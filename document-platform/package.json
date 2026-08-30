@@ -1,0 +1,35 @@
+{
+  "name": "document-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A secure web-based document conversion, editing, and export platform",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "corepack pnpm -r --parallel --if-present run dev",
+    "build": "corepack pnpm db:generate && corepack pnpm -r --if-present run build",
+    "lint": "oxlint apps packages",
+    "typecheck": "corepack pnpm -r --if-present run typecheck",
+    "test": "corepack pnpm -r --if-present run test",
+    "test:integration": "corepack pnpm -r --if-present run test:integration",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "clean": "corepack pnpm -r --if-present run clean && rm -rf node_modules",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "db:generate": "corepack pnpm --filter @docconv/api exec prisma generate",
+    "db:migrate": "corepack pnpm --filter @docconv/api exec prisma migrate dev",
+    "db:push": "corepack pnpm --filter @docconv/api exec prisma db push",
+    "db:studio": "corepack pnpm --filter @docconv/api exec prisma studio"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "oxlint": "^1.79.0",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.0",
+    "typescript": "^5.9.3"
+  }
+}

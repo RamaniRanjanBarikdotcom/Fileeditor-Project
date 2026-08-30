@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.turbo
+.git
+.env
+*.json
+!package.json
+!tsconfig*.json
+!turbo.json
+!pnpm-workspace.yaml
+!apps/**/package.json
+!packages/**/package.json
+

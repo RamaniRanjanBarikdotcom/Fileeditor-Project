@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "workers/*"
+  - "packages/*"
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  '@scarf/scarf': true
+  bcrypt: true
+  msgpackr-extract: true
+  prisma: true

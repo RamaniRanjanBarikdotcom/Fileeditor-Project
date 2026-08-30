@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+*.tsbuildinfo
+
+# Turbo
+.turbo/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Testing
+coverage/
+
+# Docker volumes (local dev)
+.docker-data/
+
+# Temporary files
+tmp/
+temp/
+
+# Prisma
+apps/api/prisma/migrations/**/migration_lock.toml
+
+# MinIO data
+minio-data/
