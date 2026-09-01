@@ -1,6 +1,8 @@
 node_modules
 **/node_modules
 **/dist
+**/.next
+**/coverage
 **/*.tsbuildinfo
 .turbo
 .git
@@ -12,4 +14,3 @@ node_modules
 !pnpm-workspace.yaml
 !apps/**/package.json
 !packages/**/package.json
-

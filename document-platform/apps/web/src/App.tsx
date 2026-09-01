@@ -1,11 +1,11 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './lib/ThemeContext';
-import { Auth } from './pages/Auth';
-import { Dashboard } from './pages/Dashboard';
-import { History } from './pages/History';
-import { Settings } from './pages/Settings';
-import { Editor } from './pages/Editor';
+import { Auth } from './views/Auth';
+import { Dashboard } from './views/Dashboard';
+import { History } from './views/History';
+import { Settings } from './views/Settings';
+import { Editor } from './views/Editor';
 import { Layout } from './components/Layout';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {

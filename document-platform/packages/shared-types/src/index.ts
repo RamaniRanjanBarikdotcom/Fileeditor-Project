@@ -18,7 +18,6 @@ export enum InputFormat {
   JPEG = 'jpeg',
   URL = 'url',
 }
-
 export enum OutputFormat {
   PDF = 'pdf',
   DOCX = 'docx',
@@ -304,8 +303,285 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
   };
 }
 
-// ─── Conversion Request / Response DTOs ──────────────────────
+// ─── Platform Roles ──────────────────────────────────────────
 
+export enum PlatformRole {
+  CUSTOMER = 'CUSTOMER',
+  SUPPORT = 'SUPPORT',
+  ADMIN = 'ADMIN',
+}
+
+// ─── Subscription & Plans ────────────────────────────────────
+
+export enum SubscriptionPlanTier {
+  FREE = 'FREE',
+  PRO = 'PRO',
+  BUSINESS = 'BUSINESS',
+}
+
+export enum SubscriptionStatus {
+  INCOMPLETE = 'INCOMPLETE',
+  ACTIVE = 'ACTIVE',
+  PAST_DUE = 'PAST_DUE',
+  CANCELED = 'CANCELED',
+  UNPAID = 'UNPAID',
+}
+
+export interface SubscriptionPlanDto {
+  id: string;
+  tier: SubscriptionPlanTier;
+  name: string;
+  monthlyOpsLimit: number;
+  maxFileSizeBytes: number;
+  retentionDays: number;
+  hasApiAccess: boolean;
+  maxTeamSeats: number;
+}
+
+export interface SubscriptionDto {
+  id: string;
+  organizationId: string;
+  planId: string;
+  provider: PaymentProvider;
+  providerSubId: string;
+  status: SubscriptionStatus;
+  currency: CurrencyCode;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+  plan?: SubscriptionPlanDto;
+}
+
+// ─── Tools Registry ──────────────────────────────────────────
+
+export interface ToolDto {
+  id: string;
+  slug: string;
+  name: string;
+  category: string;
+  engine: string;
+  acceptedFormats: string[];
+  outputFormats: string[];
+  minimumPlan: SubscriptionPlanTier;
+  anonymousEnabled: boolean;
+  costUnits: number;
+  maxFileSizeBytes: number;
+  isPublished: boolean;
+  isFeatured: boolean;
+  sortOrder: number;
+  seoMetadata?: {
+    title?: string;
+    description?: string;
+    keywords?: string[];
+    canonical?: string;
+  };
+  configJson?: Record<string, unknown>;
+}
+
+// ─── Quota & Reservations ────────────────────────────────────
+
+export enum ReservationStatus {
+  RESERVED = 'RESERVED',
+  SETTLED = 'SETTLED',
+  RELEASED = 'RELEASED',
+  EXPIRED = 'EXPIRED',
+}
+
+export interface QuotaReservationDto {
+  id: string;
+  idempotencyKey: string;
+  userId?: string;
+  anonymousId?: string;
+  toolId: string;
+  conversionJobId?: string;
+  unitsReserved: number;
+  status: ReservationStatus;
+  expiresAt: string;
+  createdAt: string;
+  settledAt?: string;
+}
+
+// ─── Commerce & Catalog ──────────────────────────────────────
+
+export enum ProductType {
+  FREE_TOOL = 'FREE_TOOL',
+  SOFTWARE = 'SOFTWARE',
+  AUTOMATION = 'AUTOMATION',
+  SAAS = 'SAAS',
+}
+
+export enum CurrencyCode {
+  USD = 'USD',
+  INR = 'INR',
+}
+
+export enum PaymentProvider {
+  STRIPE = 'STRIPE',
+  RAZORPAY = 'RAZORPAY',
+}
+
+export interface PriceDto {
+  id: string;
+  productId: string;
+  currency: CurrencyCode;
+  amountMinorUnits: number; // e.g. cents (USD) or paise (INR)
+  provider: PaymentProvider;
+  providerPriceId?: string;
+  isActive: boolean;
+}
+
+export interface ProductReleaseDto {
+  id: string;
+  productId: string;
+  version: string;
+  changelog?: string;
+  fileSizeBytes: number;
+  fileSha256: string;
+  isCurrent: boolean;
+  createdAt: string;
+}
+
+export interface ProductDto {
+  id: string;
+  slug: string;
+  name: string;
+  tagline?: string;
+  description: string;
+  type: ProductType;
+  isPublished: boolean;
+  isFeatured: boolean;
+  sortOrder: number;
+  metadataJson?: Record<string, unknown>;
+  prices?: PriceDto[];
+  currentRelease?: ProductReleaseDto;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Cart & Orders ───────────────────────────────────────────
+
+export interface CartItemDto {
+  id: string;
+  productId: string;
+  priceId: string;
+  product?: ProductDto;
+  price?: PriceDto;
+}
+
+export interface CartDto {
+  id: string;
+  userId: string;
+  items: CartItemDto[];
+  totalMinorUnits: number;
+  currency?: CurrencyCode;
+}
+
+export enum OrderStatus {
+  PENDING = 'PENDING',
+  PAID = 'PAID',
+  FAILED = 'FAILED',
+  REFUNDED = 'REFUNDED',
+}
+
+export interface OrderItemDto {
+  id: string;
+  productId: string;
+  priceId: string;
+  amountMinorUnits: number;
+  productName?: string;
+}
+
+export interface OrderDto {
+  id: string;
+  orderNumber: string;
+  userId: string;
+  status: OrderStatus;
+  currency: CurrencyCode;
+  totalAmountMinor: number;
+  paymentProvider: PaymentProvider;
+  providerOrderId?: string;
+  providerPaymentId?: string;
+  providerInvoiceUrl?: string;
+  items: OrderItemDto[];
+  createdAt: string;
+}
+
+// ─── Entitlements, Licenses & Downloads ───────────────────────
+
+export enum EntitlementType {
+  LIFETIME_DOWNLOAD = 'LIFETIME_DOWNLOAD',
+  LICENSE_KEY = 'LICENSE_KEY',
+  SUBSCRIPTION = 'SUBSCRIPTION',
+}
+
+export interface EntitlementDto {
+  id: string;
+  userId: string;
+  productId: string;
+  orderId?: string;
+  type: EntitlementType;
+  isActive: boolean;
+  product?: ProductDto;
+  createdAt: string;
+}
+
+export enum LicenseStatus {
+  ACTIVE = 'ACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  EXPIRED = 'EXPIRED',
+  REVOKED = 'REVOKED',
+}
+
+export interface LicenseActivationDto {
+  id: string;
+  licenseKeyId: string;
+  machineHash: string;
+  deviceInfo?: string;
+  lastPingAt: string;
+  createdAt: string;
+}
+
+export interface LicenseKeyDto {
+  id: string;
+  keyMasked: string; // e.g. TOOL-****-****-XXXX
+  productId: string;
+  userId: string;
+  orderId?: string;
+  status: LicenseStatus;
+  maxActivations: number;
+  activationsCount: number;
+  expiresAt?: string;
+  product?: ProductDto;
+  activations?: LicenseActivationDto[];
+  createdAt: string;
+}
+
+export interface DownloadUrlDto {
+  downloadUrl: string;
+  expiresAt: string;
+  filename: string;
+  fileSizeBytes: number;
+  fileSha256: string;
+}
+
+// ─── Auth & Sessions ─────────────────────────────────────────
+
+export interface AuthUserDto {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  platformRole: PlatformRole;
+  emailVerified: boolean;
+  defaultOrganizationId?: string;
+}
+
+export interface LoginResponseDto {
+  accessToken: string;
+  user: AuthUserDto;
+}
+
+// ─── Conversion Request / Response DTOs ──────────────────────
 export interface CreateConversionRequest {
   sourceFileId: string;
   targetFormat: OutputFormat;

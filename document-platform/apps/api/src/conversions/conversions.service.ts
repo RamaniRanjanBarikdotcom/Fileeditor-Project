@@ -21,6 +21,7 @@ export class ConversionsService {
     @InjectQueue(QUEUE_NAMES.DATA) private readonly dataQueue: Queue,
     @InjectQueue(QUEUE_NAMES.DOCUMENT) private readonly documentQueue: Queue,
     @InjectQueue(QUEUE_NAMES.IMAGE) private readonly imageQueue: Queue,
+    @InjectQueue(QUEUE_NAMES.PDF) private readonly pdfQueue: Queue,
   ) {
     this.storageClient = new StorageClient(
       createStorageConfig(process.env as Record<string, string | undefined>),
@@ -36,6 +37,7 @@ export class ConversionsService {
       case QUEUE_NAMES.DATA: return this.dataQueue;
       case QUEUE_NAMES.DOCUMENT: return this.documentQueue;
       case QUEUE_NAMES.IMAGE: return this.imageQueue;
+      case QUEUE_NAMES.PDF: return this.pdfQueue;
       default: return this.htmlQueue;
     }
   }

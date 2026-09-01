@@ -1,89 +1,28 @@
 // ═══════════════════════════════════════════════════════════════
-// Document Conversion Platform — Prisma Schema
+// ToolSuite — Enterprise Multi-Tool & SaaS Prisma Schema
 // ═══════════════════════════════════════════════════════════════
 
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-// ─── Users ───────────────────────────────────────────────────
+// ─── Platform Roles & Enums ──────────────────────────────────
 
-model User {
-  id              String    @id @default(uuid())
-  email           String    @unique
-  passwordHash    String    @map("password_hash")
-  firstName       String?   @map("first_name")
-  lastName        String?   @map("last_name")
-  status          UserStatus @default(ACTIVE)
-  emailVerifiedAt DateTime? @map("email_verified_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-
-  // Relations
-  ownedOrganizations Organization[] @relation("OrgOwner")
-  memberships        OrganizationMember[]
-  storedFiles        StoredFile[]
-  conversionJobs     ConversionJob[]
-  conversionPresets  ConversionPreset[]
-  apiKeys            ApiKey[]
-  usageRecords       UsageRecord[]
-  auditLogs          AuditLog[]
-
-  @@map("users")
+enum PlatformRole {
+  CUSTOMER
+  SUPPORT
+  ADMIN
 }
 
 enum UserStatus {
   ACTIVE
   INACTIVE
   SUSPENDED
-}
-
-// ─── Organizations ───────────────────────────────────────────
-
-model Organization {
-  id          String   @id @default(uuid())
-  name        String
-  slug        String   @unique
-  ownerUserId String   @map("owner_user_id")
-  planId      String?  @map("plan_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  owner              User                 @relation("OrgOwner", fields: [ownerUserId], references: [id])
-  members            OrganizationMember[]
-  storedFiles        StoredFile[]
-  conversionJobs     ConversionJob[]
-  templates          Template[]
-  conversionPresets  ConversionPreset[]
-  apiKeys            ApiKey[]
-  usageRecords       UsageRecord[]
-  auditLogs          AuditLog[]
-
-  @@map("organizations")
-}
-
-// ─── Organization Members ────────────────────────────────────
-
-model OrganizationMember {
-  id             String   @id @default(uuid())
-  organizationId String   @map("organization_id")
-  userId         String   @map("user_id")
-  role           OrgRole  @default(MEMBER)
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  // Relations
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([organizationId, userId])
-  @@map("organization_members")
 }
 
 enum OrgRole {
@@ -93,37 +32,62 @@ enum OrgRole {
   VIEWER
 }
 
-// ─── Stored Files ────────────────────────────────────────────
+enum SubscriptionPlanTier {
+  FREE
+  PRO
+  BUSINESS
+}
 
-model StoredFile {
-  id               String            @id @default(uuid())
-  organizationId   String            @map("organization_id")
-  userId           String            @map("user_id")
-  originalFilename String            @map("original_filename")
-  storageKey       String            @map("storage_key")
-  extension        String
-  mimeType         String            @map("mime_type")
-  detectedType     String?           @map("detected_type")
-  sizeBytes        BigInt            @map("size_bytes")
-  sha256           String?
-  status           FileStatus        @default(UPLOADING)
-  malwareScanStatus MalwareScanStatus @default(PENDING) @map("malware_scan_status")
-  createdAt        DateTime          @default(now()) @map("created_at")
-  updatedAt        DateTime          @updatedAt @map("updated_at")
-  expiresAt        DateTime?         @map("expires_at")
-  deletedAt        DateTime?         @map("deleted_at")
+enum SubscriptionStatus {
+  INCOMPLETE
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+}
 
-  // Relations
-  organization         Organization    @relation(fields: [organizationId], references: [id])
-  user                 User            @relation(fields: [userId], references: [id])
-  sourceConversionJobs ConversionJob[] @relation("SourceFile")
-  outputConversionJobs ConversionJob[] @relation("OutputFile")
+enum ProductType {
+  FREE_TOOL
+  SOFTWARE
+  AUTOMATION
+  SAAS
+}
 
-  @@index([organizationId])
-  @@index([userId])
-  @@index([status])
-  @@index([expiresAt])
-  @@map("stored_files")
+enum CurrencyCode {
+  USD
+  INR
+}
+
+enum PaymentProvider {
+  STRIPE
+  RAZORPAY
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum EntitlementType {
+  LIFETIME_DOWNLOAD
+  LICENSE_KEY
+  SUBSCRIPTION
+}
+
+enum LicenseStatus {
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  REVOKED
+}
+
+enum ReservationStatus {
+  RESERVED
+  SETTLED
+  RELEASED
+  EXPIRED
 }
 
 enum FileStatus {
@@ -146,7 +110,504 @@ enum MalwareScanStatus {
   ERROR
 }
 
-// ─── Conversion Jobs ─────────────────────────────────────────
+enum JobStatus {
+  CREATED
+  UPLOADING
+  UPLOADED
+  SCANNING
+  VALIDATING
+  QUEUED
+  PROCESSING
+  OUTPUT_VALIDATION
+  COMPLETED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum TemplateType {
+  DOCX_REFERENCE
+  HTML_TEMPLATE
+  CSS_STYLESHEET
+  HEADER_FOOTER
+}
+
+// ─── Users ───────────────────────────────────────────────────
+
+model User {
+  id              String       @id @default(uuid())
+  email           String       @unique
+  passwordHash    String       @map("password_hash")
+  firstName       String?      @map("first_name")
+  lastName        String?      @map("last_name")
+  platformRole    PlatformRole @default(CUSTOMER) @map("platform_role")
+  status          UserStatus   @default(ACTIVE)
+  emailVerifiedAt DateTime?    @map("email_verified_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  ownedOrganizations      Organization[]           @relation("OrgOwner")
+  memberships             OrganizationMember[]
+  refreshSessions         RefreshSession[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  storedFiles             StoredFile[]
+  conversionJobs          ConversionJob[]
+  conversionPresets       ConversionPreset[]
+  apiKeys                 ApiKey[]
+  usageRecords            UsageRecord[]
+  auditLogs               AuditLog[]
+  orders                  Order[]
+  cart                    Cart?
+  entitlements            Entitlement[]
+  licenses                LicenseKey[]
+  quotaReservations       QuotaReservation[]
+  downloadLogs            DownloadLog[]
+
+  @@map("users")
+}
+
+// ─── Auth Tokens & Sessions ──────────────────────────────────
+
+model RefreshSession {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  userAgent String?   @map("user_agent")
+  ipAddress String?   @map("ip_address")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_sessions")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// ─── Organizations & Subscriptions ───────────────────────────
+
+model SubscriptionPlan {
+  id               String               @id @default(uuid())
+  tier             SubscriptionPlanTier @unique
+  name             String
+  monthlyOpsLimit  Int                  @map("monthly_ops_limit")
+  maxFileSizeBytes BigInt               @map("max_file_size_bytes")
+  retentionDays    Int                  @map("retention_days")
+  hasApiAccess     Boolean              @default(false) @map("has_api_access")
+  maxTeamSeats     Int                  @default(1) @map("max_team_seats")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  organizations Organization[]
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  ownerUserId String   @map("owner_user_id")
+  planId      String?  @map("plan_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  owner             User                 @relation("OrgOwner", fields: [ownerUserId], references: [id])
+  plan              SubscriptionPlan?    @relation(fields: [planId], references: [id])
+  members           OrganizationMember[]
+  subscriptions     Subscription[]
+  storedFiles       StoredFile[]
+  conversionJobs    ConversionJob[]
+  templates         Template[]
+  conversionPresets ConversionPreset[]
+  apiKeys           ApiKey[]
+  usageRecords      UsageRecord[]
+  auditLogs         AuditLog[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  userId         String   @map("user_id")
+  role           OrgRole  @default(MEMBER)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@map("organization_members")
+}
+
+model Subscription {
+  id                 String             @id @default(uuid())
+  organizationId     String             @map("organization_id")
+  planId             String             @map("plan_id")
+  provider           PaymentProvider
+  providerSubId      String             @unique @map("provider_sub_id")
+  status             SubscriptionStatus @default(ACTIVE)
+  currency           CurrencyCode
+  currentPeriodStart DateTime           @map("current_period_start")
+  currentPeriodEnd   DateTime           @map("current_period_end")
+  cancelAtPeriodEnd  Boolean            @default(false) @map("cancel_at_period_end")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan    @relation(fields: [planId], references: [id])
+  events       SubscriptionEvent[]
+
+  @@index([organizationId])
+  @@map("subscriptions")
+}
+
+model SubscriptionEvent {
+  id             String       @id @default(uuid())
+  subscriptionId String       @map("subscription_id")
+  eventType      String       @map("event_type")
+  payloadJson    Json         @map("payload_json")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@map("subscription_events")
+}
+
+// ─── Server-Authoritative Tool Registry ───────────────────────
+
+model Tool {
+  id               String               @id @default(uuid())
+  slug             String               @unique
+  name             String
+  category         String
+  engine           String
+  acceptedFormats  String[]             @map("accepted_formats")
+  outputFormats    String[]             @map("output_formats")
+  minimumPlan      SubscriptionPlanTier @default(FREE) @map("minimum_plan")
+  anonymousEnabled Boolean              @default(true) @map("anonymous_enabled")
+  costUnits        Int                  @default(1) @map("cost_units")
+  maxFileSizeBytes BigInt               @default(10485760) @map("max_file_size_bytes") // default 10MB
+  isPublished      Boolean              @default(true) @map("is_published")
+  isFeatured       Boolean              @default(false) @map("is_featured")
+  sortOrder        Int                  @default(0) @map("sort_order")
+  seoMetadata      Json?                @map("seo_metadata")
+  configJson       Json?                @map("config_json")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  reservations QuotaReservation[]
+
+  @@index([isPublished, category])
+  @@map("tools")
+}
+
+// ─── Atomic Quota Reservation ────────────────────────────────
+
+model QuotaReservation {
+  id              String            @id @default(uuid())
+  idempotencyKey  String            @unique @map("idempotency_key")
+  userId          String?           @map("user_id")
+  anonymousId     String?           @map("anonymous_id")
+  toolId          String            @map("tool_id")
+  conversionJobId String?           @map("conversion_job_id")
+  unitsReserved   Int               @map("units_reserved")
+  status          ReservationStatus @default(RESERVED)
+  expiresAt       DateTime          @map("expires_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  settledAt       DateTime?         @map("settled_at")
+
+  user          User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tool          Tool           @relation(fields: [toolId], references: [id])
+  conversionJob ConversionJob? @relation(fields: [conversionJobId], references: [id])
+
+  @@index([userId, status])
+  @@index([anonymousId, status])
+  @@index([expiresAt, status])
+  @@map("quota_reservations")
+}
+
+// ─── Commerce, Catalog, Products & Carts ──────────────────────
+
+model Product {
+  id           String      @id @default(uuid())
+  slug         String      @unique
+  name         String
+  tagline      String?
+  description  String      @db.Text
+  type         ProductType
+  isPublished  Boolean     @default(false) @map("is_published")
+  isFeatured   Boolean     @default(false) @map("is_featured")
+  sortOrder    Int         @default(0) @map("sort_order")
+  metadataJson Json?       @map("metadata_json")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  prices       Price[]
+  releases     ProductRelease[]
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
+  entitlements Entitlement[]
+  licenses     LicenseKey[]
+
+  @@index([isPublished, type])
+  @@map("products")
+}
+
+model Price {
+  id               String          @id @default(uuid())
+  productId        String          @map("product_id")
+  currency         CurrencyCode
+  amountMinorUnits Int             @map("amount_minor_units") // cents or paise
+  provider         PaymentProvider
+  providerPriceId  String?         @map("provider_price_id")
+  isActive         Boolean         @default(true) @map("is_active")
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@unique([productId, currency])
+  @@map("prices")
+}
+
+model ProductRelease {
+  id            String   @id @default(uuid())
+  productId     String   @map("product_id")
+  version       String
+  changelog     String?  @db.Text
+  storageKey    String   @map("storage_key")
+  fileSizeBytes BigInt   @map("file_size_bytes")
+  fileSha256    String   @map("file_sha256")
+  isCurrent     Boolean  @default(false) @map("is_current")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  product   Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  downloads DownloadLog[]
+
+  @@index([productId, isCurrent])
+  @@map("product_releases")
+}
+
+model Cart {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  cartId    String   @map("cart_id")
+  productId String   @map("product_id")
+  priceId   String   @map("price_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+  price   Price   @relation(fields: [priceId], references: [id])
+
+  @@unique([cartId, productId])
+  @@map("cart_items")
+}
+
+// ─── Orders, Payments & Invoices ─────────────────────────────
+
+model Order {
+  id                 String          @id @default(uuid())
+  orderNumber        String          @unique @map("order_number")
+  userId             String          @map("user_id")
+  status             OrderStatus     @default(PENDING)
+  currency           CurrencyCode
+  totalAmountMinor   Int             @map("total_amount_minor")
+  paymentProvider    PaymentProvider @map("payment_provider")
+  providerOrderId    String?         @map("provider_order_id")
+  providerPaymentId  String?         @map("provider_payment_id")
+  providerInvoiceUrl String?         @map("provider_invoice_url")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id])
+  items        OrderItem[]
+  licenses     LicenseKey[]
+  entitlements Entitlement[]
+
+  @@index([userId, status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id               String   @id @default(uuid())
+  orderId          String   @map("order_id")
+  productId        String   @map("product_id")
+  priceId          String   @map("price_id")
+  amountMinorUnits Int      @map("amount_minor_units")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+  price   Price   @relation(fields: [priceId], references: [id])
+
+  @@map("order_items")
+}
+
+// ─── Entitlements, Licenses & Downloads ───────────────────────
+
+model Entitlement {
+  id        String          @id @default(uuid())
+  userId    String          @map("user_id")
+  productId String          @map("product_id")
+  orderId   String?         @map("order_id")
+  type      EntitlementType
+  isActive  Boolean         @default(true) @map("is_active")
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+  order   Order?  @relation(fields: [orderId], references: [id])
+
+  @@unique([userId, productId, type])
+  @@map("entitlements")
+}
+
+model LicenseKey {
+  id               String        @id @default(uuid())
+  keyHash          String        @unique @map("key_hash")
+  keyMasked        String        @map("key_masked") // e.g. TOOL-****-****-XXXX
+  productId        String        @map("product_id")
+  userId           String        @map("user_id")
+  orderId          String?       @map("order_id")
+  status           LicenseStatus @default(ACTIVE)
+  maxActivations   Int           @default(1) @map("max_activations")
+  activationsCount Int           @default(0) @map("activations_count")
+  expiresAt        DateTime?     @map("expires_at")
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  product     Product             @relation(fields: [productId], references: [id])
+  user        User                @relation(fields: [userId], references: [id])
+  order       Order?              @relation(fields: [orderId], references: [id])
+  activations LicenseActivation[]
+
+  @@index([userId, productId])
+  @@map("license_keys")
+}
+
+model LicenseActivation {
+  id           String   @id @default(uuid())
+  licenseKeyId String   @map("license_key_id")
+  machineHash  String   @map("machine_hash")
+  deviceInfo   String?  @map("device_info")
+  ipAddress    String?  @map("ip_address")
+  lastPingAt   DateTime @default(now()) @map("last_ping_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  licenseKey LicenseKey @relation(fields: [licenseKeyId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseKeyId, machineHash])
+  @@map("license_activations")
+}
+
+model DownloadLog {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  releaseId String   @map("release_id")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  release ProductRelease @relation(fields: [releaseId], references: [id])
+
+  @@index([userId, releaseId])
+  @@map("download_logs")
+}
+
+// ─── Webhook Idempotency & Events ────────────────────────────
+
+model WebhookEvent {
+  id          String          @id @default(uuid())
+  provider    PaymentProvider
+  eventId     String          @unique @map("event_id")
+  eventType   String          @map("event_type")
+  payloadJson Json            @map("payload_json")
+  processedAt DateTime?       @map("processed_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  @@index([provider, eventId])
+  @@map("webhook_events")
+}
+
+// ─── Stored Files & Conversion Jobs ──────────────────────────
+
+model StoredFile {
+  id                String            @id @default(uuid())
+  organizationId    String            @map("organization_id")
+  userId            String            @map("user_id")
+  originalFilename  String            @map("original_filename")
+  storageKey        String            @map("storage_key")
+  extension         String
+  mimeType          String            @map("mime_type")
+  detectedType      String?           @map("detected_type")
+  sizeBytes         BigInt            @map("size_bytes")
+  sha256            String?
+  status            FileStatus        @default(UPLOADING)
+  malwareScanStatus MalwareScanStatus @default(PENDING) @map("malware_scan_status")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  expiresAt         DateTime?         @map("expires_at")
+  deletedAt         DateTime?         @map("deleted_at")
+
+  organization         Organization    @relation(fields: [organizationId], references: [id])
+  user                 User            @relation(fields: [userId], references: [id])
+  sourceConversionJobs ConversionJob[] @relation("SourceFile")
+  outputConversionJobs ConversionJob[] @relation("OutputFile")
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("stored_files")
+}
 
 model ConversionJob {
   id             String    @id @default(uuid())
@@ -171,13 +632,13 @@ model ConversionJob {
   completedAt    DateTime? @map("completed_at")
   expiresAt      DateTime? @map("expires_at")
 
-  // Relations
-  organization    Organization      @relation(fields: [organizationId], references: [id])
-  user            User              @relation(fields: [userId], references: [id])
-  sourceFile      StoredFile        @relation("SourceFile", fields: [sourceFileId], references: [id])
-  outputFile      StoredFile?       @relation("OutputFile", fields: [outputFileId], references: [id])
-  events          ConversionEvent[]
-  usageRecords    UsageRecord[]
+  organization      Organization       @relation(fields: [organizationId], references: [id])
+  user              User               @relation(fields: [userId], references: [id])
+  sourceFile        StoredFile         @relation("SourceFile", fields: [sourceFileId], references: [id])
+  outputFile        StoredFile?        @relation("OutputFile", fields: [outputFileId], references: [id])
+  events            ConversionEvent[]
+  usageRecords      UsageRecord[]
+  quotaReservations QuotaReservation[]
 
   @@index([organizationId])
   @@index([userId])
@@ -185,23 +646,6 @@ model ConversionJob {
   @@index([createdAt])
   @@map("conversion_jobs")
 }
-
-enum JobStatus {
-  CREATED
-  UPLOADING
-  UPLOADED
-  SCANNING
-  VALIDATING
-  QUEUED
-  PROCESSING
-  OUTPUT_VALIDATION
-  COMPLETED
-  FAILED
-  CANCELLED
-  EXPIRED
-}
-
-// ─── Conversion Events ──────────────────────────────────────
 
 model ConversionEvent {
   id              String   @id @default(uuid())
@@ -211,14 +655,11 @@ model ConversionEvent {
   metadataJson    Json?    @map("metadata_json")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  // Relations
   conversionJob ConversionJob @relation(fields: [conversionJobId], references: [id], onDelete: Cascade)
 
   @@index([conversionJobId])
   @@map("conversion_events")
 }
-
-// ─── Templates ───────────────────────────────────────────────
 
 model Template {
   id             String       @id @default(uuid())
@@ -232,20 +673,10 @@ model Template {
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
-  // Relations
   organization Organization @relation(fields: [organizationId], references: [id])
 
   @@map("templates")
 }
-
-enum TemplateType {
-  DOCX_REFERENCE
-  HTML_TEMPLATE
-  CSS_STYLESHEET
-  HEADER_FOOTER
-}
-
-// ─── Conversion Presets ──────────────────────────────────────
 
 model ConversionPreset {
   id             String   @id @default(uuid())
@@ -258,14 +689,11 @@ model ConversionPreset {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  // Relations
   organization Organization @relation(fields: [organizationId], references: [id])
   user         User         @relation(fields: [userId], references: [id])
 
   @@map("conversion_presets")
 }
-
-// ─── API Keys ────────────────────────────────────────────────
 
 model ApiKey {
   id              String    @id @default(uuid())
@@ -279,14 +707,11 @@ model ApiKey {
   createdAt       DateTime  @default(now()) @map("created_at")
   revokedAt       DateTime? @map("revoked_at")
 
-  // Relations
   organization Organization @relation(fields: [organizationId], references: [id])
   createdBy    User         @relation(fields: [createdByUserId], references: [id])
 
   @@map("api_keys")
 }
-
-// ─── Usage Records ───────────────────────────────────────────
 
 model UsageRecord {
   id              String   @id @default(uuid())
@@ -299,7 +724,6 @@ model UsageRecord {
   processingMs    Int?     @map("processing_ms")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  // Relations
   organization  Organization   @relation(fields: [organizationId], references: [id])
   user          User           @relation(fields: [userId], references: [id])
   conversionJob ConversionJob? @relation(fields: [conversionJobId], references: [id])
@@ -309,8 +733,6 @@ model UsageRecord {
   @@index([createdAt])
   @@map("usage_records")
 }
-
-// ─── Audit Logs ──────────────────────────────────────────────
 
 model AuditLog {
   id             String   @id @default(uuid())
@@ -324,7 +746,6 @@ model AuditLog {
   metadataJson   Json?    @map("metadata_json")
   createdAt      DateTime @default(now()) @map("created_at")
 
-  // Relations
   organization Organization? @relation(fields: [organizationId], references: [id])
   user         User?         @relation(fields: [userId], references: [id])
 

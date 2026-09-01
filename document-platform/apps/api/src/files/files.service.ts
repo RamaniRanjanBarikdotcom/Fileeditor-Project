@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma.service';
 import { StorageClient, createStorageConfig } from '@docconv/storage';
@@ -8,7 +8,7 @@ import { UrlInspectorService } from './url-inspector.service';
 import { UrlSecurityService } from '@docconv/url-security';
 
 @Injectable()
-export class FilesService {
+export class FilesService implements OnModuleInit {
   private storage: StorageClient;
 
   constructor(
@@ -18,6 +18,12 @@ export class FilesService {
     private readonly urlSecurity: UrlSecurityService,
   ) {
     this.storage = new StorageClient(createStorageConfig(process.env as Record<string, string>));
+  }
+
+  async onModuleInit() {
+    // Docker normally creates these through minio-init. Native Node mode has
+    // no such container lifecycle, so make startup idempotently self-healing.
+    await this.storage.ensureAllBuckets();
   }
 
   /**

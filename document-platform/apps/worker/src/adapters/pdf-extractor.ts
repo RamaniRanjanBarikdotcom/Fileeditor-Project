@@ -8,7 +8,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { workerLogger } from '@docconv/logging';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 
 const execFileAsync = promisify(execFile);
 
@@ -38,10 +38,13 @@ export class PdfExtractorAdapter {
       // Try fast pure-JS extraction first (always works, no system deps)
       try {
         const pdfBuffer = await fs.readFile(inputPath);
-        const parsed = await pdfParse(pdfBuffer, {
-          max: 0, // no page limit
-        });
-        extractedText = parsed.text || '';
+        const parser = new PDFParse({ data: pdfBuffer });
+        try {
+          const parsed = await parser.getText();
+          extractedText = parsed.text || '';
+        } finally {
+          await parser.destroy();
+        }
         workerLogger.debug({ chars: extractedText.length }, 'pdf-parse extracted text');
       } catch (pdfParseErr: any) {
         workerLogger.warn({ err: pdfParseErr.message }, 'pdf-parse failed, trying pdftotext');

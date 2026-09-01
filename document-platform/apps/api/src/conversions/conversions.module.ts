@@ -12,6 +12,7 @@ import { ConversionsService } from './conversions.service';
     BullModule.registerQueue({ name: QUEUE_NAMES.DATA }),
     BullModule.registerQueue({ name: QUEUE_NAMES.DOCUMENT }),
     BullModule.registerQueue({ name: QUEUE_NAMES.IMAGE }),
+    BullModule.registerQueue({ name: QUEUE_NAMES.PDF }),
   ],
   controllers: [ConversionsController],
   providers: [ConversionsService],

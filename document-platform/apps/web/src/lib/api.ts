@@ -1,52 +1,88 @@
-export async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
-  let token = localStorage.getItem('token');
-  
-  if (!token) {
-    throw new Error('No token found');
-  }
+import { ApiResponse } from '@docconv/shared-types';
 
+let inMemoryAccessToken: string | null = null;
+
+export function setAccessToken(token: string | null) {
+  inMemoryAccessToken = token;
+}
+
+export function getAccessToken(): string | null {
+  return inMemoryAccessToken;
+}
+
+export async function fetchApi<T = any>(
+  endpoint: string,
+  options: RequestInit = {},
+): Promise<ApiResponse<T>> {
+  const url = endpoint.startsWith('/') ? `/api/v1${endpoint}` : `/api/v1/${endpoint}`;
   const headers = new Headers(options.headers || {});
-  if (!headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`);
+
+  headers.set('X-Requested-With', 'ToolSuiteApp');
+
+  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
   }
 
-  let response = await fetch(url, { ...options, headers });
+  if (inMemoryAccessToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${inMemoryAccessToken}`);
+  }
 
-  // If unauthorized, attempt to refresh token
-  if (response.status === 401) {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (refreshToken) {
-      try {
-        const refreshRes = await fetch('/api/v1/auth/refresh', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken })
-        });
-        
-        if (refreshRes.ok) {
-          const data = await refreshRes.json();
-          token = data.data.accessToken;
-          const newRefreshToken = data.data.refreshToken;
-          
-          localStorage.setItem('token', token!);
-          localStorage.setItem('refreshToken', newRefreshToken);
-          
-          // Retry original request with new token
-          headers.set('Authorization', `Bearer ${token}`);
-          response = await fetch(url, { ...options, headers });
-        } else {
-          // Refresh failed, clear local storage
-          localStorage.removeItem('token');
-          localStorage.removeItem('refreshToken');
+  // Include credentials for HttpOnly refresh cookies
+  const fetchOptions: RequestInit = {
+    ...options,
+    headers,
+    credentials: 'include',
+  };
+
+  let response = await fetch(url, fetchOptions);
+
+  // If 401 Unauthorized, try to refresh token automatically
+  if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
+    try {
+      const refreshRes = await fetch('/api/v1/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'ToolSuiteApp',
+        },
+        credentials: 'include',
+      });
+
+      if (refreshRes.ok) {
+        const refreshData = await refreshRes.json();
+        if (refreshData.data?.accessToken) {
+          inMemoryAccessToken = refreshData.data.accessToken;
+          headers.set('Authorization', `Bearer ${inMemoryAccessToken}`);
+          response = await fetch(url, { ...fetchOptions, headers });
         }
-      } catch {
-        localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
+      } else {
+        inMemoryAccessToken = null;
       }
-    } else {
-      localStorage.removeItem('token');
+    } catch {
+      inMemoryAccessToken = null;
     }
   }
 
-  return response;
+  try {
+    const data = await response.json();
+    return data;
+  } catch {
+    return {
+      success: response.ok,
+      error: response.ok
+        ? undefined
+        : { code: 'INTERNAL_ERROR' as any, message: `HTTP ${response.status}: ${response.statusText}` },
+    };
+  }
+}
+
+export async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(options.headers || {});
+  headers.set('X-Requested-With', 'ToolSuiteApp');
+
+  if (inMemoryAccessToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${inMemoryAccessToken}`);
+  }
+
+  return fetch(url, { ...options, headers, credentials: 'include' });
 }
