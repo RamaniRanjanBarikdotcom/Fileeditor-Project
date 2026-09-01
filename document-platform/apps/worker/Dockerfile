@@ -8,10 +8,10 @@ RUN apt-get update \
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json turbo.json ./
 COPY apps/api/package.json apps/api/package.json
-COPY apps/web/package.json apps/web/package.json
 COPY apps/worker/package.json apps/worker/package.json
 COPY packages ./packages
-RUN corepack pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=toolsuite-pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
+    corepack pnpm install --frozen-lockfile --filter @docconv/worker... --filter @docconv/api
 
 COPY apps/api/prisma ./apps/api/prisma
 COPY apps/worker ./apps/worker

@@ -2,6 +2,7 @@
 set -eu
 
 api_url="${API_URL:-http://localhost:4201/api/v1}"
+origin="${ORIGIN:-http://localhost:5173}"
 email="smoke-$(date +%s)@example.test"
 password="SmokeTest123!"
 output_file="$(mktemp /tmp/docconv-smoke.XXXXXX.pdf)"
@@ -9,6 +10,7 @@ trap 'rm -f "$output_file"' EXIT
 
 register_response="$(
   curl -fsS -X POST "$api_url/auth/register" \
+    -H "Origin: $origin" \
     -H 'Content-Type: application/json' \
     --data "{\"email\":\"$email\",\"password\":\"$password\",\"organizationName\":\"Smoke Test\"}"
 )"
@@ -16,6 +18,7 @@ token="$(printf '%s' "$register_response" | jq -er '.data.accessToken')"
 
 file_response="$(
   curl -fsS -X POST "$api_url/files/paste" \
+    -H "Origin: $origin" \
     -H "Authorization: Bearer $token" \
     -H 'Content-Type: application/json' \
     --data '{"format":"html","content":"<!doctype html><html><body><h1>Conversion smoke test</h1><p>The complete API, queue, worker, Gotenberg, storage, and download path is working.</p></body></html>"}'
@@ -24,6 +27,7 @@ file_id="$(printf '%s' "$file_response" | jq -er '.data.id')"
 
 conversion_response="$(
   curl -fsS -X POST "$api_url/conversions" \
+    -H "Origin: $origin" \
     -H "Authorization: Bearer $token" \
     -H 'Content-Type: application/json' \
     --data "{\"sourceFileId\":\"$file_id\",\"targetFormat\":\"pdf\"}"
@@ -51,6 +55,7 @@ fi
 
 download_response="$(
   curl -fsS -X POST "$api_url/conversions/$conversion_id/download-url" \
+    -H "Origin: $origin" \
     -H "Authorization: Bearer $token"
 )"
 download_url="$(printf '%s' "$download_response" | jq -er '.data.url')"

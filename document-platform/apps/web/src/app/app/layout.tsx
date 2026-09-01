@@ -65,7 +65,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
           </div>
           <div className="flex flex-col overflow-hidden">
             <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
-              {user?.firstName ? `${user.firstName}'s Workspace` : 'ToolSuite Workspace'}
+              {user?.firstName ? `${user.firstName}'s Workspace` : 'AppToolkitLab Workspace'}
             </span>
             <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
               Free Plan (Active)

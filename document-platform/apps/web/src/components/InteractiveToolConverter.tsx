@@ -89,7 +89,7 @@ export function InteractiveToolConverter({ tool }: Props) {
       formData.append('settings', JSON.stringify({ pageSize, orientation }));
       const convRes = await fetch(`/api/v1/tools/${tool.slug}/execute`, {
         method: 'POST',
-        headers: { 'X-Requested-With': 'ToolSuiteApp' },
+        headers: { 'X-Requested-With': 'AppToolkitLabApp' },
         body: formData,
         credentials: 'include',
       });

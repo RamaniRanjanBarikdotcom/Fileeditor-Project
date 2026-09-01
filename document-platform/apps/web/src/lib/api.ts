@@ -17,7 +17,7 @@ export async function fetchApi<T = any>(
   const url = endpoint.startsWith('/') ? `/api/v1${endpoint}` : `/api/v1/${endpoint}`;
   const headers = new Headers(options.headers || {});
 
-  headers.set('X-Requested-With', 'ToolSuiteApp');
+  headers.set('X-Requested-With', 'AppToolkitLabApp');
 
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
@@ -43,7 +43,7 @@ export async function fetchApi<T = any>(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'ToolSuiteApp',
+          'X-Requested-With': 'AppToolkitLabApp',
         },
         credentials: 'include',
       });
@@ -78,7 +78,7 @@ export async function fetchApi<T = any>(
 
 export async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
   const headers = new Headers(options.headers || {});
-  headers.set('X-Requested-With', 'ToolSuiteApp');
+  headers.set('X-Requested-With', 'AppToolkitLabApp');
 
   if (inMemoryAccessToken && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${inMemoryAccessToken}`);

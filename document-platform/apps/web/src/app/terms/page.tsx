@@ -1,27 +1,25 @@
-import React from 'react';
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { PolicyPage, PolicySection } from '../../components/PolicyPage';
+
+export const metadata: Metadata = { title: 'AppToolkitLab Terms of Service', description: 'Terms for AppToolkitLab public tools, accounts, file and URL processing, subscriptions, marketplace purchases, downloads, and software licenses.' };
 
 export default function TermsPage() {
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-16 space-y-8 text-slate-800 dark:text-slate-200">
-      <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white">Terms of Service</h1>
-      <p className="text-xs text-slate-500">Last updated: August 31, 2026</p>
-
-      <div className="space-y-6 text-sm leading-relaxed">
-        <section className="space-y-2">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">1. Acceptance of Terms</h2>
-          <p>By accessing or using ToolSuite, you agree to be bound by these Terms of Service and all applicable laws and regulations.</p>
-        </section>
-
-        <section className="space-y-2">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">2. Permitted Use & Quotas</h2>
-          <p>You agree to use ToolSuite solely for lawful purposes. Anonymous users are granted up to 3 operations per day. Registered users receive quotas corresponding to their subscription tier.</p>
-        </section>
-
-        <section className="space-y-2">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">3. Software Licenses</h2>
-          <p>Software and digital assets purchased on ToolSuite grant a perpetual, non-exclusive license subject to the activation seat limits specified at checkout.</p>
-        </section>
-      </div>
-    </div>
-  );
+  return <PolicyPage eyebrow="Terms of service" title="Rules that keep AppToolkitLab useful, lawful, and fair." description="These terms cover the public tools, account workspace, APIs, subscriptions, software marketplace, downloads, and support services." currentPath="/terms">
+    <PolicySection id="acceptance" title="1. Acceptance and operator details"><p>By using AppToolkitLab, you agree to these terms and the policies linked from them. If you use AppToolkitLab for an organization, you represent that you have authority to bind it. AppToolkitLab is a Gonexel product. These terms must not be activated for paid production use until the responsible legal entity, address, contact information, and governing jurisdiction are inserted and reviewed.</p></PolicySection>
+    <PolicySection id="eligibility" title="2. Eligibility and accounts"><p>You must meet the minimum age and contracting requirements of your location. Provide accurate account information, protect credentials and API keys, and promptly report unauthorized use. You are responsible for activity under your account unless caused by AppToolkitLab&apos;s failure to apply reasonable security.</p></PolicySection>
+    <PolicySection id="services" title="3. Services and availability"><p>AppToolkitLab may provide free tools, cloud conversion, OCR, browser-based URL capture, editing, storage, APIs, automations, software, licenses, and downloads. A listing marked preview, coming soon, unavailable, or lacking an enabled checkout is not an offer for sale. Features and limits may change, with reasonable notice for material paid-plan reductions where practicable.</p></PolicySection>
+    <PolicySection id="content" title="4. Your content and processing permission"><p>You retain your rights in uploaded files, URLs, text, and other content. You grant AppToolkitLab and its processors a limited, worldwide permission to receive, copy, transform, temporarily store, transmit, and return that content only to provide, secure, and support the requested service. You represent that you have the necessary rights and lawful basis to submit it.</p></PolicySection>
+    <PolicySection id="acceptable-use" title="5. Acceptable use"><p>Do not use AppToolkitLab to:</p><ul><li>break law, infringe intellectual property or privacy, or process content without authorization;</li><li>bypass authentication, paywalls, CAPTCHAs, robots restrictions, technical access controls, or a third party&apos;s terms;</li><li>upload malware, exploit vulnerabilities, probe systems without written permission, or disrupt other users;</li><li>process illegal abuse material, facilitate fraud, harassment, discrimination, or physical harm;</li><li>evade quotas, resell access without permission, or automate requests in a way that degrades the service.</li></ul></PolicySection>
+    <PolicySection id="results" title="6. Conversion and generated-output limitations"><p>Conversion, OCR, webpage capture, and generated output can be incomplete or inaccurate. Layouts, fonts, formulas, forms, images, links, metadata, or text may change. Remote pages may refuse access or render differently because of scripts, sessions, location, timing, or browser rules. You must review output before relying on it for legal, financial, medical, safety, regulatory, archival, or publication purposes.</p></PolicySection>
+    <PolicySection id="plans" title="7. Plans, quotas, and subscriptions"><p>Current operations, file size, storage, processing time, API, and seat limits are shown in the active plan or server response. AppToolkitLab may reject or queue work that exceeds them. Unless checkout says otherwise, subscriptions renew for the displayed period until cancelled. Cancellation prevents future renewal but does not automatically create a refund for an already-started period.</p></PolicySection>
+    <PolicySection id="marketplace" title="8. Marketplace products and licenses"><p>Each product&apos;s page, version, license, supported systems, update period, user or device limits, and checkout terms control that purchase. No blanket perpetual license or lifetime update promise applies. Unless expressly allowed, licenses are non-transferable and may not be shared, resold, reverse engineered beyond mandatory-law rights, or used to distribute the product itself.</p></PolicySection>
+    <PolicySection id="payments" title="9. Payments, taxes, and providers"><p>Prices, currency, billing period, taxes, and payment provider are confirmed at checkout. Supported INR transactions may route through Razorpay and supported international transactions through Stripe. You authorize the selected provider to process the charge and permit AppToolkitLab to receive transaction status and references. You remain responsible for applicable taxes not collected at checkout.</p></PolicySection>
+    <PolicySection id="refunds" title="10. Cancellations and refunds"><p>Refund eligibility is governed by the <Link href="/refund-policy">Refund Policy</Link>, the checkout disclosure, product-specific terms, and mandatory consumer law. Digital access, activation, downloads, usage, duplicate charges, and unresolved technical defects can affect the review.</p></PolicySection>
+    <PolicySection id="suspension" title="11. Suspension and termination"><p>AppToolkitLab may restrict or terminate access for material breach, security risk, fraud, non-payment, unlawful use, sanctions restrictions, or harm to the platform or others. Where risk permits, notice and a chance to cure should be provided. Users may stop using the service and request account closure, subject to required record retention.</p></PolicySection>
+    <PolicySection id="ip" title="12. AppToolkitLab intellectual property"><p>The platform, branding, interfaces, documentation, software, and marketplace content are protected by applicable intellectual-property law. Except for the rights expressly granted by a plan or product license, no ownership transfers to you. Feedback may be used to improve AppToolkitLab without an obligation to pay, provided it does not disclose protected confidential information.</p></PolicySection>
+    <PolicySection id="disclaimers" title="13. Disclaimers"><p>To the extent permitted by law, the service is provided “as available.” AppToolkitLab does not promise uninterrupted operation, universal URL access, perfectly faithful conversion, error-free OCR, compatibility with every environment, or that output is suitable for a particular professional or regulated purpose. Mandatory warranties that cannot lawfully be excluded remain unaffected.</p></PolicySection>
+    <PolicySection id="liability" title="14. Liability"><p>The final limitation of liability, excluded-loss categories, liability cap, indemnity language, and consumer exceptions must be set by qualified counsel for the operator&apos;s jurisdiction and insurance. Nothing in these terms excludes liability that cannot legally be excluded.</p></PolicySection>
+    <PolicySection id="law" title="15. Governing law, disputes, and changes"><p>Governing law and dispute venue cannot be selected until the operating entity and markets are confirmed. The production version must state them, preserve mandatory consumer rights, explain any arbitration or informal resolution process, and provide notice of material changes. Questions can be sent through <Link href="/contact">Contact support</Link>.</p></PolicySection>
+  </PolicyPage>;
 }

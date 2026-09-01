@@ -7,11 +7,18 @@ const checks = [];
 const nodeMajor = Number(process.versions.node.split('.')[0]);
 checks.push({ name: `Node.js ${process.versions.node}`, ok: nodeMajor >= 20, hint: 'Install Node.js 20 or newer.' });
 
-for (const command of ['pandoc', 'pdftoppm', 'tesseract']) {
-  const result = spawnSync(command, ['--version'], { stdio: 'ignore' });
+const nativeCommands = [
+  ['pandoc', ['--version']],
+  ['pdftotext', ['-v']],
+  ['pdftoppm', ['-v']],
+  ['tesseract', ['--version']],
+];
+
+for (const [command, args] of nativeCommands) {
+  const result = spawnSync(command, args, { stdio: 'ignore' });
   checks.push({
     name: command,
-    ok: result.status === 0,
+    ok: !result.error && result.status !== null,
     hint: `Install ${command} (macOS: brew install pandoc poppler tesseract).`,
   });
 }

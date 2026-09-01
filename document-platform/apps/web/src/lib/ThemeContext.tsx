@@ -17,7 +17,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
-    const stored = localStorage.getItem('toolsuite-theme') || localStorage.getItem('docconv-theme');
+    const stored = localStorage.getItem('apptoolkitlab-theme') || localStorage.getItem('toolsuite-theme') || localStorage.getItem('docconv-theme');
     if (stored === 'light' || stored === 'dark') {
       setTheme(stored);
     }
@@ -25,7 +25,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!mounted) return;
-    localStorage.setItem('toolsuite-theme', theme);
+    localStorage.setItem('apptoolkitlab-theme', theme);
     document.documentElement.setAttribute('data-theme', theme);
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');

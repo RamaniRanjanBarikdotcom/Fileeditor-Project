@@ -1,6 +1,6 @@
-# ToolSuite
+# AppToolkitLab
 
-ToolSuite is a Next.js + NestJS document platform with a separate Node.js conversion worker. It supports two runtime modes without changing application code:
+AppToolkitLab is a Gonexel product built with Next.js, NestJS, and a separate Node.js conversion worker. It supports multiple runtime modes without changing application code:
 
 - **Docker mode:** every service runs in Docker Compose.
 - **Node/hybrid mode:** Next.js, NestJS, and the worker run directly in Node.js; only infrastructure runs in Docker.
@@ -43,23 +43,28 @@ Review `.env` and replace the development secrets before using a public server.
 This runs the dependencies (Postgres, Redis, MinIO, Gotenberg) in Docker, but runs the API, Worker, and Web natively on your machine via Node.js.
 
 ```bash
-# This will start infra, setup the database, and run the node apps in parallel
+# Stops Docker app containers if necessary, starts the four infrastructure
+# containers, initializes the database, and runs all Node apps in parallel.
 corepack pnpm run hybrid:dev
 ```
+
+Open <http://localhost:5173>. Stop the foreground Node processes with `Ctrl+C`;
+the infrastructure containers can be stopped with `corepack pnpm infra:down`.
 
 ## 2. Fully Native Node.js (Production Server)
 
 If you are deploying this to a raw Node.js server (like an EC2 instance or VPS) where your databases are hosted elsewhere, you do not need Docker at all.
 
 ```bash
-# 1. Install dependencies
+# 1. Install dependencies and check the server prerequisites
 corepack pnpm install
+corepack pnpm node:doctor
 
-# 2. Setup the database schema (make sure DATABASE_URL in .env points to your DB)
-corepack pnpm run db:push
+# 2. Build shared packages, initialize the database, and seed the tool registry
+corepack pnpm node:setup
 
 # 3. Build the API, Worker, and Next.js Web app
-corepack pnpm run build
+corepack pnpm node:build
 
 # 4. Start all three apps in production mode
 corepack pnpm run node:start
@@ -72,12 +77,15 @@ corepack pnpm run node:start
 To run the entire stack inside Docker (useful for quick testing on any machine).
 
 ```bash
-# Start everything in the background
+# Build the current source, start everything, and wait for health checks
 corepack pnpm run docker:up
 
 # View logs
 corepack pnpm run docker:logs
 ```
+
+Open <http://localhost:5173>. Stop all containers with
+`corepack pnpm docker:down`.
 
 ## Native environment defaults
 
@@ -100,5 +108,5 @@ Docker Compose overrides these values with internal service names. The applicati
 ```bash
 corepack pnpm test
 corepack pnpm node:build
-corepack pnpm test:integration
+corepack pnpm test:smoke
 ```

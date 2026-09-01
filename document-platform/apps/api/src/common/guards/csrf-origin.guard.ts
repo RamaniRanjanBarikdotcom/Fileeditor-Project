@@ -26,7 +26,7 @@ export class CsrfOriginGuard implements CanActivate {
     const clientSecret = req.headers['x-toolsuite-client'] as string | undefined;
 
     // Allow requests with our custom application header
-    if (requestedWith === 'ToolSuiteApp' || requestedWith === 'XMLHttpRequest' || clientSecret) {
+    if (requestedWith === 'AppToolkitLabApp' || requestedWith === 'ToolSuiteApp' || requestedWith === 'XMLHttpRequest' || clientSecret) {
       return true;
     }
 

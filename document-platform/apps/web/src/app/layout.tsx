@@ -5,8 +5,8 @@ import { Footer } from '../components/Footer';
 import '../index.css';
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:5173'),
-  title: 'ToolSuite — Free Online Tools, Cloud SaaS Studio & Software Marketplace',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://apptoolkitlab.com'),
+  title: 'AppToolkitLab — Free Online Tools, Cloud SaaS & Software Marketplace',
   description:
     'All-in-one digital platform for high-speed PDF conversions, developer tools, downloadable software, and cloud document editing.',
   keywords: [
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     'software marketplace',
     'document editor',
   ],
-  authors: [{ name: 'ToolSuite Engineering' }],
+  authors: [{ name: 'AppToolkitLab by Gonexel' }],
   robots: {
     index: true,
     follow: true,
@@ -28,10 +28,10 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     url: '/',
-    title: 'ToolSuite — Enterprise Free Tools & Software Marketplace',
+    title: 'AppToolkitLab — Free Tools & Software Marketplace',
     description:
       'Convert documents, extract text with OCR, download developer software, and build in our cloud SaaS workspace.',
-    siteName: 'ToolSuite',
+    siteName: 'AppToolkitLab',
   },
 };
 
@@ -60,7 +60,7 @@ export default function RootLayout({
       >
         <ThemeProvider>
           <Navbar />
-          <main className="w-full flex-1 pt-16">{children}</main>
+          <main className="w-full flex-1 pt-[4.5rem]">{children}</main>
           <Footer />
         </ThemeProvider>
       </body>

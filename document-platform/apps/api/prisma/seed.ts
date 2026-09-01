@@ -5,7 +5,7 @@ import * as crypto from 'crypto';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Seeding ToolSuite database...');
+  console.log('🌱 Seeding AppToolkitLab database...');
 
   // ─── 1. Subscription Plans ───────────────────────────────────
 
@@ -272,8 +272,8 @@ async function main() {
 
   const products = [
     {
-      slug: 'toolsuite-desktop-cli',
-      name: 'ToolSuite CLI Pro Engine',
+      slug: 'apptoolkitlab-desktop-cli',
+      name: 'AppToolkitLab CLI Pro Engine',
       tagline: 'High-throughput command-line document conversion & automation tool',
       description: 'A cross-platform binary CLI for batch converting PDFs, URLs, Markdown, and HTML with hardware acceleration.',
       type: ProductType.SOFTWARE,

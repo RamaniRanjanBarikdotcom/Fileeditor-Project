@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// ToolSuite — NestJS API Entry Point
+// AppToolkitLab — NestJS API Entry Point
 // ═══════════════════════════════════════════════════════════════
 
 import { NestFactory } from '@nestjs/core';
@@ -67,7 +67,7 @@ async function bootstrap() {
 
   // ─── Swagger / OpenAPI ─────────────────────────────────────
   const config = new DocumentBuilder()
-    .setTitle('ToolSuite Platform API')
+    .setTitle('AppToolkitLab Platform API')
     .setDescription('Enterprise Multi-Tool, SaaS Subscription & Software Marketplace API')
     .setVersion('1.0')
     .addBearerAuth()
@@ -87,7 +87,7 @@ async function bootstrap() {
   // ─── Start Server ─────────────────────────────────────────
   const port = process.env.PORT || 4201;
   await app.listen(port);
-  console.log(`🚀 ToolSuite API running on http://localhost:${port}`);
+  console.log(`🚀 AppToolkitLab API running on http://localhost:${port}`);
   console.log(`📚 Swagger docs at http://localhost:${port}/api/docs`);
 }
 

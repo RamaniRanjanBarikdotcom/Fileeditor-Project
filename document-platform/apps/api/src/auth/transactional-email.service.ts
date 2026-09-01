@@ -15,12 +15,12 @@ export class TransactionalEmailService {
 
   async sendPasswordReset(email: string, token: string) {
     const url = `${this.webUrl()}/reset-password?token=${encodeURIComponent(token)}`;
-    await this.send(email, 'Reset your ToolSuite password', `Open this secure link to reset your password (valid for one hour):\n\n${url}`);
+    await this.send(email, 'Reset your AppToolkitLab password', `Open this secure link to reset your password (valid for one hour):\n\n${url}`);
   }
 
   async sendEmailVerification(email: string, token: string) {
     const url = `${this.webUrl()}/verify-email?token=${encodeURIComponent(token)}`;
-    await this.send(email, 'Verify your ToolSuite email', `Verify your ToolSuite email address using this link (valid for 24 hours):\n\n${url}`);
+    await this.send(email, 'Verify your AppToolkitLab email', `Verify your AppToolkitLab email address using this link (valid for 24 hours):\n\n${url}`);
   }
 
   private webUrl() {
@@ -36,7 +36,7 @@ export class TransactionalEmailService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: this.config.get<string>('EMAIL_FROM', 'ToolSuite <onboarding@resend.dev>'),
+        from: this.config.get<string>('EMAIL_FROM', 'AppToolkitLab <onboarding@resend.dev>'),
         to: [to],
         subject,
         text,

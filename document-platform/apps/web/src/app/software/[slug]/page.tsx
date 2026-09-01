@@ -76,7 +76,7 @@ export default function SoftwareDetailPage() {
     }
     const data = result.data;
     const gateway = new window.Razorpay({
-      key: data.keyId, amount: data.amount, currency: data.currency, name: 'ToolSuite', description: data.productName,
+      key: data.keyId, amount: data.amount, currency: data.currency, name: 'AppToolkitLab', description: data.productName,
       order_id: data.razorpayOrderId,
       handler: async (payment: Record<string, string>) => {
         const verified = await fetchApi('/orders/verify-razorpay', { method: 'POST', body: JSON.stringify({ orderId: data.orderId, razorpayOrderId: payment.razorpay_order_id, razorpayPaymentId: payment.razorpay_payment_id, razorpaySignature: payment.razorpay_signature }) });

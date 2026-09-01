@@ -34,7 +34,7 @@ export class AnonymousToolsService {
   }) {
     const tool = await this.tools.getToolBySlug(params.slug);
     if (!tool.anonymousEnabled) {
-      throw new BadRequestException('This tool requires a free ToolSuite account.');
+      throw new BadRequestException('This tool requires a free AppToolkitLab account.');
     }
 
     const targetFormat = (params.targetFormat || tool.outputFormats[0] || '').toLowerCase();
@@ -134,7 +134,7 @@ export class AnonymousToolsService {
     ]);
     if (!user || !organization) {
       throw new NotFoundException(
-        'Anonymous tools are not initialized. Run the ToolSuite database seed.',
+        'Anonymous tools are not initialized. Run the AppToolkitLab database seed.',
       );
     }
     return { userId: user.id, organizationId: organization.id };

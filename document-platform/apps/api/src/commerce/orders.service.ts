@@ -218,7 +218,7 @@ export class OrdersService {
         keyId: rzpOrder.keyId,
         amount: rzpOrder.amount,
         currency: rzpOrder.currency,
-        productName: orderItems[0]?.name || 'ToolSuite Digital Purchase',
+        productName: orderItems[0]?.name || 'AppToolkitLab Digital Purchase',
       };
     }
   }
