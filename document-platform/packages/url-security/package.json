@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "test": "node --test test/*.test.cjs",
     "clean": "rm -rf dist"
   },
   "dependencies": {

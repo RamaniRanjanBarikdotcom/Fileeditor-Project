@@ -1,6 +1,15 @@
 import {
-  Controller, Post, Get, Delete, Param, Query, Body,
-  UseGuards, Request, UseInterceptors, UploadedFile,
+  Controller,
+  Post,
+  Get,
+  Delete,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  Request,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiConsumes } from '@nestjs/swagger';
@@ -15,6 +24,10 @@ enum PasteFormat {
   TEXT = 'txt',
   URL = 'url',
 }
+
+const TRANSPORT_UPLOAD_LIMIT = Number(
+  process.env.MAX_TRANSPORT_UPLOAD_SIZE_BYTES || 250 * 1024 * 1024,
+);
 
 class PasteContentDto {
   @IsString()
@@ -36,23 +49,16 @@ export class FilesController {
   @Post('upload')
   @ApiOperation({ summary: 'Upload a file' })
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 26_214_400 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: TRANSPORT_UPLOAD_LIMIT } }))
   async upload(@Request() req: any, @UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('A file is required.');
-    const result = await this.filesService.uploadFile(
-      req.user.userId,
-      req.user.orgId,
-      file,
-    );
+    const result = await this.filesService.uploadFile(req.user.userId, req.user.orgId, file);
     return { success: true, data: result };
   }
 
   @Post('paste')
   @ApiOperation({ summary: 'Upload pasted content (HTML, Markdown, or text)' })
-  async paste(
-    @Request() req: any,
-    @Body() body: PasteContentDto,
-  ) {
+  async paste(@Request() req: any, @Body() body: PasteContentDto) {
     const result = await this.filesService.uploadPastedContent(
       req.user.userId,
       req.user.orgId,

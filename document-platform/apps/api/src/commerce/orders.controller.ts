@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  UseGuards,
-  Req,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { OrdersService, CheckoutDto, VerifyRazorpayPaymentDto } from './orders.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrencyCode } from '@prisma/client';
@@ -54,23 +46,14 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post('checkout')
-  async createCheckout(
-    @Req() req: any,
-    @Body() dto: CreateCheckoutSessionDto,
-  ) {
+  async createCheckout(@Req() req: any, @Body() dto: CreateCheckoutSessionDto) {
     const data = await this.ordersService.createCheckoutSession(req.user.userId, dto);
     return { success: true, data };
   }
 
   @Post('verify-razorpay')
-  async verifyRazorpayPayment(
-    @Req() req: any,
-    @Body() dto: ClientVerifyRazorpayDto,
-  ) {
-    const data = await this.ordersService.verifyClientRazorpayPayment(
-      req.user.userId,
-      dto,
-    );
+  async verifyRazorpayPayment(@Req() req: any, @Body() dto: ClientVerifyRazorpayDto) {
+    const data = await this.ordersService.verifyClientRazorpayPayment(req.user.userId, dto);
     return { success: true, data };
   }
 

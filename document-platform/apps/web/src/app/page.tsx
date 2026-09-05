@@ -88,11 +88,8 @@ export default function HomePage() {
 
   return (
     <div className="w-full" style={{ overflowX: 'hidden' }}>
-
       {/* ─── HERO ─── */}
-      <section
-        className="home-hero relative overflow-hidden w-full"
-      >
+      <section className="home-hero relative overflow-hidden w-full">
         {/* Animated mesh background */}
         <div className="absolute inset-0 -z-10">
           <div
@@ -131,13 +128,14 @@ export default function HomePage() {
           {/* Grid overlay */}
           <div
             className="absolute inset-0 dot-grid opacity-40 dark:opacity-20"
-            style={{ maskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, black 40%, transparent 100%)' }}
+            style={{
+              maskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, black 40%, transparent 100%)',
+            }}
           />
         </div>
 
         <div className="container-custom relative z-10">
           <div className="home-hero-inner">
-
             {/* Badge */}
             <div className="inline-flex items-center gap-2 mb-8 anim-fade-up" id="hero-badge">
               <span
@@ -155,10 +153,7 @@ export default function HomePage() {
               style={{ color: 'var(--text-primary)' }}
             >
               Every Document Tool,{' '}
-              <span
-                className="block gradient-text"
-                style={{ lineHeight: '1.1' }}
-              >
+              <span className="block gradient-text" style={{ lineHeight: '1.1' }}>
                 SaaS Studio & Marketplace
               </span>
               <span className="block">In One Platform.</span>
@@ -175,8 +170,8 @@ export default function HomePage() {
                 lineHeight: '1.7',
               }}
             >
-              Convert PDFs, extract text with OCR, capture webpages, and purchase
-              software catalog items from one consistent workspace.
+              Convert PDFs, extract text with OCR, capture webpages, and purchase software catalog
+              items from one consistent workspace.
             </p>
 
             {/* CTAs */}
@@ -218,7 +213,8 @@ export default function HomePage() {
             <div
               className="absolute inset-0 pointer-events-none -z-0"
               style={{
-                background: 'radial-gradient(ellipse 80% 80% at 50% 50%, rgba(99,102,241,0.08) 0%, transparent 80%)',
+                background:
+                  'radial-gradient(ellipse 80% 80% at 50% 50%, rgba(99,102,241,0.08) 0%, transparent 80%)',
               }}
             />
 
@@ -245,19 +241,13 @@ export default function HomePage() {
                     </div>
 
                     {/* Stat Value */}
-                    <div className="home-stat-value">
-                      {stat.value}
-                    </div>
+                    <div className="home-stat-value">{stat.value}</div>
 
                     {/* Stat Label */}
-                    <div className="home-stat-label">
-                      {stat.label}
-                    </div>
+                    <div className="home-stat-label">{stat.label}</div>
 
                     {/* Sublabel */}
-                    <div className="home-stat-sublabel">
-                      {stat.sublabel}
-                    </div>
+                    <div className="home-stat-sublabel">{stat.sublabel}</div>
                   </div>
                 );
               })}
@@ -272,7 +262,8 @@ export default function HomePage() {
         <div
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[500px] rounded-full pointer-events-none -z-10"
           style={{
-            background: 'radial-gradient(ellipse 60% 50% at 50% 50%, rgba(99,102,241,0.1) 0%, transparent 70%)',
+            background:
+              'radial-gradient(ellipse 60% 50% at 50% 50%, rgba(99,102,241,0.1) 0%, transparent 70%)',
             filter: 'blur(60px)',
           }}
         />
@@ -295,7 +286,8 @@ export default function HomePage() {
               Featured Free Tools
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: '1.6' }}>
-              High-speed, private document utilities that process directly in your browser with zero registration required.
+              High-speed, private document utilities that process directly in your browser with zero
+              registration required.
             </p>
           </div>
 
@@ -309,9 +301,11 @@ export default function HomePage() {
                   href={`/tools/${tool.slug}`}
                   id={`tool-card-${tool.slug}`}
                   className="home-tool-card group"
-                  style={{
-                    '--tool-accent': tool.accentColor,
-                  } as React.CSSProperties}
+                  style={
+                    {
+                      '--tool-accent': tool.accentColor,
+                    } as React.CSSProperties
+                  }
                 >
                   <div>
                     {/* Top Row: Icon + Badge */}
@@ -353,17 +347,11 @@ export default function HomePage() {
                     </h3>
 
                     {/* Description */}
-                    <p
-                      className="home-tool-description"
-                    >
-                      {tool.features[0]}
-                    </p>
+                    <p className="home-tool-description">{tool.features[0]}</p>
                   </div>
 
                   {/* Bottom Footer */}
-                  <div
-                    className="home-tool-card-footer"
-                  >
+                  <div className="home-tool-card-footer">
                     <span
                       style={{
                         fontSize: '0.75rem',
@@ -390,11 +378,8 @@ export default function HomePage() {
 
           {/* Centered Bottom CTA */}
           <div className="home-tools-action">
-            <Link
-              href="/tools"
-              className="btn btn-secondary btn-md inline-flex items-center gap-2"
-            >
-              <span>Explore All 8 Tools in Directory</span>
+            <Link href="/tools" className="btn btn-secondary btn-md inline-flex items-center gap-2">
+              <span>Explore All Tools in Directory</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
@@ -416,7 +401,8 @@ export default function HomePage() {
         <div
           className="absolute inset-0 -z-0"
           style={{
-            background: 'radial-gradient(ellipse 60% 80% at 100% 50%, rgba(99,102,241,0.06) 0%, transparent 70%)',
+            background:
+              'radial-gradient(ellipse 60% 80% at 100% 50%, rgba(99,102,241,0.06) 0%, transparent 70%)',
           }}
         />
 
@@ -426,8 +412,17 @@ export default function HomePage() {
             <h2 className="ts-h2 mb-4" style={{ color: 'var(--text-primary)' }}>
               Buy Production-Ready Software & Developer Kits
             </h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '1.0625rem', lineHeight: '1.6', maxWidth: '600px', margin: '0 auto' }}>
-              Explore our curated catalog of source code, templates, and standalone tools available for one-time purchase.
+            <p
+              style={{
+                color: 'var(--text-secondary)',
+                fontSize: '1.0625rem',
+                lineHeight: '1.6',
+                maxWidth: '600px',
+                margin: '0 auto',
+              }}
+            >
+              Explore our curated catalog of source code, templates, and standalone tools available
+              for one-time purchase.
             </p>
           </div>
 
@@ -542,10 +537,7 @@ export default function HomePage() {
                         / {item.priceINR} one-time
                       </span>
                     </div>
-                    <Link
-                      href={`/software/${item.slug}`}
-                      className="btn btn-primary btn-sm"
-                    >
+                    <Link href={`/software/${item.slug}`} className="btn btn-primary btn-sm">
                       View Product
                       <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
@@ -573,7 +565,8 @@ export default function HomePage() {
               Simple, High-Value SaaS Plans
             </h2>
             <p>
-              Start completely free or scale with Pro & Business tiers for priority batch queues and API access.
+              Start completely free or scale with Pro & Business tiers for priority batch queues and
+              API access.
             </p>
           </div>
 
@@ -590,14 +583,21 @@ export default function HomePage() {
                 <span>$0</span>
                 <small>/ forever</small>
               </div>
-              <p className="pricing-plan-summary">Essential document tools for occasional personal projects.</p>
+              <p className="pricing-plan-summary">
+                Essential document tools for occasional personal projects.
+              </p>
               <ul className="pricing-plan-features">
-                {['10 operations per day', '25 MB file size', '24-hour cloud retention'].map((f) => (
-                  <li key={f} className="feature-item">
-                    <CheckCircle2 className="w-4 h-4" style={{ color: 'var(--success)', flexShrink: 0 }} />
-                    {f}
-                  </li>
-                ))}
+                {['10 operations per day', '25 MB file size', '10-minute temporary files'].map(
+                  (f) => (
+                    <li key={f} className="feature-item">
+                      <CheckCircle2
+                        className="w-4 h-4"
+                        style={{ color: 'var(--success)', flexShrink: 0 }}
+                      />
+                      {f}
+                    </li>
+                  ),
+                )}
               </ul>
               <Link href="/register" className="btn btn-secondary btn-md pricing-plan-action">
                 Start Free Today
@@ -618,13 +618,25 @@ export default function HomePage() {
               </div>
               <div className="pricing-plan-price">
                 <span className="gradient-text">$9</span>
-                <small>/ month <em>or ₹749</em></small>
+                <small>
+                  / month <em>or ₹749</em>
+                </small>
               </div>
-              <p className="pricing-plan-summary">Higher limits, longer retention, and priority processing.</p>
+              <p className="pricing-plan-summary">
+                Higher limits and priority processing for regular workflows.
+              </p>
               <ul className="pricing-plan-features">
-                {['500 operations per month', '100 MB file size', '30-day cloud retention', 'Priority worker queues'].map((f) => (
+                {[
+                  '500 operations per month',
+                  '100 MB file size',
+                  '10-minute temporary files',
+                  'Priority worker queues',
+                ].map((f) => (
                   <li key={f} className="feature-item">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: 'var(--brand-500)', flexShrink: 0 }} />
+                    <CheckCircle2
+                      className="w-4 h-4 shrink-0"
+                      style={{ color: 'var(--brand-500)', flexShrink: 0 }}
+                    />
                     {f}
                   </li>
                 ))}
@@ -645,13 +657,25 @@ export default function HomePage() {
               </div>
               <div className="pricing-plan-price">
                 <span>$29</span>
-                <small>/ month <em>or ₹2,499</em></small>
+                <small>
+                  / month <em>or ₹2,499</em>
+                </small>
               </div>
-              <p className="pricing-plan-summary">Team access, API capacity, and room for production workloads.</p>
+              <p className="pricing-plan-summary">
+                Team access, API capacity, and room for production workloads.
+              </p>
               <ul className="pricing-plan-features">
-                {['5,000 ops / month', '250 MB file size', '90-day cloud retention', 'Full REST API + 10 Team Seats'].map((f) => (
+                {[
+                  '5,000 ops / month',
+                  '250 MB file size',
+                  '10-minute temporary files',
+                  'Full REST API + 10 Team Seats',
+                ].map((f) => (
                   <li key={f} className="feature-item">
-                    <CheckCircle2 className="w-4 h-4" style={{ color: 'var(--success)', flexShrink: 0 }} />
+                    <CheckCircle2
+                      className="w-4 h-4"
+                      style={{ color: 'var(--success)', flexShrink: 0 }}
+                    />
                     {f}
                   </li>
                 ))}
@@ -663,16 +687,13 @@ export default function HomePage() {
           </div>
 
           <div className="home-pricing-compare">
-            <Link
-              href="/pricing"
-            >
+            <Link href="/pricing">
               Compare all features in full detail
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
       </section>
-
     </div>
   );
 }

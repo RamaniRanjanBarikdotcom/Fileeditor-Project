@@ -20,7 +20,10 @@ import { AnonymousToolsService } from './anonymous-tools.service';
 import { Request, Response } from 'express';
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 
-const ANON_COOKIE_NAME = 'toolsuite_anon_id';
+const ANON_COOKIE_NAME = 'apptoolkitlab_anon_id';
+const TRANSPORT_UPLOAD_LIMIT = Number(
+  process.env.MAX_TRANSPORT_UPLOAD_SIZE_BYTES || 250 * 1024 * 1024,
+);
 
 class AnonymousToolExecutionDto {
   @IsOptional()
@@ -48,17 +51,14 @@ export class ToolsController {
 
   @Get()
   @ApiOperation({ summary: 'List all published tools with optional category filter' })
-  async getTools(
-    @Query('category') category?: string,
-    @Query('featured') featured?: string,
-  ) {
+  async getTools(@Query('category') category?: string, @Query('featured') featured?: string) {
     const isFeatured = featured === 'true' || featured === '1';
     const tools = await this.toolsService.getPublishedTools(category, isFeatured);
     return { success: true, data: tools };
   }
 
   @Post(':slug/execute')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: TRANSPORT_UPLOAD_LIMIT } }))
   @ApiOperation({ summary: 'Execute a published tool with anonymous daily quota' })
   async executeAnonymousTool(
     @Param('slug') slug: string,
@@ -113,6 +113,18 @@ export class ToolsController {
     return { success: true, data: { url } };
   }
 
+  @Post('jobs/:jobId/cancel')
+  @ApiOperation({ summary: 'Cancel an anonymous tool conversion' })
+  async cancelAnonymousJob(
+    @Param('jobId') jobId: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { anonId } = this.ensureAnonymousIdentity(req, res);
+    const result = await this.anonymousToolsService.cancel(jobId, anonId);
+    return { success: true, data: result };
+  }
+
   @Get('categories')
   @ApiOperation({ summary: 'Get list of tool categories with counts' })
   async getCategories() {
@@ -122,10 +134,7 @@ export class ToolsController {
 
   @Get('quota/anonymous')
   @ApiOperation({ summary: 'Check remaining anonymous quota' })
-  async checkAnonymousQuota(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async checkAnonymousQuota(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const ip = this.getClientIp(req);
     const { anonId } = this.ensureAnonymousIdentity(req, res);
 

@@ -31,10 +31,7 @@ export class WebhooksController {
    */
   @Post('stripe')
   @HttpCode(HttpStatus.OK)
-  async handleStripeWebhook(
-    @Req() req: Request,
-    @Headers('stripe-signature') signature: string,
-  ) {
+  async handleStripeWebhook(@Req() req: Request, @Headers('stripe-signature') signature: string) {
     const rawBody = (req as any).rawBody || req.body;
     if (!rawBody) {
       throw new BadRequestException('Missing webhook payload');

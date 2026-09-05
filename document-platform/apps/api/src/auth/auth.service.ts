@@ -12,13 +12,7 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../common/prisma.service';
 import { PlatformRole, UserStatus } from '@prisma/client';
 import { TransactionalEmailService } from './transactional-email.service';
-import {
-  IsEmail,
-  IsOptional,
-  IsString,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 // ─── DTOs ────────────────────────────────────────────────────
 

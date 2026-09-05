@@ -2,7 +2,11 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@docconv/shared-types'],
+  transpilePackages: [
+    '@docconv/shared-types',
+    '@docconv/tool-registry',
+    '@docconv/processing-core',
+  ],
   async rewrites() {
     return [
       {

@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { listToolDefinitions } from '@docconv/tool-registry';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://apptoolkitlab.com').replace(/\/$/, '');
@@ -18,6 +19,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     '/data-policy',
     '/terms',
     '/refund-policy',
+    ...listToolDefinitions()
+      .filter((tool) => tool.availability !== 'COMING_SOON')
+      .map((tool) => `/tools/${tool.slug}`),
   ];
 
   return paths.map((path) => ({

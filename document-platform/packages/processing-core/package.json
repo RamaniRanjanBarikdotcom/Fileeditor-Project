@@ -1,0 +1,17 @@
+{
+  "name": "@docconv/processing-core",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@docconv/shared-types": "workspace:*",
+    "@docconv/tool-registry": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.cjs",
+    "clean": "rm -rf dist"
+  }
+}

@@ -1,4 +1,11 @@
-import { PrismaClient, SubscriptionPlanTier, ProductType, CurrencyCode, PaymentProvider, UserStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  SubscriptionPlanTier,
+  ProductType,
+  CurrencyCode,
+  PaymentProvider,
+  UserStatus,
+} from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
@@ -17,7 +24,7 @@ async function main() {
       name: 'Free Starter',
       monthlyOpsLimit: 300, // ~10 ops/day
       maxFileSizeBytes: BigInt(25 * 1024 * 1024), // 25 MB
-      retentionDays: 1, // 24h
+      retentionDays: 0, // customer file bytes expire within 10 minutes
       hasApiAccess: false,
       maxTeamSeats: 1,
     },
@@ -31,7 +38,7 @@ async function main() {
       name: 'Pro Developer',
       monthlyOpsLimit: 500,
       maxFileSizeBytes: BigInt(100 * 1024 * 1024), // 100 MB
-      retentionDays: 30,
+      retentionDays: 0,
       hasApiAccess: false,
       maxTeamSeats: 1,
     },
@@ -45,13 +52,15 @@ async function main() {
       name: 'Business Enterprise',
       monthlyOpsLimit: 5000,
       maxFileSizeBytes: BigInt(250 * 1024 * 1024), // 250 MB
-      retentionDays: 90,
+      retentionDays: 0,
       hasApiAccess: true,
       maxTeamSeats: 10,
     },
   });
 
-  console.log(`✅ Subscription plans seeded: ${freePlan.name}, ${proPlan.name}, ${businessPlan.name}`);
+  console.log(
+    `✅ Subscription plans seeded: ${freePlan.name}, ${proPlan.name}, ${businessPlan.name}`,
+  );
 
   // Internal principal used only by the public anonymous-tool pipeline. It is
   // inactive, has no usable password, and can never authenticate interactively.
@@ -96,6 +105,36 @@ async function main() {
   // ─── 2. Server-Authoritative Tools ───────────────────────────
 
   const tools = [
+    ...([
+      ['merge-pdf', 'Merge PDF', 'pdf.merge', 'Combine multiple PDF files privately in your browser.'],
+      ['split-pdf', 'Split PDF', 'pdf.split', 'Export every PDF page as an individual PDF.'],
+      ['extract-pdf-pages', 'Extract PDF Pages', 'pdf.extractPages', 'Create a new PDF from selected pages.'],
+      ['delete-pdf-pages', 'Delete PDF Pages', 'pdf.deletePages', 'Remove selected pages from a PDF.'],
+      ['rotate-pdf', 'Rotate PDF', 'pdf.rotate', 'Rotate every page in a PDF.'],
+      ['watermark-pdf', 'Watermark PDF', 'pdf.watermark', 'Apply a text watermark to every PDF page.'],
+      ['number-pdf-pages', 'Add PDF Page Numbers', 'pdf.addPageNumbers', 'Add page numbers to a PDF.'],
+      ['pdf-metadata', 'Edit PDF Metadata', 'pdf.editMetadata', 'Set PDF title, author, subject, and keywords.'],
+    ] as const).map(([slug, name, operation, description], index) => ({
+      slug,
+      name,
+      category: 'PDF',
+      engine: 'browser-pdf-lib',
+      acceptedFormats: ['pdf'],
+      outputFormats: ['pdf'],
+      minimumPlan: SubscriptionPlanTier.FREE,
+      anonymousEnabled: true,
+      costUnits: 0,
+      maxFileSizeBytes: BigInt(30 * 1024 * 1024),
+      isPublished: true,
+      isFeatured: index < 4,
+      sortOrder: index + 1,
+      seoMetadata: {
+        title: `${name} Online — Private Browser Tool`,
+        description,
+        keywords: [name.toLowerCase(), 'browser pdf tool', 'private pdf utility'],
+      },
+      configJson: { operation, processingLocation: 'BROWSER' },
+    })),
     {
       slug: 'pdf-to-docx',
       name: 'PDF to Word Converter',
@@ -109,11 +148,17 @@ async function main() {
       maxFileSizeBytes: BigInt(10 * 1024 * 1024), // 10MB
       isPublished: true,
       isFeatured: true,
-      sortOrder: 1,
+      sortOrder: 20,
       seoMetadata: {
         title: 'Free PDF to Word Converter Online — Editable DOCX Output',
-        description: 'Convert PDF documents to editable Microsoft Word (DOCX) files with OCR text extraction. Fast, secure, and free online.',
-        keywords: ['pdf to word', 'convert pdf to docx', 'pdf text extraction', 'editable word converter'],
+        description:
+          'Convert PDF documents to editable Microsoft Word (DOCX) files with OCR text extraction. Fast, secure, and free online.',
+        keywords: [
+          'pdf to word',
+          'convert pdf to docx',
+          'pdf text extraction',
+          'editable word converter',
+        ],
       },
     },
     {
@@ -129,10 +174,11 @@ async function main() {
       maxFileSizeBytes: BigInt(10 * 1024 * 1024),
       isPublished: true,
       isFeatured: true,
-      sortOrder: 2,
+      sortOrder: 21,
       seoMetadata: {
         title: 'Online PDF OCR & Text Extraction Tool',
-        description: 'Extract English text from digital and scanned PDF files into a downloadable text file.',
+        description:
+          'Extract English text from digital and scanned PDF files into a downloadable text file.',
         keywords: ['pdf ocr', 'extract text from pdf', 'scanned pdf extractor'],
       },
     },
@@ -149,7 +195,7 @@ async function main() {
       maxFileSizeBytes: BigInt(10 * 1024 * 1024),
       isPublished: true,
       isFeatured: true,
-      sortOrder: 3,
+      sortOrder: 22,
       seoMetadata: {
         title: 'URL to PDF Converter — Save Web Pages as Clean PDFs',
         description: 'Capture a public webpage into a PDF using a real headless Chromium browser.',
@@ -169,10 +215,11 @@ async function main() {
       maxFileSizeBytes: BigInt(10 * 1024 * 1024),
       isPublished: true,
       isFeatured: false,
-      sortOrder: 4,
+      sortOrder: 23,
       seoMetadata: {
         title: 'Convert Webpages to Editable Word Documents (DOCX)',
-        description: 'Save blog posts, documentation, and articles from any URL directly into Microsoft Word format.',
+        description:
+          'Save blog posts, documentation, and articles from any URL directly into Microsoft Word format.',
         keywords: ['url to word', 'web to docx', 'article to word'],
       },
     },
@@ -189,7 +236,7 @@ async function main() {
       maxFileSizeBytes: BigInt(10 * 1024 * 1024),
       isPublished: true,
       isFeatured: true,
-      sortOrder: 5,
+      sortOrder: 24,
       seoMetadata: {
         title: 'HTML to PDF Converter — High Precision Rendering',
         description: 'Render HTML and CSS into a PDF using a headless Chromium browser.',
@@ -209,10 +256,11 @@ async function main() {
       maxFileSizeBytes: BigInt(10 * 1024 * 1024),
       isPublished: true,
       isFeatured: false,
-      sortOrder: 6,
+      sortOrder: 25,
       seoMetadata: {
         title: 'Markdown to PDF Converter — GitHub Flavored Markdown',
-        description: 'Format and export Markdown documentation, technical specs, and notes into beautifully styled PDFs.',
+        description:
+          'Format and export Markdown documentation, technical specs, and notes into beautifully styled PDFs.',
         keywords: ['markdown to pdf', 'md to pdf', 'gfm pdf export'],
       },
     },
@@ -229,7 +277,7 @@ async function main() {
       maxFileSizeBytes: BigInt(10 * 1024 * 1024),
       isPublished: true,
       isFeatured: false,
-      sortOrder: 7,
+      sortOrder: 26,
       seoMetadata: {
         title: 'Convert Images to PDF Online (PNG, JPG, JPEG)',
         description: 'Convert a PNG, JPG, or JPEG image into a PDF file.',
@@ -249,10 +297,11 @@ async function main() {
       maxFileSizeBytes: BigInt(10 * 1024 * 1024),
       isPublished: true,
       isFeatured: true,
-      sortOrder: 8,
+      sortOrder: 27,
       seoMetadata: {
         title: 'Online Rich Document Studio & Exporter',
-        description: 'Compose, format, and export documents directly to PDF, DOCX, and HTML in a modern rich-text workspace.',
+        description:
+          'Compose, format, and export documents directly to PDF, DOCX, and HTML in a modern rich-text workspace.',
         keywords: ['online document editor', 'rich text editor', 'document studio'],
       },
     },
@@ -275,7 +324,8 @@ async function main() {
       slug: 'apptoolkitlab-desktop-cli',
       name: 'AppToolkitLab CLI Pro Engine',
       tagline: 'High-throughput command-line document conversion & automation tool',
-      description: 'A cross-platform binary CLI for batch converting PDFs, URLs, Markdown, and HTML with hardware acceleration.',
+      description:
+        'A cross-platform binary CLI for batch converting PDFs, URLs, Markdown, and HTML with hardware acceleration.',
       type: ProductType.SOFTWARE,
       isPublished: true,
       isFeatured: true,
@@ -299,7 +349,8 @@ async function main() {
       slug: 'nextjs-saas-starter-kit',
       name: 'Enterprise Next.js SaaS Boilerplate',
       tagline: 'Production-ready Next.js 16 + NestJS + Stripe + Razorpay boilerplate',
-      description: 'Complete full-stack starter kit with authentication, dual payment routing, rate limiting, and PostgreSQL integration.',
+      description:
+        'Complete full-stack starter kit with authentication, dual payment routing, rate limiting, and PostgreSQL integration.',
       type: ProductType.SOFTWARE,
       isPublished: true,
       isFeatured: true,

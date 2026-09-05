@@ -59,10 +59,7 @@ export class CartService {
       };
     });
 
-    const subtotalMinorUnits = items.reduce(
-      (acc, it) => acc + it.priceMinorUnits * it.quantity,
-      0,
-    );
+    const subtotalMinorUnits = items.reduce((acc, it) => acc + it.priceMinorUnits * it.quantity, 0);
 
     return {
       id: cart.id,

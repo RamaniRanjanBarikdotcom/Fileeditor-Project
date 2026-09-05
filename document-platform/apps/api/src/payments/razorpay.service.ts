@@ -106,10 +106,7 @@ export class RazorpayService {
       .digest('hex');
 
     try {
-      return crypto.timingSafeEqual(
-        Buffer.from(expected),
-        Buffer.from(signature),
-      );
+      return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
     } catch {
       return false;
     }

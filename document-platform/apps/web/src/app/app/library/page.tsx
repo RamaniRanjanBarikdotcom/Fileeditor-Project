@@ -65,7 +65,9 @@ export default function CustomerLibraryPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Customer Software Library</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+            Customer Software Library
+          </h1>
           <p className="text-xs text-slate-500 mt-1">
             Access your purchased lifetime licenses, product downloads, and activation keys
           </p>
@@ -90,9 +92,12 @@ export default function CustomerLibraryPage() {
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 flex items-center justify-center mx-auto">
             <ShoppingBag className="w-6 h-6" />
           </div>
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white">Your Software Library is Empty</h3>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+            Your Software Library is Empty
+          </h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-            You have not purchased any downloadable CLI tools or developer kits yet. Explore our store for lifetime software deals.
+            You have not purchased any downloadable CLI tools or developer kits yet. Explore our
+            store for lifetime software deals.
           </p>
           <div className="pt-2">
             <Link
@@ -143,7 +148,10 @@ export default function CustomerLibraryPage() {
                   ) : (
                     <Download className="w-4 h-4" />
                   )}
-                  <span>Download Binary ({((item.release?.fileSizeBytes || 0) / (1024 * 1024)).toFixed(1)} MB)</span>
+                  <span>
+                    Download Binary (
+                    {((item.release?.fileSizeBytes || 0) / (1024 * 1024)).toFixed(1)} MB)
+                  </span>
                 </button>
               </div>
 

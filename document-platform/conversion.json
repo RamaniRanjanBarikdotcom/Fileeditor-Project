@@ -1,1 +1,4 @@
-{"success":true,"data":{"id":"c24b0bed-913b-40b1-96ba-9f6d26b6b498","status":"QUEUED","engine":"chromium"}}
+{
+  "success": true,
+  "data": { "id": "c24b0bed-913b-40b1-96ba-9f6d26b6b498", "status": "QUEUED", "engine": "chromium" }
+}

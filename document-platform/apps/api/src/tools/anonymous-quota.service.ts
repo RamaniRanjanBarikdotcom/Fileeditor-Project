@@ -13,7 +13,8 @@ export interface AnonymousQuotaStatus {
 }
 
 const ANON_DAILY_LIMIT = 3;
-const ANON_COOKIE_NAME = 'toolsuite_anon_id';
+const ANON_COOKIE_NAME = 'apptoolkitlab_anon_id';
+const LEGACY_ANON_COOKIE_NAME = 'toolsuite_anon_id';
 
 @Injectable()
 export class AnonymousQuotaService {
@@ -33,7 +34,7 @@ export class AnonymousQuotaService {
    * Generates or extracts signed anonymous identity from cookies & headers.
    */
   getOrCreateAnonId(cookies?: Record<string, string>): { anonId: string; isNew: boolean } {
-    const existing = cookies?.[ANON_COOKIE_NAME];
+    const existing = cookies?.[ANON_COOKIE_NAME] || cookies?.[LEGACY_ANON_COOKIE_NAME];
     if (existing && existing.includes('.')) {
       const parts = existing.split('.');
       if (parts.length === 2 && parts[0] && parts[1]) {
@@ -117,15 +118,7 @@ export class AnonymousQuotaService {
   async releaseQuota(ip: string, anonId: string): Promise<void> {
     const ipHash = this.computeIpHmac(ip);
     const redisKey = `quota:anon:${ipHash}:${anonId}`;
-    try {
-      await this.redis.getClient().eval(
-        "local n=tonumber(redis.call('GET', KEYS[1]) or '0'); if n > 0 then return redis.call('DECR', KEYS[1]) end; return 0",
-        1,
-        redisKey,
-      );
-    } catch {
-      // A failed refund must not hide the original conversion error.
-    }
+    await this.redis.decrementFloorZero(redisKey);
   }
 
   private signAnonId(id: string): string {

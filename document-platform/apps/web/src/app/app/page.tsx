@@ -25,13 +25,55 @@ interface FormatOption {
 }
 
 const ALL_FORMATS: Record<string, FormatOption> = {
-  pdf: { value: 'pdf', label: 'PDF Document', ext: '.pdf', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
-  docx: { value: 'docx', label: 'Word Document', ext: '.docx', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
-  html: { value: 'html', label: 'HTML Website', ext: '.html', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
-  xlsx: { value: 'xlsx', label: 'Excel Spreadsheet', ext: '.xlsx', color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
-  csv: { value: 'csv', label: 'CSV Data', ext: '.csv', color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
-  md: { value: 'markdown', label: 'Markdown File', ext: '.md', color: '#06b6d4', bg: 'rgba(6,182,212,0.1)' },
-  txt: { value: 'txt', label: 'Plain Text', ext: '.txt', color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' },
+  pdf: {
+    value: 'pdf',
+    label: 'PDF Document',
+    ext: '.pdf',
+    color: '#ef4444',
+    bg: 'rgba(239,68,68,0.1)',
+  },
+  docx: {
+    value: 'docx',
+    label: 'Word Document',
+    ext: '.docx',
+    color: '#3b82f6',
+    bg: 'rgba(59,130,246,0.1)',
+  },
+  html: {
+    value: 'html',
+    label: 'HTML Website',
+    ext: '.html',
+    color: '#f59e0b',
+    bg: 'rgba(245,158,11,0.1)',
+  },
+  xlsx: {
+    value: 'xlsx',
+    label: 'Excel Spreadsheet',
+    ext: '.xlsx',
+    color: '#10b981',
+    bg: 'rgba(16,185,129,0.1)',
+  },
+  csv: {
+    value: 'csv',
+    label: 'CSV Data',
+    ext: '.csv',
+    color: '#8b5cf6',
+    bg: 'rgba(139,92,246,0.1)',
+  },
+  md: {
+    value: 'markdown',
+    label: 'Markdown File',
+    ext: '.md',
+    color: '#06b6d4',
+    bg: 'rgba(6,182,212,0.1)',
+  },
+  txt: {
+    value: 'txt',
+    label: 'Plain Text',
+    ext: '.txt',
+    color: '#94a3b8',
+    bg: 'rgba(148,163,184,0.1)',
+  },
 };
 
 function getAvailableFormats(inputType: 'file' | 'url', file: File | null): FormatOption[] {
@@ -73,12 +115,15 @@ export default function WorkspaceConverterPage() {
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState('');
   const [targetFormat, setTargetFormat] = useState('pdf');
-  const [status, setStatus] = useState<'idle' | 'uploading' | 'converting' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'uploading' | 'converting' | 'success' | 'error'>(
+    'idle',
+  );
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const availableFormats = getAvailableFormats(inputType, file);
 
@@ -95,6 +140,81 @@ export default function WorkspaceConverterPage() {
       setError(null);
     }
   }, []);
+
+  useEffect(() => {
+    const activeJobId = localStorage.getItem('active_job_workspace');
+    const activeJobStartTime = localStorage.getItem('active_job_time_workspace');
+    if (activeJobId && activeJobStartTime) {
+      setJobId(activeJobId);
+      setStatus('converting');
+      setProgress(60);
+      startPolling(activeJobId, parseInt(activeJobStartTime, 10));
+    }
+
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
+
+  const handleCancel = () => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    localStorage.removeItem('active_job_workspace');
+    localStorage.removeItem('active_job_time_workspace');
+    handleReset();
+  };
+
+  const startPolling = (id: string, startTime: number) => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+
+    // TODO (SSE): Replace polling with Server-Sent Events for push-based updates.
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const res = await fetchWithAuth(`/api/v1/conversions/${id}`);
+        const data = await res.json();
+
+        if (data.success && data.data) {
+          setProgress(Math.max(50, data.data.progress || 60));
+
+          if (data.data.status === 'COMPLETED') {
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            localStorage.removeItem('active_job_workspace');
+            localStorage.removeItem('active_job_time_workspace');
+            setProgress(100);
+
+            const downloadRes = await fetchWithAuth(`/api/v1/conversions/${id}/download-url`, {
+              method: 'POST',
+            });
+            const downloadData = await downloadRes.json();
+
+            if (!downloadData.success || !downloadData.data?.url) {
+              setStatus('error');
+              setError('Conversion completed, but the download link could not be created.');
+              return;
+            }
+
+            setDownloadUrl(downloadData.data.url);
+            setStatus('success');
+          } else if (data.data.status === 'FAILED') {
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            localStorage.removeItem('active_job_workspace');
+            localStorage.removeItem('active_job_time_workspace');
+            setStatus('error');
+            setError('Conversion failed. Please try a different document format.');
+          }
+        }
+
+        if (Date.now() - startTime > 240000) {
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          localStorage.removeItem('active_job_workspace');
+          localStorage.removeItem('active_job_time_workspace');
+          setStatus('error');
+          setError('Conversion timed out. Please try again.');
+        }
+      } catch (e) {
+        // ignore errors to keep polling
+      }
+    }, 1500);
+  };
 
   const handleConvert = async () => {
     setError(null);
@@ -114,7 +234,8 @@ export default function WorkspaceConverterPage() {
           body: formData,
         });
         const uploadData = await uploadRes.json();
-        if (!uploadData.success) throw new Error(uploadData.error?.message || 'Failed to process URL');
+        if (!uploadData.success)
+          throw new Error(uploadData.error?.message || 'Failed to process URL');
         sourceFileId = uploadData.data.id;
       } else {
         if (!file) return;
@@ -126,7 +247,8 @@ export default function WorkspaceConverterPage() {
           body: formData,
         });
         const uploadData = await uploadRes.json();
-        if (!uploadData.success) throw new Error(uploadData.error?.message || 'Failed to upload file');
+        if (!uploadData.success)
+          throw new Error(uploadData.error?.message || 'Failed to upload file');
         sourceFileId = uploadData.data.id;
       }
 
@@ -142,38 +264,17 @@ export default function WorkspaceConverterPage() {
         }),
       });
       const convData = await convRes.json();
-      if (!convData.success) throw new Error(convData.error?.message || 'Failed to start conversion');
+      if (!convData.success)
+        throw new Error(convData.error?.message || 'Failed to start conversion');
 
       const id = convData.data.id;
       setJobId(id);
 
       // Poll job
-      const poll = setInterval(async () => {
-        const res = await fetchWithAuth(`/api/v1/conversions/${id}`);
-        const data = await res.json();
-        if (data.success && data.data) {
-          setProgress(Math.max(50, data.data.progress || 60));
-          if (data.data.status === 'COMPLETED') {
-            clearInterval(poll);
-            setProgress(100);
-            const downloadRes = await fetchWithAuth(`/api/v1/conversions/${id}/download-url`, {
-              method: 'POST',
-            });
-            const downloadData = await downloadRes.json();
-            if (!downloadData.success || !downloadData.data?.url) {
-              setStatus('error');
-              setError('Conversion completed, but the download link could not be created.');
-              return;
-            }
-            setDownloadUrl(downloadData.data.url);
-            setStatus('success');
-          } else if (data.data.status === 'FAILED') {
-            clearInterval(poll);
-            setStatus('error');
-            setError('Conversion failed. Please try a different document format.');
-          }
-        }
-      }, 1500);
+      const startTime = Date.now();
+      localStorage.setItem('active_job_workspace', id);
+      localStorage.setItem('active_job_time_workspace', startTime.toString());
+      startPolling(id, startTime);
     } catch (err: any) {
       setStatus('error');
       setError(err.message || 'An error occurred during conversion.');
@@ -181,6 +282,9 @@ export default function WorkspaceConverterPage() {
   };
 
   const handleReset = () => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    localStorage.removeItem('active_job_workspace');
+    localStorage.removeItem('active_job_time_workspace');
     setFile(null);
     setUrl('');
     setStatus('idle');
@@ -195,7 +299,9 @@ export default function WorkspaceConverterPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Workspace Converter</h1>
-        <p className="text-xs text-slate-500 mt-1">Universal multi-format conversion pipeline with cloud storage</p>
+        <p className="text-xs text-slate-500 mt-1">
+          Universal multi-format conversion pipeline with cloud storage
+        </p>
       </div>
 
       {/* Main Container */}
@@ -203,7 +309,10 @@ export default function WorkspaceConverterPage() {
         {/* Toggle Mode */}
         <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl w-fit">
           <button
-            onClick={() => { setInputType('file'); handleReset(); }}
+            onClick={() => {
+              setInputType('file');
+              handleReset();
+            }}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
               inputType === 'file'
                 ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
@@ -213,7 +322,10 @@ export default function WorkspaceConverterPage() {
             File Upload
           </button>
           <button
-            onClick={() => { setInputType('url'); handleReset(); }}
+            onClick={() => {
+              setInputType('url');
+              handleReset();
+            }}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
               inputType === 'url'
                 ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
@@ -227,7 +339,9 @@ export default function WorkspaceConverterPage() {
         {status === 'success' ? (
           <div className="text-center py-10 space-y-4">
             <CheckCircle className="w-14 h-14 text-emerald-500 mx-auto animate-bounce" />
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Conversion Finished!</h3>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+              Conversion Finished!
+            </h3>
             <p className="text-xs text-slate-500">Your output document is ready for download.</p>
             <div className="flex items-center justify-center gap-3 pt-2">
               <a
@@ -282,15 +396,21 @@ export default function WorkspaceConverterPage() {
                   <UploadCloud className="w-10 h-10 text-indigo-600 mx-auto mb-3" />
                   {file ? (
                     <div>
-                      <span className="font-semibold text-slate-900 dark:text-white text-sm">{file.name}</span>
-                      <p className="text-xs text-slate-400 mt-1">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
+                      <span className="font-semibold text-slate-900 dark:text-white text-sm">
+                        {file.name}
+                      </span>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {(file.size / (1024 * 1024)).toFixed(2)} MB
+                      </p>
                     </div>
                   ) : (
                     <div>
                       <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm">
                         Click or drag document to convert
                       </p>
-                      <p className="text-xs text-slate-400 mt-1">PDF, DOCX, XLSX, CSV, HTML, Markdown, Images</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        PDF, DOCX, XLSX, CSV, HTML, Markdown, Images
+                      </p>
                     </div>
                   )}
                 </div>
@@ -313,7 +433,9 @@ export default function WorkspaceConverterPage() {
                         : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40'
                     }`}
                   >
-                    <div className="text-xs font-bold text-slate-900 dark:text-white">{fmt.label}</div>
+                    <div className="text-xs font-bold text-slate-900 dark:text-white">
+                      {fmt.label}
+                    </div>
                     <div className="text-[10px] text-slate-400">{fmt.ext}</div>
                   </button>
                 ))}
@@ -333,7 +455,10 @@ export default function WorkspaceConverterPage() {
                   <span>{progress}%</span>
                 </div>
                 <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
-                  <div className="bg-indigo-600 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                  <div
+                    className="bg-indigo-600 h-2 rounded-full transition-all"
+                    style={{ width: `${progress}%` }}
+                  />
                 </div>
               </div>
             )}
@@ -344,10 +469,30 @@ export default function WorkspaceConverterPage() {
               className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2"
             >
               {status === 'converting' ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Processing Conversion...</span>
-                </>
+                <div style={{ display: 'flex', width: '100%', gap: '10px' }}>
+                  <div
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Processing Conversion...</span>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCancel();
+                    }}
+                    className="px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl text-xs font-bold bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-200"
+                  >
+                    Cancel
+                  </button>
+                </div>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4" />

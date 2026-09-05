@@ -4,14 +4,19 @@ AppToolkitLab is a Gonexel product built with Next.js, NestJS, and a separate No
 
 - **Docker mode:** every service runs in Docker Compose.
 - **Node/hybrid mode:** Next.js, NestJS, and the worker run directly in Node.js; only infrastructure runs in Docker.
-- **Fully native mode:** all Node processes and infrastructure services are installed directly on the server.
+- **Managed Node/Hostinger mode:** Next.js and NestJS run as Node processes; browser-capable tools need no Docker or native converter.
+- **Fully native mode:** all Node processes and infrastructure services are installed directly on a VPS.
+
+## Project execution memory
+
+All implementation tasks, statuses, decisions, verification evidence, cleanup candidates, and session handoffs must be recorded in [`docs/PROJECT_EXECUTION_MEMORY.md`](docs/PROJECT_EXECUTION_MEMORY.md). Only tasks marked `VERIFIED` in that ledger should be treated as completed.
 
 ## Requirements
 
 - Node.js 20 or newer
 - Corepack (included with Node.js)
-- PostgreSQL 16+, Redis 7+, MinIO/S3, and Gotenberg 8
-- Pandoc, Poppler (`pdftoppm`), and Tesseract on the worker host
+- A PostgreSQL database for accounts, commerce, subscriptions, and metadata
+- Redis 7+, MinIO/S3, Gotenberg 8, Pandoc, Poppler and Tesseract only when server conversion workers are enabled
 
 Worker dependencies on macOS:
 
@@ -51,7 +56,38 @@ corepack pnpm run hybrid:dev
 Open <http://localhost:5173>. Stop the foreground Node processes with `Ctrl+C`;
 the infrastructure containers can be stopped with `corepack pnpm infra:down`.
 
-## 2. Fully Native Node.js (Production Server)
+## 2. Managed Node / Hostinger (No Docker)
+
+This mode serves the public website, PostgreSQL-backed account/API features, and every tool marked
+**Private browser processing**. It deliberately disables native-only processing and never silently
+uploads a file selected for local processing.
+
+```bash
+corepack pnpm install
+cp .env.example .env
+
+# Configure DATABASE_URL and production secrets, then:
+corepack pnpm hostinger:doctor
+corepack pnpm node:setup
+corepack pnpm hostinger:build
+corepack pnpm hostinger:start
+```
+
+Set these values in the hosting control panel:
+
+```dotenv
+DEPLOYMENT_MODE=HOSTINGER
+PROCESSING_BROWSER_ENABLED=true
+PROCESSING_NODE_ENABLED=true
+PROCESSING_NATIVE_ENABLED=false
+REDIS_ENABLED=false
+```
+
+The no-Redis quota fallback is process-local, intended for a single API instance, and resets when
+that process restarts. Use managed Redis for multiple API instances. URL capture, OCR, Office, and
+other native tools stay capability-disabled until a compatible worker service is connected.
+
+## 3. Fully Native Node.js (VPS Production Server)
 
 If you are deploying this to a raw Node.js server (like an EC2 instance or VPS) where your databases are hosted elsewhere, you do not need Docker at all.
 
@@ -70,9 +106,9 @@ corepack pnpm node:build
 corepack pnpm run node:start
 ```
 
-*(Note: For a real production server, you might want to run the 3 apps using a process manager like PM2 instead of `pnpm run node:start` so they restart automatically if they crash).*
+_(Note: For a real production server, you might want to run the 3 apps using a process manager like PM2 instead of `pnpm run node:start` so they restart automatically if they crash)._
 
-## 3. Fully Docker-based
+## 4. Fully Docker-based
 
 To run the entire stack inside Docker (useful for quick testing on any machine).
 

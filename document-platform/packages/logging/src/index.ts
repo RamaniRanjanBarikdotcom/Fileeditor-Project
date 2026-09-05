@@ -15,7 +15,11 @@ export interface LoggerConfig {
 // ─── Create Logger ───────────────────────────────────────────
 
 export function createLogger(config: LoggerConfig): pino.Logger {
-  const { level = 'info', pretty = process.env['NODE_ENV'] === 'development', serviceName } = config;
+  const {
+    level = 'info',
+    pretty = process.env['NODE_ENV'] === 'development',
+    serviceName,
+  } = config;
 
   const options: pino.LoggerOptions = {
     level,

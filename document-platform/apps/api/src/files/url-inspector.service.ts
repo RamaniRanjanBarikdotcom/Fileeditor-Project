@@ -21,7 +21,8 @@ export class UrlInspectorService {
     let currentUrl = url;
 
     try {
-      for (let redirectCount = 0; redirectCount <= 10; redirectCount++) {
+      const maxRedirects = Math.max(0, Number(process.env.URL_MAX_REDIRECTS || 5));
+      for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount++) {
         await validateUrl?.(currentUrl);
 
         let response;
@@ -31,7 +32,8 @@ export class UrlInspectorService {
             maxRedirects: 0,
             validateStatus: () => true,
             headers: {
-              'User-Agent': 'Mozilla/5.0 (compatible; DocConv/1.0; +https://localhost)',
+              'User-Agent':
+                'Mozilla/5.0 (compatible; AppToolkitLab/1.0; +https://apptoolkitlab.com)',
               Accept: 'text/html,application/xhtml+xml,application/pdf,*/*;q=0.8',
             },
           });
@@ -42,7 +44,7 @@ export class UrlInspectorService {
         }
 
         if (response.status >= 300 && response.status < 400 && response.headers.location) {
-          if (redirectCount === 10) {
+          if (redirectCount === maxRedirects) {
             throw new BadRequestException('URL has too many redirects.');
           }
           currentUrl = new URL(String(response.headers.location), currentUrl).toString();
@@ -52,18 +54,20 @@ export class UrlInspectorService {
         const contentType = String(response.headers['content-type'] || '').toLowerCase();
         const contentLength = response.headers['content-length'];
 
-      // Extract base MIME without charset
+        // Extract base MIME without charset
         const mimeType = (contentType.split(';')[0] || '').trim() || 'text/html';
         const sizeBytes = contentLength ? parseInt(String(contentLength), 10) : undefined;
 
-      // Determine the detectedType for our platform
+        // Determine the detectedType for our platform
         let detectedType = 'url';
         if (mimeType.includes('pdf')) detectedType = 'pdf';
         else if (mimeType.includes('csv')) detectedType = 'csv';
         else if (mimeType.includes('json')) detectedType = 'json';
         else if (mimeType.includes('image')) detectedType = 'image';
-        else if (mimeType.includes('wordprocessingml') || mimeType.includes('msword')) detectedType = 'docx';
-        else if (mimeType.includes('spreadsheetml') || mimeType.includes('ms-excel')) detectedType = 'xlsx';
+        else if (mimeType.includes('wordprocessingml') || mimeType.includes('msword'))
+          detectedType = 'docx';
+        else if (mimeType.includes('spreadsheetml') || mimeType.includes('ms-excel'))
+          detectedType = 'xlsx';
         else if (mimeType.includes('html')) detectedType = 'html';
 
         return { url: currentUrl, mimeType, sizeBytes, detectedType };

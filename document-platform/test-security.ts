@@ -7,7 +7,7 @@ async function test() {
     'http://localhost:4201',
     'http://127.0.0.1',
     'http://169.254.169.254',
-    'https://google.com'
+    'https://google.com',
   ];
   for (const u of urls) {
     try {

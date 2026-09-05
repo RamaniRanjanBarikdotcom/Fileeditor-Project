@@ -23,7 +23,9 @@ export default function WorkspaceSettingsPage() {
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Account Settings</h1>
-        <p className="text-xs text-slate-500 mt-1">Manage personal profile, organizations, and security</p>
+        <p className="text-xs text-slate-500 mt-1">
+          Manage personal profile, organizations, and security
+        </p>
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm space-y-6">
@@ -35,12 +37,16 @@ export default function WorkspaceSettingsPage() {
           </div>
           <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl space-y-1">
             <span className="text-slate-400 font-semibold">Platform Role</span>
-            <p className="font-bold text-indigo-600 dark:text-indigo-400">{profile?.platformRole || 'CUSTOMER'}</p>
+            <p className="font-bold text-indigo-600 dark:text-indigo-400">
+              {profile?.platformRole || 'CUSTOMER'}
+            </p>
           </div>
         </div>
 
         <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-4">
-          <h3 className="text-base font-bold text-slate-900 dark:text-white">Organization & Plan</h3>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            Organization & Plan
+          </h3>
           <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-850 rounded-2xl flex items-center justify-between">
             <div>
               <span className="text-xs font-bold text-slate-900 dark:text-white">

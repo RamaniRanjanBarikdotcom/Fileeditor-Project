@@ -1,19 +1,10 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { StripeService } from '../payments/stripe.service';
 import { RazorpayService } from '../payments/razorpay.service';
 import { PaymentsService } from '../payments/payments.service';
 import { CartService } from './cart.service';
-import {
-  CurrencyCode,
-  OrderStatus,
-  PaymentProvider,
-} from '@prisma/client';
+import { CurrencyCode, OrderStatus, PaymentProvider } from '@prisma/client';
 import * as crypto from 'crypto';
 
 export interface CheckoutDto {
@@ -79,9 +70,7 @@ export class OrdersService {
       }
 
       if (product.releases.length === 0) {
-        throw new BadRequestException(
-          'This product does not have a downloadable release yet.',
-        );
+        throw new BadRequestException('This product does not have a downloadable release yet.');
       }
 
       const price = product.prices[0];
@@ -139,9 +128,7 @@ export class OrdersService {
     );
 
     const paymentProvider =
-      dto.currency === CurrencyCode.USD
-        ? PaymentProvider.STRIPE
-        : PaymentProvider.RAZORPAY;
+      dto.currency === CurrencyCode.USD ? PaymentProvider.STRIPE : PaymentProvider.RAZORPAY;
 
     // Create Order Record
     const order = await this.prisma.order.create({

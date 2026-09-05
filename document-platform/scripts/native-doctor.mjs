@@ -4,10 +4,11 @@ import { spawnSync } from 'node:child_process';
 import net from 'node:net';
 
 const checks = [];
+const hostingerMode = process.argv.includes('--hostinger');
 const nodeMajor = Number(process.versions.node.split('.')[0]);
 checks.push({ name: `Node.js ${process.versions.node}`, ok: nodeMajor >= 20, hint: 'Install Node.js 20 or newer.' });
 
-const nativeCommands = [
+const nativeCommands = hostingerMode ? [] : [
   ['pandoc', ['--version']],
   ['pdftotext', ['-v']],
   ['pdftoppm', ['-v']],
@@ -30,7 +31,7 @@ try {
   checks.push({ name: 'Root .env file', ok: false, hint: 'Copy .env.example to .env and review its secrets.' });
 }
 
-const services = [
+const services = hostingerMode ? [] : [
   ['PostgreSQL', '127.0.0.1', 5432],
   ['Redis', '127.0.0.1', 6379],
   ['MinIO', '127.0.0.1', 9000],
@@ -54,15 +55,15 @@ for (const [name, host, port] of services) {
   });
 }
 
-console.log('\nToolSuite native runtime check\n');
+console.log(`\nAppToolkitLab ${hostingerMode ? 'Hostinger' : 'native'} runtime check\n`);
 for (const check of checks) {
   console.log(`${check.ok ? 'PASS' : 'FAIL'}  ${check.name}`);
   if (!check.ok) console.log(`      ${check.hint}`);
 }
 
 if (checks.some((check) => !check.ok)) {
-  console.log('\nNative prerequisites are incomplete. See README.md for setup options.\n');
+  console.log(`\n${hostingerMode ? 'Hostinger' : 'Native'} prerequisites are incomplete. See README.md for setup options.\n`);
   process.exitCode = 1;
 } else {
-  console.log('\nAll native prerequisites are available.\n');
+  console.log(`\nAll ${hostingerMode ? 'Hostinger' : 'native'} prerequisites are available.\n`);
 }

@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Body,
-  UseGuards,
-  Req,
-  Ip,
-} from '@nestjs/common';
+import { Controller, Post, Get, Body, UseGuards, Req, Ip } from '@nestjs/common';
 import { LicensesService } from './licenses.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { IsNotEmpty, IsString, IsOptional } from 'class-validator';

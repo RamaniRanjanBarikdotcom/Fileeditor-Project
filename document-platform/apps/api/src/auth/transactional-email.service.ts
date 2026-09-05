@@ -15,12 +15,20 @@ export class TransactionalEmailService {
 
   async sendPasswordReset(email: string, token: string) {
     const url = `${this.webUrl()}/reset-password?token=${encodeURIComponent(token)}`;
-    await this.send(email, 'Reset your AppToolkitLab password', `Open this secure link to reset your password (valid for one hour):\n\n${url}`);
+    await this.send(
+      email,
+      'Reset your AppToolkitLab password',
+      `Open this secure link to reset your password (valid for one hour):\n\n${url}`,
+    );
   }
 
   async sendEmailVerification(email: string, token: string) {
     const url = `${this.webUrl()}/verify-email?token=${encodeURIComponent(token)}`;
-    await this.send(email, 'Verify your AppToolkitLab email', `Verify your AppToolkitLab email address using this link (valid for 24 hours):\n\n${url}`);
+    await this.send(
+      email,
+      'Verify your AppToolkitLab email',
+      `Verify your AppToolkitLab email address using this link (valid for 24 hours):\n\n${url}`,
+    );
   }
 
   private webUrl() {

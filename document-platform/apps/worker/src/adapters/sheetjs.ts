@@ -7,7 +7,7 @@ export class SheetJSAdapter {
   async convert(
     inputStream: Readable,
     sourceFormat: string,
-    targetFormat: string
+    targetFormat: string,
   ): Promise<Readable> {
     // Read stream into buffer
     const chunks: Buffer[] = [];
@@ -30,11 +30,20 @@ export class SheetJSAdapter {
     // Write workbook to target format
     let bookType: XLSX.BookType;
     switch (targetFormat.toLowerCase()) {
-      case 'csv': bookType = 'csv'; break;
-      case 'xlsx': bookType = 'xlsx'; break;
-      case 'html': bookType = 'html'; break;
-      case 'txt': bookType = 'txt'; break;
-      default: throw new Error(`Unsupported output format: ${targetFormat}`);
+      case 'csv':
+        bookType = 'csv';
+        break;
+      case 'xlsx':
+        bookType = 'xlsx';
+        break;
+      case 'html':
+        bookType = 'html';
+        break;
+      case 'txt':
+        bookType = 'txt';
+        break;
+      default:
+        throw new Error(`Unsupported output format: ${targetFormat}`);
     }
 
     const outputBuffer = XLSX.write(workbook, { type: 'buffer', bookType });

@@ -52,12 +52,8 @@ export class AnonymousToolsService {
       throw new BadRequestException('A source file is required.');
     }
 
-    const inputFormat = isUrlTool
-      ? 'url'
-      : getExtension(params.file!.originalname) || '';
-    const inputSize = isUrlTool
-      ? Buffer.byteLength(params.url!, 'utf8')
-      : params.file!.size;
+    const inputFormat = isUrlTool ? 'url' : getExtension(params.file!.originalname) || '';
+    const inputSize = isUrlTool ? Buffer.byteLength(params.url!, 'utf8') : params.file!.size;
     await this.tools.validateToolExecution(params.slug, null, inputSize, inputFormat);
 
     let quotaConsumed = false;
@@ -73,11 +69,7 @@ export class AnonymousToolsService {
             params.url!,
             'url',
           )
-        : await this.files.uploadFile(
-            principal.userId,
-            principal.organizationId,
-            params.file!,
-          );
+        : await this.files.uploadFile(principal.userId, principal.organizationId, params.file!);
 
       const conversion = await this.conversions.createConversion(
         principal.userId,
@@ -89,11 +81,7 @@ export class AnonymousToolsService {
         },
       );
 
-      await this.redis.set(
-        this.jobOwnerKey(conversion.id),
-        params.anonId,
-        JOB_TTL_SECONDS,
-      );
+      await this.redis.set(this.jobOwnerKey(conversion.id), params.anonId, JOB_TTL_SECONDS);
 
       return conversion;
     } catch (error) {
@@ -114,6 +102,12 @@ export class AnonymousToolsService {
     await this.assertJobOwner(jobId, anonId);
     const principal = await this.getAnonymousPrincipal();
     return this.conversions.getDownloadUrl(jobId, principal.organizationId);
+  }
+
+  async cancel(jobId: string, anonId: string) {
+    await this.assertJobOwner(jobId, anonId);
+    const principal = await this.getAnonymousPrincipal();
+    return this.conversions.cancelConversion(jobId, principal.organizationId);
   }
 
   private async assertJobOwner(jobId: string, anonId: string) {

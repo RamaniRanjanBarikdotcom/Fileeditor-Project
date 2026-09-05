@@ -23,6 +23,9 @@ import { LicensesModule } from './licenses/licenses.module';
 import { DownloadsModule } from './downloads/downloads.module';
 import { PlatformRolesGuard } from './common/guards/platform-roles.guard';
 import { CsrfOriginGuard } from './common/guards/csrf-origin.guard';
+import { CapabilitiesModule } from './capabilities/capabilities.module';
+
+const redisQueuesEnabled = process.env.REDIS_ENABLED !== 'false';
 
 @Module({
   imports: [
@@ -49,18 +52,23 @@ import { CsrfOriginGuard } from './common/guards/csrf-origin.guard';
     ]),
 
     // ─── BullMQ Queues ──────────────────────────────────────
-    BullModule.forRoot({
-      connection: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      },
-    }),
+    ...(redisQueuesEnabled
+      ? [
+          BullModule.forRoot({
+            connection: {
+              host: process.env.REDIS_HOST || 'localhost',
+              port: parseInt(process.env.REDIS_PORT || '6379', 10),
+            },
+          }),
+        ]
+      : []),
 
     // ─── Database ───────────────────────────────────────────
     PrismaModule,
 
     // ─── Core Platform Modules ──────────────────────────────
     FeatureFlagsModule,
+    CapabilitiesModule,
     ToolsModule,
     CatalogModule,
     CommerceModule,

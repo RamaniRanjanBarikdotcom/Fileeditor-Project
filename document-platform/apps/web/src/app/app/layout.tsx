@@ -47,11 +47,31 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   };
 
   const navItems = [
-    { name: 'Converter', path: '/app', icon: ArrowLeftRight, description: 'Universal file converter' },
-    { name: 'Document Studio', path: '/app/editor', icon: Edit, description: 'Rich document exporter' },
+    {
+      name: 'Converter',
+      path: '/app',
+      icon: ArrowLeftRight,
+      description: 'Universal file converter',
+    },
+    {
+      name: 'Document Studio',
+      path: '/app/editor',
+      icon: Edit,
+      description: 'Rich document exporter',
+    },
     { name: 'History', path: '/app/history', icon: Clock, description: 'Past conversions & files' },
-    { name: 'My Software Library', path: '/app/library', icon: ShoppingBag, description: 'Purchased software & keys' },
-    { name: 'Account Settings', path: '/app/settings', icon: Settings, description: 'Preferences & API keys' },
+    {
+      name: 'My Software Library',
+      path: '/app/library',
+      icon: ShoppingBag,
+      description: 'Purchased software & keys',
+    },
+    {
+      name: 'Account Settings',
+      path: '/app/settings',
+      icon: Settings,
+      description: 'Preferences & API keys',
+    },
   ];
 
   return (

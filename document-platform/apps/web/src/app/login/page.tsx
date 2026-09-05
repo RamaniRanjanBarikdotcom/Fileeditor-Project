@@ -28,9 +28,8 @@ export default function LoginPage() {
     if (res.success && res.data) {
       setAccessToken(res.data.accessToken);
       const requested = new URLSearchParams(window.location.search).get('redirect');
-      const destination = requested?.startsWith('/') && !requested.startsWith('//')
-        ? requested
-        : '/app';
+      const destination =
+        requested?.startsWith('/') && !requested.startsWith('//') ? requested : '/app';
       router.push(destination);
     } else {
       setError(res.error?.message || 'Invalid email or password.');
@@ -45,7 +44,9 @@ export default function LoginPage() {
             <Sparkles className="w-6 h-6 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Welcome Back</h1>
-          <p className="text-xs text-slate-500">Sign in to access your workspace and purchased software</p>
+          <p className="text-xs text-slate-500">
+            Sign in to access your workspace and purchased software
+          </p>
         </div>
 
         {error && (

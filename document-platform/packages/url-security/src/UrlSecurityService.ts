@@ -25,7 +25,10 @@ export class UrlSecurityService {
       throw new UrlSecurityError(`Unsupported protocol: ${url.protocol}`);
     }
 
-    const hostname = url.hostname;
+    if (url.username || url.password) {
+      throw new UrlSecurityError('URLs containing embedded credentials are forbidden');
+    }
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^\[|\]$/g, '');
 
     // Reject obvious localhost strings before DNS lookup
     if (
@@ -38,47 +41,48 @@ export class UrlSecurityService {
 
     // Resolve DNS
     let addresses: string[] = [];
-    try {
-      // First try IPv4
-      const ipv4Records = await dns.promises.resolve4(hostname);
-      addresses.push(...ipv4Records);
-    } catch (e: any) {
-      if (e.code !== 'ENODATA' && e.code !== 'ENOTFOUND') {
-        throw new UrlSecurityError(`DNS resolution error: ${e.message}`);
+    if (ipaddr.isValid(hostname)) {
+      addresses = [hostname];
+    } else {
+      try {
+        const ipv4Records = await dns.promises.resolve4(hostname);
+        addresses.push(...ipv4Records);
+      } catch (e: any) {
+        if (e.code !== 'ENODATA' && e.code !== 'ENOTFOUND') {
+          throw new UrlSecurityError(`DNS resolution error: ${e.message}`);
+        }
       }
-    }
 
-    try {
-      // Then try IPv6
-      const ipv6Records = await dns.promises.resolve6(hostname);
-      addresses.push(...ipv6Records);
-    } catch (e: any) {
-      if (e.code !== 'ENODATA' && e.code !== 'ENOTFOUND') {
-        throw new UrlSecurityError(`DNS resolution error: ${e.message}`);
+      try {
+        const ipv6Records = await dns.promises.resolve6(hostname);
+        addresses.push(...ipv6Records);
+      } catch (e: any) {
+        if (e.code !== 'ENODATA' && e.code !== 'ENOTFOUND') {
+          throw new UrlSecurityError(`DNS resolution error: ${e.message}`);
+        }
       }
     }
 
     if (addresses.length === 0) {
-      // It might be an IP address literal already, try parsing it directly
-      if (ipaddr.isValid(hostname)) {
-        addresses.push(hostname);
-      } else {
-        throw new UrlSecurityError('Could not resolve hostname');
-      }
+      throw new UrlSecurityError('Could not resolve hostname');
     }
 
     for (const address of addresses) {
       try {
-        const ip = ipaddr.parse(address);
+        let ip = ipaddr.parse(address);
+        if (ip.kind() === 'ipv6') {
+          const ipv6 = ip as ipaddr.IPv6;
+          if (ipv6.isIPv4MappedAddress()) ip = ipv6.toIPv4Address();
+        }
         const range = ip.range();
 
-        if (range !== 'unicast' && range !== 'ipv4Mapped') {
-           throw new UrlSecurityError(`IP address ${address} is in a restricted range (${range})`);
+        if (range !== 'unicast') {
+          throw new UrlSecurityError(`IP address ${address} is in a restricted range (${range})`);
         }
-        
+
         // Block specifically cloud metadata
         if (address === '169.254.169.254') {
-           throw new UrlSecurityError(`IP address ${address} is a restricted metadata IP`);
+          throw new UrlSecurityError(`IP address ${address} is a restricted metadata IP`);
         }
       } catch (e: any) {
         if (e.name === 'UrlSecurityError') throw e;

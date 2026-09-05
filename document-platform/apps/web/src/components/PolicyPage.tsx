@@ -31,7 +31,10 @@ export function PolicyPage({
     <div className="info-page">
       <header className="info-hero">
         <div className="container-custom info-hero-inner">
-          <span className="info-eyebrow"><Scale className="h-4 w-4" />{eyebrow}</span>
+          <span className="info-eyebrow">
+            <Scale className="h-4 w-4" />
+            {eyebrow}
+          </span>
           <h1>{title}</h1>
           <p>{description}</p>
           <div className="info-meta-row">
@@ -46,7 +49,11 @@ export function PolicyPage({
           <p className="policy-sidebar-title">Legal &amp; policies</p>
           <nav>
             {POLICY_LINKS.map((link) => (
-              <Link key={link.href} href={link.href} aria-current={currentPath === link.href ? 'page' : undefined}>
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={currentPath === link.href ? 'page' : undefined}
+              >
                 {link.label}
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
@@ -64,8 +71,9 @@ export function PolicyPage({
               <div>
                 <strong>Pre-launch legal review required</strong>
                 <p>
-                  AppToolkitLab is still being configured. The operator&apos;s legal name, registered address,
-                  support channels, tax details, and governing jurisdiction must be added before accepting payments.
+                  AppToolkitLab is still being configured. The operator&apos;s legal name,
+                  registered address, support channels, tax details, and governing jurisdiction must
+                  be added before accepting payments.
                 </p>
               </div>
             </div>
@@ -77,7 +85,15 @@ export function PolicyPage({
   );
 }
 
-export function PolicySection({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+export function PolicySection({
+  id,
+  title,
+  children,
+}: {
+  id: string;
+  title: string;
+  children: ReactNode;
+}) {
   return (
     <section id={id}>
       <h2>{title}</h2>

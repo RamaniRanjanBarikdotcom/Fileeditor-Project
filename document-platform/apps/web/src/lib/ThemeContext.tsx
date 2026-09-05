@@ -17,7 +17,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
-    const stored = localStorage.getItem('apptoolkitlab-theme') || localStorage.getItem('toolsuite-theme') || localStorage.getItem('docconv-theme');
+    const stored =
+      localStorage.getItem('apptoolkitlab-theme') ||
+      localStorage.getItem('toolsuite-theme') ||
+      localStorage.getItem('docconv-theme');
     if (stored === 'light' || stored === 'dark') {
       setTheme(stored);
     }
@@ -36,11 +39,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const toggleTheme = () => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
 
-  return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>;
 }
 
 export const useTheme = () => useContext(ThemeContext);

@@ -50,7 +50,9 @@ export default function RegisterPage() {
             <Sparkles className="w-6 h-6 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Create Account</h1>
-          <p className="text-xs text-slate-500">Get 10 free daily operations and access to the software store</p>
+          <p className="text-xs text-slate-500">
+            Get 10 free daily operations and access to the software store
+          </p>
         </div>
 
         {error && (
@@ -144,7 +146,11 @@ export default function RegisterPage() {
             disabled={loading}
             className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Create Free Account</span>}
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <span>Create Free Account</span>
+            )}
           </button>
         </form>
 

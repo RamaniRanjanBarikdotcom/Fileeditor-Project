@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  ForbiddenException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { StorageClient, createStorageConfig } from '@docconv/storage';
 
@@ -13,9 +8,7 @@ export class DownloadsService {
   private readonly storage: StorageClient;
 
   constructor(private readonly prisma: PrismaService) {
-    this.storage = new StorageClient(
-      createStorageConfig(process.env as Record<string, string>),
-    );
+    this.storage = new StorageClient(createStorageConfig(process.env as Record<string, string>));
   }
 
   /**
@@ -75,7 +68,9 @@ export class DownloadsService {
       },
     });
 
-    this.logger.log(`Generated download URL for user '${params.userId}' product '${entitlement.product.name}' v${release.version}`);
+    this.logger.log(
+      `Generated download URL for user '${params.userId}' product '${entitlement.product.name}' v${release.version}`,
+    );
 
     return {
       downloadUrl: signedUrl,

@@ -64,4 +64,15 @@ export class ConversionsController {
     const url = await this.conversionsService.getDownloadUrl(id, req.user.orgId);
     return { success: true, data: { url } };
   }
+
+  @Post(':id/cancel')
+  @ApiOperation({ summary: 'Cancel a queued or processing conversion job' })
+  async cancel(@Request() req: any, @Param('id') id: string) {
+    const result = await this.conversionsService.cancelConversion(
+      id,
+      req.user.orgId,
+      req.user.userId,
+    );
+    return { success: true, data: result };
+  }
 }

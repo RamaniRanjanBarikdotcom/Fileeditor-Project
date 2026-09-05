@@ -21,7 +21,9 @@ const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false 
 
 export default function WorkspaceEditorPage() {
   const [editorMode, setEditorMode] = useState<'richtext' | 'markdown'>('richtext');
-  const [markdownContent, setMarkdownContent] = useState('# Title\n\nStart typing your markdown here...');
+  const [markdownContent, setMarkdownContent] = useState(
+    '# Title\n\nStart typing your markdown here...',
+  );
   const [status, setStatus] = useState<'idle' | 'converting' | 'complete' | 'error'>('idle');
   const [progress, setProgress] = useState(0);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
@@ -67,7 +69,8 @@ export default function WorkspaceEditorPage() {
         body: formData,
       });
       const uploadData = await uploadRes.json();
-      if (!uploadData.success) throw new Error(uploadData.error?.message || 'Failed to upload document');
+      if (!uploadData.success)
+        throw new Error(uploadData.error?.message || 'Failed to upload document');
 
       const sourceFileId = uploadData.data.id;
       setProgress(45);

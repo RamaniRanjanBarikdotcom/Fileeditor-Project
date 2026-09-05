@@ -7,6 +7,14 @@ import {
   FileCode,
   Image,
   Edit3,
+  Combine,
+  Scissors,
+  ListFilter,
+  Trash2,
+  RotateCw,
+  Stamp,
+  ListOrdered,
+  Tags,
   LucideIcon,
 } from 'lucide-react';
 
@@ -23,6 +31,62 @@ export interface ToolPresentation {
 }
 
 export const TOOL_PRESENTATION_MAP: Record<string, ToolPresentation> = {
+  'merge-pdf': {
+    slug: 'merge-pdf', name: 'Merge PDF', icon: Combine, badge: 'Private in Browser',
+    gradient: 'from-indigo-500/20 via-violet-500/20 to-fuchsia-500/20', accentColor: '#6366f1',
+    features: ['Combine up to 20 PDFs in selection order', 'Preserve every source page', 'No server upload', 'Validated PDF output'],
+    steps: [{ step: 1, title: 'Choose PDFs', desc: 'Select two or more PDFs in the order you want.' }, { step: 2, title: 'Merge locally', desc: 'Your browser copies every page into one document.' }, { step: 3, title: 'Download', desc: 'Save the combined PDF immediately.' }],
+    faq: [{ q: 'Are my PDFs uploaded?', a: 'No. This operation runs entirely in your browser.' }],
+  },
+  'split-pdf': {
+    slug: 'split-pdf', name: 'Split PDF', icon: Scissors, badge: 'Private in Browser',
+    gradient: 'from-cyan-500/20 via-blue-500/20 to-indigo-500/20', accentColor: '#0284c7',
+    features: ['Export each page separately', 'Keep original page dimensions', 'No server upload', 'One-click page downloads'],
+    steps: [{ step: 1, title: 'Choose PDF', desc: 'Select the document to split.' }, { step: 2, title: 'Split locally', desc: 'Each source page becomes a valid PDF.' }, { step: 3, title: 'Download pages', desc: 'Download the page files you need.' }],
+    faq: [{ q: 'Does splitting reduce quality?', a: 'No. Existing PDF pages are copied without rasterizing them.' }],
+  },
+  'extract-pdf-pages': {
+    slug: 'extract-pdf-pages', name: 'Extract PDF Pages', icon: ListFilter, badge: 'Select Exact Pages',
+    gradient: 'from-emerald-500/20 via-teal-500/20 to-cyan-500/20', accentColor: '#059669',
+    features: ['Ranges such as 1-3,5', 'Ascending deterministic order', 'No server upload', 'Original page dimensions'],
+    steps: [{ step: 1, title: 'Choose PDF', desc: 'Select a PDF up to the local limit.' }, { step: 2, title: 'Enter pages', desc: 'Use page numbers or comma-separated ranges.' }, { step: 3, title: 'Download', desc: 'Save one PDF containing only those pages.' }],
+    faq: [{ q: 'How do page ranges work?', a: 'Enter values like 1-3,5,8. Page numbers begin at 1.' }],
+  },
+  'delete-pdf-pages': {
+    slug: 'delete-pdf-pages', name: 'Delete PDF Pages', icon: Trash2, badge: 'Private in Browser',
+    gradient: 'from-rose-500/20 via-red-500/20 to-orange-500/20', accentColor: '#e11d48',
+    features: ['Remove exact pages or ranges', 'Prevents an empty result', 'No server upload', 'Keeps remaining pages intact'],
+    steps: [{ step: 1, title: 'Choose PDF', desc: 'Select the source PDF.' }, { step: 2, title: 'Mark pages', desc: 'Enter the pages you want removed.' }, { step: 3, title: 'Download', desc: 'Save the remaining pages as a new PDF.' }],
+    faq: [{ q: 'Can I delete every page?', a: 'No. The tool safely requires at least one page to remain.' }],
+  },
+  'rotate-pdf': {
+    slug: 'rotate-pdf', name: 'Rotate PDF', icon: RotateCw, badge: 'Lossless Page Edit',
+    gradient: 'from-amber-500/20 via-orange-500/20 to-red-500/20', accentColor: '#d97706',
+    features: ['Rotate all pages by 90°, 180°, or 270°', 'Preserve PDF vector content', 'No server upload', 'Works with mixed page sizes'],
+    steps: [{ step: 1, title: 'Choose PDF', desc: 'Select the PDF with sideways pages.' }, { step: 2, title: 'Choose rotation', desc: 'Apply one rotation to every page.' }, { step: 3, title: 'Download', desc: 'Save the corrected PDF.' }],
+    faq: [{ q: 'Does rotation rasterize pages?', a: 'No. It updates page rotation without turning pages into images.' }],
+  },
+  'watermark-pdf': {
+    slug: 'watermark-pdf', name: 'Watermark PDF', icon: Stamp, badge: 'Text Watermark',
+    gradient: 'from-purple-500/20 via-fuchsia-500/20 to-pink-500/20', accentColor: '#a855f7',
+    features: ['Text watermark on every page', 'Readable translucent overlay', 'No server upload', 'Preserves source content'],
+    steps: [{ step: 1, title: 'Choose PDF', desc: 'Select the document to mark.' }, { step: 2, title: 'Enter text', desc: 'Type a concise watermark such as DRAFT.' }, { step: 3, title: 'Download', desc: 'Save the watermarked copy.' }],
+    faq: [{ q: 'Can this remove existing watermarks?', a: 'No. It only adds a new text overlay.' }],
+  },
+  'number-pdf-pages': {
+    slug: 'number-pdf-pages', name: 'Add PDF Page Numbers', icon: ListOrdered, badge: 'Automatic Numbering',
+    gradient: 'from-blue-500/20 via-indigo-500/20 to-violet-500/20', accentColor: '#4f46e5',
+    features: ['Number every page automatically', 'Page X / total format', 'No server upload', 'Centered footer placement'],
+    steps: [{ step: 1, title: 'Choose PDF', desc: 'Select the document.' }, { step: 2, title: 'Add numbers', desc: 'The browser labels every page.' }, { step: 3, title: 'Download', desc: 'Save the numbered document.' }],
+    faq: [{ q: 'Where are numbers placed?', a: 'They are centered near the bottom edge of every page.' }],
+  },
+  'pdf-metadata': {
+    slug: 'pdf-metadata', name: 'Edit PDF Metadata', icon: Tags, badge: 'Private Metadata',
+    gradient: 'from-teal-500/20 via-emerald-500/20 to-lime-500/20', accentColor: '#0d9488',
+    features: ['Set title, author, and subject', 'Add comma-separated keywords', 'No server upload', 'Updates modification time'],
+    steps: [{ step: 1, title: 'Choose PDF', desc: 'Select a PDF on your device.' }, { step: 2, title: 'Enter metadata', desc: 'Fill only the fields you want to set.' }, { step: 3, title: 'Download', desc: 'Save the updated PDF.' }],
+    faq: [{ q: 'Does metadata change page content?', a: 'No. It changes document properties only.' }],
+  },
   'pdf-to-docx': {
     slug: 'pdf-to-docx',
     name: 'PDF to Word Converter',
@@ -37,9 +101,21 @@ export const TOOL_PRESENTATION_MAP: Record<string, ToolPresentation> = {
       'Fast client & cloud worker execution',
     ],
     steps: [
-      { step: 1, title: 'Upload PDF', desc: 'Select or drag & drop your PDF file up to your plan limit.' },
-      { step: 2, title: 'Select Options', desc: 'Configure OCR extraction mode or page formatting.' },
-      { step: 3, title: 'Download DOCX', desc: 'Get your editable Microsoft Word document instantly.' },
+      {
+        step: 1,
+        title: 'Upload PDF',
+        desc: 'Select or drag & drop your PDF file up to your plan limit.',
+      },
+      {
+        step: 2,
+        title: 'Select Options',
+        desc: 'Configure OCR extraction mode or page formatting.',
+      },
+      {
+        step: 3,
+        title: 'Download DOCX',
+        desc: 'Get your editable Microsoft Word document instantly.',
+      },
     ],
     faq: [
       {
@@ -48,7 +124,7 @@ export const TOOL_PRESENTATION_MAP: Record<string, ToolPresentation> = {
       },
       {
         q: 'Is my uploaded document private and secure?',
-        a: 'Yes. Files are encrypted, processed in isolated worker containers, and automatically purged based on retention policies.',
+        a: 'Server jobs use isolated temporary storage and files expire within 10 minutes. Browser-capable tools keep the file on your device.',
       },
     ],
   },
@@ -67,7 +143,11 @@ export const TOOL_PRESENTATION_MAP: Record<string, ToolPresentation> = {
     ],
     steps: [
       { step: 1, title: 'Upload Scanned File', desc: 'Upload scanned PDF or photo documents.' },
-      { step: 2, title: 'Process OCR', desc: 'Our engine identifies characters and structured text.' },
+      {
+        step: 2,
+        title: 'Process OCR',
+        desc: 'Our engine identifies characters and structured text.',
+      },
       { step: 3, title: 'Download Text', desc: 'Download the extracted content as a TXT file.' },
     ],
     faq: [
@@ -92,7 +172,11 @@ export const TOOL_PRESENTATION_MAP: Record<string, ToolPresentation> = {
     ],
     steps: [
       { step: 1, title: 'Enter Web URL', desc: 'Paste the public link of the webpage or article.' },
-      { step: 2, title: 'Capture Page', desc: 'Chromium loads the public page, its scripts, fonts, and print styles.' },
+      {
+        step: 2,
+        title: 'Capture Page',
+        desc: 'Chromium loads the public page, its scripts, fonts, and print styles.',
+      },
       { step: 3, title: 'Generate PDF', desc: 'Receive pixel-perfect PDF rendering in seconds.' },
     ],
     faq: [
@@ -117,7 +201,11 @@ export const TOOL_PRESENTATION_MAP: Record<string, ToolPresentation> = {
     ],
     steps: [
       { step: 1, title: 'Provide URL', desc: 'Paste any public article or documentation URL.' },
-      { step: 2, title: 'Analyze Content', desc: 'The engine extracts readable body text and structure.' },
+      {
+        step: 2,
+        title: 'Analyze Content',
+        desc: 'The engine extracts readable body text and structure.',
+      },
       { step: 3, title: 'Export to Word', desc: 'Download the formatted .docx file immediately.' },
     ],
     faq: [
@@ -141,8 +229,16 @@ export const TOOL_PRESENTATION_MAP: Record<string, ToolPresentation> = {
       'Runs in an isolated Chromium rendering worker',
     ],
     steps: [
-      { step: 1, title: 'Paste or Upload HTML', desc: 'Input your HTML/CSS code or upload an HTML file.' },
-      { step: 2, title: 'Preview & Configure', desc: 'Set page dimensions, margins, and background printing.' },
+      {
+        step: 1,
+        title: 'Paste or Upload HTML',
+        desc: 'Input your HTML/CSS code or upload an HTML file.',
+      },
+      {
+        step: 2,
+        title: 'Preview & Configure',
+        desc: 'Set page dimensions, margins, and background printing.',
+      },
       { step: 3, title: 'Render PDF', desc: 'Generate your professional PDF document.' },
     ],
     faq: [
@@ -166,8 +262,16 @@ export const TOOL_PRESENTATION_MAP: Record<string, ToolPresentation> = {
       'Uses the Pandoc conversion worker',
     ],
     steps: [
-      { step: 1, title: 'Input Markdown', desc: 'Write or paste Markdown content or upload a .md file.' },
-      { step: 2, title: 'Convert Content', desc: 'The worker parses the Markdown and builds a print-ready document.' },
+      {
+        step: 1,
+        title: 'Input Markdown',
+        desc: 'Write or paste Markdown content or upload a .md file.',
+      },
+      {
+        step: 2,
+        title: 'Convert Content',
+        desc: 'The worker parses the Markdown and builds a print-ready document.',
+      },
       { step: 3, title: 'Export PDF', desc: 'Download clean, publication-ready PDF notes.' },
     ],
     faq: [
@@ -192,7 +296,11 @@ export const TOOL_PRESENTATION_MAP: Record<string, ToolPresentation> = {
     ],
     steps: [
       { step: 1, title: 'Select Image', desc: 'Upload a PNG, JPG, or JPEG image.' },
-      { step: 2, title: 'Convert', desc: 'The worker fits the image to a PDF page while preserving its aspect ratio.' },
+      {
+        step: 2,
+        title: 'Convert',
+        desc: 'The worker fits the image to a PDF page while preserving its aspect ratio.',
+      },
       { step: 3, title: 'Generate PDF', desc: 'Download the generated PDF.' },
     ],
     faq: [
@@ -218,7 +326,11 @@ export const TOOL_PRESENTATION_MAP: Record<string, ToolPresentation> = {
     steps: [
       { step: 1, title: 'Open Studio', desc: 'Start writing or paste existing content.' },
       { step: 2, title: 'Format & Organize', desc: 'Use headings, tables, callouts, and images.' },
-      { step: 3, title: 'Export Anywhere', desc: 'Export directly into your preferred file format.' },
+      {
+        step: 3,
+        title: 'Export Anywhere',
+        desc: 'Export directly into your preferred file format.',
+      },
     ],
     faq: [
       {

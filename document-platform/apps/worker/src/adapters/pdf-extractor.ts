@@ -7,6 +7,7 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { workerLogger } from '@docconv/logging';
+import { Document, Packer, PageBreak, Paragraph, TextRun } from 'docx';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { PDFParse } = require('pdf-parse');
 
@@ -81,7 +82,7 @@ export class PdfExtractorAdapter {
       if (extractedText.trim().length === 0) {
         throw new Error(
           'No readable text could be extracted from this PDF. ' +
-          'If it is a scanned document, please install poppler-utils and tesseract-ocr on the server.'
+            'If it is a scanned document, please install poppler-utils and tesseract-ocr on the server.',
         );
       }
 
@@ -93,23 +94,48 @@ export class PdfExtractorAdapter {
 
       const allowedFormats = ['docx', 'html', 'markdown', 'md'];
       if (!allowedFormats.includes(target)) {
-        throw new Error(`PDF conversion to '${targetFormat}' is not supported. Supported: txt, docx, html, markdown`);
+        throw new Error(
+          `PDF conversion to '${targetFormat}' is not supported. Supported: txt, docx, html, markdown`,
+        );
       }
 
-      const outputExtension = target === 'markdown' ? 'md' : target;
-      const outputPath = path.join(tmpDir, `output.${outputExtension}`);
-      const textPath = path.join(tmpDir, 'input.txt');
-      await fs.writeFile(textPath, extractedText, 'utf8');
+      if (target === 'docx') {
+        const children: Paragraph[] = [];
+        const pages = extractedText.split('\f');
+        pages.forEach((pageText, pageIndex) => {
+          if (pageIndex > 0) children.push(new Paragraph({ children: [new PageBreak()] }));
+          for (const line of pageText.split(/\r?\n/)) {
+            children.push(new Paragraph({
+              children: [new TextRun({ text: line || ' ', font: 'Courier New', size: 20 })],
+              spacing: { after: 40 },
+            }));
+          }
+        });
+        const document = new Document({
+          creator: 'AppToolkitLab',
+          title: 'Extracted PDF content',
+          description: 'Editable, text-focused PDF extraction',
+          sections: [{ children }],
+        });
+        return Readable.from(await Packer.toBuffer(document));
+      }
 
-      const pandocArgs = [textPath, '--from=markdown', '-o', outputPath];
-      if (target === 'html') pandocArgs.push('--standalone');
+      if (target === 'html') {
+        const escaped = extractedText
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        return Readable.from(Buffer.from(
+          `<!doctype html><html><head><meta charset="utf-8"><title>Extracted PDF</title></head><body><pre>${escaped}</pre></body></html>`,
+          'utf8',
+        ));
+      }
 
-      await execFileAsync('pandoc', pandocArgs, {
-        timeout,
-        maxBuffer: 10 * 1024 * 1024,
-      });
+      if (target === 'markdown' || target === 'md') {
+        return Readable.from(Buffer.from(extractedText, 'utf8'));
+      }
 
-      return Readable.from(await fs.readFile(outputPath));
+      throw new Error(`PDF conversion to '${targetFormat}' is not supported.`);
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true }).catch((error) => {
         workerLogger.warn({ error, tmpDir }, 'Failed to clean up PDF conversion files');

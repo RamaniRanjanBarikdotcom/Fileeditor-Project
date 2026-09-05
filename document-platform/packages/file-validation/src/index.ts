@@ -17,7 +17,11 @@ const FILE_SIGNATURES: FileSignature[] = [
   // PDF
   { extension: 'pdf', mimeType: 'application/pdf', magic: [0x25, 0x50, 0x44, 0x46] },
   // PNG
-  { extension: 'png', mimeType: 'image/png', magic: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
+  {
+    extension: 'png',
+    mimeType: 'image/png',
+    magic: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+  },
   // JPEG
   { extension: 'jpg', mimeType: 'image/jpeg', magic: [0xff, 0xd8, 0xff] },
   // ZIP-based (DOCX, XLSX, etc.)
@@ -189,16 +193,23 @@ export function detectFileType(buffer: Buffer): {
 
 // ─── Validate File Signature ─────────────────────────────────
 
-export function validateFileSignature(
-  buffer: Buffer,
-  declaredExtension: string,
-): ValidationResult {
+export function validateFileSignature(buffer: Buffer, declaredExtension: string): ValidationResult {
   const errors: ValidationError[] = [];
   const detected = detectFileType(buffer);
 
   // For text-based formats (HTML, Markdown, TXT, CSV, JSON), magic bytes
   // are unreliable — skip signature validation.
-  const textFormats = new Set(['html', 'htm', 'md', 'markdown', 'txt', 'text', 'csv', 'json', 'url']);
+  const textFormats = new Set([
+    'html',
+    'htm',
+    'md',
+    'markdown',
+    'txt',
+    'text',
+    'csv',
+    'json',
+    'url',
+  ]);
   if (textFormats.has(declaredExtension.toLowerCase())) {
     return { valid: true, errors: [], detectedType: declaredExtension };
   }
@@ -271,9 +282,9 @@ export function validateFile(
 
 export function sanitizeFilename(filename: string): string {
   return filename
-    .replace(/[^\w\s.\-()]/g, '_')  // Replace dangerous chars
-    .replace(/\.{2,}/g, '.')         // Remove consecutive dots
-    .replace(/\s+/g, '_')            // Replace spaces
+    .replace(/[^\w\s.\-()]/g, '_') // Replace dangerous chars
+    .replace(/\.{2,}/g, '.') // Remove consecutive dots
+    .replace(/\s+/g, '_') // Replace spaces
     .substring(0, MAX_FILENAME_LENGTH);
 }
 

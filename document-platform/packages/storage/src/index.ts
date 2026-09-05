@@ -93,12 +93,7 @@ export class StorageClient {
    * Generate a UUID-based storage key for a file.
    * Format: organizations/{orgId}/users/{userId}/{bucket}/{uuid}.{ext}
    */
-  generateStorageKey(
-    orgId: string,
-    userId: string,
-    bucket: BucketType,
-    extension: string,
-  ): string {
+  generateStorageKey(orgId: string, userId: string, bucket: BucketType, extension: string): string {
     const uuid = randomUUID();
     const ext = extension.replace(/^\./, '');
     return `organizations/${orgId}/users/${userId}/${bucket}/${uuid}.${ext}`;
@@ -172,7 +167,10 @@ export class StorageClient {
   /**
    * Check if a file exists and get its metadata.
    */
-  async head(bucket: BucketType, key: string): Promise<{
+  async head(
+    bucket: BucketType,
+    key: string,
+  ): Promise<{
     contentLength: number;
     contentType: string;
     lastModified: Date;

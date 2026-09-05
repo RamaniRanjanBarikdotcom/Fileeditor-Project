@@ -38,13 +38,18 @@ export default function WorkspaceHistoryPage() {
         ) : jobs.length === 0 ? (
           <div className="p-16 text-center text-slate-400 space-y-2">
             <Clock className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-700" />
-            <p className="font-semibold text-sm text-slate-600 dark:text-slate-300">No conversions recorded yet</p>
+            <p className="font-semibold text-sm text-slate-600 dark:text-slate-300">
+              No conversions recorded yet
+            </p>
             <p className="text-xs">Start converting files from the converter or free tools hub.</p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {jobs.map((job) => (
-              <div key={job.id} className="p-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-850">
+              <div
+                key={job.id}
+                className="p-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-850"
+              >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
                     <FileText className="w-5 h-5" />
@@ -65,8 +70,8 @@ export default function WorkspaceHistoryPage() {
                       job.status === 'COMPLETED'
                         ? 'bg-emerald-50 text-emerald-600'
                         : job.status === 'FAILED'
-                        ? 'bg-red-50 text-red-600'
-                        : 'bg-amber-50 text-amber-600'
+                          ? 'bg-red-50 text-red-600'
+                          : 'bg-amber-50 text-amber-600'
                     }`}
                   >
                     {job.status}

@@ -37,7 +37,11 @@ export async function fetchApi<T = any>(
   let response = await fetch(url, fetchOptions);
 
   // If 401 Unauthorized, try to refresh token automatically
-  if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
+  if (
+    response.status === 401 &&
+    !endpoint.includes('/auth/login') &&
+    !endpoint.includes('/auth/refresh')
+  ) {
     try {
       const refreshRes = await fetch('/api/v1/auth/refresh', {
         method: 'POST',
@@ -71,7 +75,10 @@ export async function fetchApi<T = any>(
       success: response.ok,
       error: response.ok
         ? undefined
-        : { code: 'INTERNAL_ERROR' as any, message: `HTTP ${response.status}: ${response.statusText}` },
+        : {
+            code: 'INTERNAL_ERROR' as any,
+            message: `HTTP ${response.status}: ${response.statusText}`,
+          },
     };
   }
 }

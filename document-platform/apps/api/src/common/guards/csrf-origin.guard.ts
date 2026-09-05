@@ -26,7 +26,12 @@ export class CsrfOriginGuard implements CanActivate {
     const clientSecret = req.headers['x-toolsuite-client'] as string | undefined;
 
     // Allow requests with our custom application header
-    if (requestedWith === 'AppToolkitLabApp' || requestedWith === 'ToolSuiteApp' || requestedWith === 'XMLHttpRequest' || clientSecret) {
+    if (
+      requestedWith === 'AppToolkitLabApp' ||
+      requestedWith === 'ToolSuiteApp' ||
+      requestedWith === 'XMLHttpRequest' ||
+      clientSecret
+    ) {
       return true;
     }
 
@@ -54,7 +59,9 @@ export class CsrfOriginGuard implements CanActivate {
 
     // In production, block state mutations without Origin/Referer/Custom Header
     if (process.env.NODE_ENV === 'production') {
-      throw new ForbiddenException('CSRF/Origin validation failed: Missing origin or validation headers.');
+      throw new ForbiddenException(
+        'CSRF/Origin validation failed: Missing origin or validation headers.',
+      );
     }
 
     return true;

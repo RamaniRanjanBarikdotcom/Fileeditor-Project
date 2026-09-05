@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ProductsService, CreateProductDto } from './products.service';
 import { ProductType } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';

@@ -23,12 +23,17 @@ async function bootstrap() {
   app.use(helmet());
   app.use(cookieParser());
 
-  const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5173,http://localhost:4000')
+  const corsOrigins = (
+    process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5173,http://localhost:4000'
+  )
     .split(',')
     .map((o) => o.trim());
 
   app.enableCors({
-    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
       // Allow non-browser requests or matching origins
       if (!origin || corsOrigins.includes(origin)) {
         callback(null, true);

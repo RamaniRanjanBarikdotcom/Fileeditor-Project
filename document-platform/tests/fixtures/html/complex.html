@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Complex HTML Document</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+        h1 { color: #2c3e50; border-bottom: 2px solid #34495e; padding-bottom: 5px; }
+        .table-container { margin: 20px 0; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; color: #333; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .code-block { background-color: #f4f4f4; border: 1px solid #ddd; padding: 10px; border-radius: 4px; font-family: monospace; }
+        blockquote { border-left: 5px solid #ccc; margin: 1.5em 10px; padding: 0.5em 10px; font-style: italic; background-color: #fdfdfd; }
+    </style>
+</head>
+<body>
+    <h1>Complex HTML Document</h1>
+    <p>This document tests advanced HTML features including CSS styling, tables, code blocks, and blockquotes.</p>
+
+    <h2>Table Support</h2>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Header 1</th>
+                    <th>Header 2</th>
+                    <th>Header 3</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Row 1, Col 1</td>
+                    <td>Row 1, Col 2</td>
+                    <td>Row 1, Col 3</td>
+                </tr>
+                <tr>
+                    <td>Row 2, Col 1</td>
+                    <td>Row 2, Col 2</td>
+                    <td>Row 2, Col 3</td>
+                </tr>
+                <tr>
+                    <td><strong>Bold Row</strong></td>
+                    <td><em>Italic Row</em></td>
+                    <td><span style="font-family: monospace;">Code Row</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2>Code Blocks</h2>
+    <p>Below is a standard code block styled with CSS.</p>
+    <div class="code-block">
+<pre><code>function greet(name) {
+  return `Hello, ${name}!`;
+}
+console.log(greet("World"));</code></pre>
+    </div>
+
+    <h2>Blockquotes</h2>
+    <blockquote>
+        <p>This is a blockquote. It should be indented and styled appropriately in the output format.</p>
+        <p>It can span multiple paragraphs.</p>
+    </blockquote>
+
+    <h2>Images</h2>
+    <p>This tests inline base64 image rendering (a 1x1 blue pixel).</p>
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" alt="Blue Pixel" style="border: 1px solid #000;">
+</body>
+</html>

@@ -78,8 +78,7 @@ export class PaymentsService {
         });
 
         // Issue License Key if product requires it
-        const requiresLicense =
-          (item.product.metadataJson as any)?.requiresLicense !== false;
+        const requiresLicense = (item.product.metadataJson as any)?.requiresLicense !== false;
 
         if (requiresLicense) {
           await this.licensesService.issueLicenseKey({

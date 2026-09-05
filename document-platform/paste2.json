@@ -1,1 +1,12 @@
-{"success":true,"data":{"id":"9aaf6aa1-1123-4a72-8f36-da496c2e6400","originalFilename":"pasted-content.txt","extension":"txt","mimeType":"text/plain","sizeBytes":19,"status":"READY","createdAt":"2026-08-30T05:26:17.927Z"}}
+{
+  "success": true,
+  "data": {
+    "id": "9aaf6aa1-1123-4a72-8f36-da496c2e6400",
+    "originalFilename": "pasted-content.txt",
+    "extension": "txt",
+    "mimeType": "text/plain",
+    "sizeBytes": 19,
+    "status": "READY",
+    "createdAt": "2026-08-30T05:26:17.927Z"
+  }
+}

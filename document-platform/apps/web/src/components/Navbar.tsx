@@ -47,7 +47,9 @@ export function Navbar() {
     void fetchApi('/auth/me').then((response) => {
       if (active) setIsLoggedIn(response.success);
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [pathname]);
 
   const isActive = (href: string) => pathname === href || pathname?.startsWith(`${href}/`);
@@ -61,10 +63,16 @@ export function Navbar() {
               <Zap className="h-[1.1rem] w-[1.1rem] text-white" />
             </span>
             <span className="min-w-0">
-              <span className="block text-[1.08rem] font-extrabold leading-none tracking-[-0.025em]" style={{ color: 'var(--text-primary)' }}>
+              <span
+                className="block text-[1.08rem] font-extrabold leading-none tracking-[-0.025em]"
+                style={{ color: 'var(--text-primary)' }}
+              >
                 AppToolkit<span style={{ color: 'var(--brand-500)' }}>Lab</span>
               </span>
-              <span className="mt-1 hidden text-[0.58rem] font-bold uppercase leading-none tracking-[0.16em] sm:block" style={{ color: 'var(--text-muted)' }}>
+              <span
+                className="mt-1 hidden text-[0.58rem] font-bold uppercase leading-none tracking-[0.16em] sm:block"
+                style={{ color: 'var(--text-muted)' }}
+              >
                 Digital tools platform
               </span>
             </span>
@@ -84,7 +92,13 @@ export function Navbar() {
           </nav>
 
           <div className="site-desktop-actions">
-            <button type="button" onClick={toggleTheme} id="theme-toggle" className="site-icon-button focus-ring" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              id="theme-toggle"
+              className="site-icon-button focus-ring"
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+            >
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
 
@@ -96,14 +110,23 @@ export function Navbar() {
               </Link>
             ) : (
               <>
-                <Link href="/login" id="nav-signin-btn" className="site-sign-in">Sign in</Link>
-                <Link href="/register" id="nav-getstarted-btn" className="btn btn-primary btn-sm">Start free</Link>
+                <Link href="/login" id="nav-signin-btn" className="site-sign-in">
+                  Sign in
+                </Link>
+                <Link href="/register" id="nav-getstarted-btn" className="btn btn-primary btn-sm">
+                  Start free
+                </Link>
               </>
             )}
           </div>
 
           <div className="site-mobile-actions">
-            <button type="button" onClick={toggleTheme} className="site-icon-button focus-ring" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="site-icon-button focus-ring"
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+            >
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
             <button
@@ -128,8 +151,15 @@ export function Navbar() {
                 const Icon = link.icon;
                 const active = isActive(link.href);
                 return (
-                  <Link key={link.href} href={link.href} className={`site-mobile-link${active ? ' site-mobile-link-active' : ''}`} aria-current={active ? 'page' : undefined}>
-                    <span className="site-mobile-link-icon"><Icon className="h-4 w-4" /></span>
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`site-mobile-link${active ? ' site-mobile-link-active' : ''}`}
+                    aria-current={active ? 'page' : undefined}
+                  >
+                    <span className="site-mobile-link-icon">
+                      <Icon className="h-4 w-4" />
+                    </span>
                     <span className="flex-1">{link.name}</span>
                     <ArrowRight className="h-4 w-4 opacity-45" />
                   </Link>
@@ -137,13 +167,22 @@ export function Navbar() {
               })}
             </nav>
 
-            <div className="mt-4 grid gap-2 border-t pt-4 sm:grid-cols-2" style={{ borderColor: 'var(--border)' }}>
+            <div
+              className="mt-4 grid gap-2 border-t pt-4 sm:grid-cols-2"
+              style={{ borderColor: 'var(--border)' }}
+            >
               {isLoggedIn ? (
-                <Link href="/app" className="btn btn-primary w-full">Go to workspace <ArrowRight className="h-4 w-4" /></Link>
+                <Link href="/app" className="btn btn-primary w-full">
+                  Go to workspace <ArrowRight className="h-4 w-4" />
+                </Link>
               ) : (
                 <>
-                  <Link href="/login" className="btn btn-secondary w-full">Sign in</Link>
-                  <Link href="/register" className="btn btn-primary w-full">Create free account <ArrowRight className="h-4 w-4" /></Link>
+                  <Link href="/login" className="btn btn-secondary w-full">
+                    Sign in
+                  </Link>
+                  <Link href="/register" className="btn btn-primary w-full">
+                    Create free account <ArrowRight className="h-4 w-4" />
+                  </Link>
                 </>
               )}
             </div>

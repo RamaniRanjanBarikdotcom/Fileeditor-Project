@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { SubscriptionPlanTier } from '@prisma/client';
+import { createProcessingContext } from '@docconv/processing-core';
+import { getToolDefinition } from '@docconv/tool-registry';
 
 const PLAN_HIERARCHY: Record<SubscriptionPlanTier, number> = {
   [SubscriptionPlanTier.FREE]: 0,
@@ -34,10 +36,7 @@ export class ToolsService {
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
 
-    return tools.map((tool) => ({
-      ...tool,
-      maxFileSizeBytes: Number(tool.maxFileSizeBytes),
-    }));
+    return tools.map((tool) => this.withCapabilities(tool));
   }
 
   /**
@@ -52,10 +51,7 @@ export class ToolsService {
       throw new NotFoundException(`Tool '${slug}' not found or unavailable.`);
     }
 
-    return {
-      ...tool,
-      maxFileSizeBytes: Number(tool.maxFileSizeBytes),
-    };
+    return this.withCapabilities(tool);
   }
 
   /**
@@ -88,6 +84,21 @@ export class ToolsService {
     inputFormat: string,
   ) {
     const tool = await this.getToolBySlug(toolSlug);
+
+    const definition = getToolDefinition(toolSlug);
+    const context = createProcessingContext(process.env);
+    const serverAvailable = Boolean(
+      definition &&
+        ((definition.capability.node.supported && context.nodeEnabled) ||
+          (definition.capability.native.supported && context.nativeEnabled)),
+    );
+    if (definition && !serverAvailable) {
+      throw new BadRequestException(
+        definition.capability.browser.supported && context.browserEnabled
+          ? `Tool '${tool.name}' is available only as private in-browser processing in this deployment.`
+          : `Tool '${tool.name}' is unavailable in the current deployment.`,
+      );
+    }
 
     // 1. Check anonymous support if not logged in
     if (!userTier && !tool.anonymousEnabled) {
@@ -128,5 +139,25 @@ export class ToolsService {
     }
 
     return tool;
+  }
+
+  private withCapabilities<T extends { slug: string; maxFileSizeBytes: bigint }>(tool: T) {
+    const definition = getToolDefinition(tool.slug);
+    if (!definition) return { ...tool, maxFileSizeBytes: Number(tool.maxFileSizeBytes) };
+    const context = createProcessingContext(process.env);
+    const capability = {
+      ...definition.capability,
+      browser: { ...definition.capability.browser, supported: definition.capability.browser.supported && context.browserEnabled },
+      node: { ...definition.capability.node, supported: definition.capability.node.supported && context.nodeEnabled },
+      native: { ...definition.capability.native, supported: definition.capability.native.supported && context.nativeEnabled },
+    };
+    return {
+      ...tool,
+      maxFileSizeBytes: Number(tool.maxFileSizeBytes),
+      operation: definition.operation,
+      availability: definition.availability,
+      capability,
+      privacy: definition.privacy,
+    };
   }
 }

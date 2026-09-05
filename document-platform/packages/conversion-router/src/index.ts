@@ -16,38 +16,200 @@ import {
 
 export const CONVERSION_MATRIX: ConversionMatrixEntry[] = [
   // PDF extraction. Text PDFs preserve reading order; scanned PDFs use OCR.
-  { input: InputFormat.PDF, output: OutputFormat.DOCX, engine: ConversionEngine.PDF_EXTRACTOR, quality: ConversionQuality.B, description: 'PDF text/OCR extraction to editable Word document' },
-  { input: InputFormat.PDF, output: OutputFormat.HTML, engine: ConversionEngine.PDF_EXTRACTOR, quality: ConversionQuality.B, description: 'PDF text/OCR extraction to semantic HTML' },
-  { input: InputFormat.PDF, output: OutputFormat.MARKDOWN, engine: ConversionEngine.PDF_EXTRACTOR, quality: ConversionQuality.C, description: 'PDF text/OCR extraction to Markdown' },
-  { input: InputFormat.PDF, output: OutputFormat.TXT, engine: ConversionEngine.PDF_EXTRACTOR, quality: ConversionQuality.B, description: 'PDF text/OCR extraction to plain text' },
+  {
+    input: InputFormat.PDF,
+    output: OutputFormat.DOCX,
+    engine: ConversionEngine.PDF_EXTRACTOR,
+    quality: ConversionQuality.B,
+    description: 'PDF text/OCR extraction to editable Word document',
+  },
+  {
+    input: InputFormat.PDF,
+    output: OutputFormat.HTML,
+    engine: ConversionEngine.PDF_EXTRACTOR,
+    quality: ConversionQuality.B,
+    description: 'PDF text/OCR extraction to semantic HTML',
+  },
+  {
+    input: InputFormat.PDF,
+    output: OutputFormat.MARKDOWN,
+    engine: ConversionEngine.PDF_EXTRACTOR,
+    quality: ConversionQuality.C,
+    description: 'PDF text/OCR extraction to Markdown',
+  },
+  {
+    input: InputFormat.PDF,
+    output: OutputFormat.TXT,
+    engine: ConversionEngine.PDF_EXTRACTOR,
+    quality: ConversionQuality.B,
+    description: 'PDF text/OCR extraction to plain text',
+  },
   // Phase 1 — High reliability
-  { input: InputFormat.URL, output: OutputFormat.PDF, engine: ConversionEngine.CHROMIUM, quality: ConversionQuality.A, description: 'Gotenberg Chromium rendering for web pages' },
-  { input: InputFormat.URL, output: OutputFormat.DOCX, engine: ConversionEngine.CHROMIUM, quality: ConversionQuality.B, description: 'Chromium render followed by PDF extraction to Word' },
-  { input: InputFormat.URL, output: OutputFormat.HTML, engine: ConversionEngine.CHROMIUM, quality: ConversionQuality.C, description: 'Chromium render followed by semantic HTML extraction' },
-  { input: InputFormat.URL, output: OutputFormat.MARKDOWN, engine: ConversionEngine.CHROMIUM, quality: ConversionQuality.C, description: 'Chromium render followed by Markdown extraction' },
-  { input: InputFormat.URL, output: OutputFormat.TXT, engine: ConversionEngine.CHROMIUM, quality: ConversionQuality.B, description: 'Chromium render followed by text extraction' },
-  { input: InputFormat.HTML, output: OutputFormat.PDF, engine: ConversionEngine.CHROMIUM, quality: ConversionQuality.A, description: 'Gotenberg Chromium rendering' },
-  { input: InputFormat.MARKDOWN, output: OutputFormat.PDF, engine: ConversionEngine.CHROMIUM, quality: ConversionQuality.A, description: 'Markdown → HTML → Chromium' },
-  { input: InputFormat.DOCX, output: OutputFormat.PDF, engine: ConversionEngine.LIBREOFFICE, quality: ConversionQuality.A, description: 'LibreOffice via Gotenberg' },
-  { input: InputFormat.XLSX, output: OutputFormat.PDF, engine: ConversionEngine.LIBREOFFICE, quality: ConversionQuality.A, description: 'LibreOffice via Gotenberg' },
-  { input: InputFormat.CSV, output: OutputFormat.XLSX, engine: ConversionEngine.SHEETJS, quality: ConversionQuality.A, description: 'SheetJS spreadsheet generation' },
+  {
+    input: InputFormat.URL,
+    output: OutputFormat.PDF,
+    engine: ConversionEngine.CHROMIUM,
+    quality: ConversionQuality.A,
+    description: 'Gotenberg Chromium rendering for web pages',
+  },
+  {
+    input: InputFormat.URL,
+    output: OutputFormat.DOCX,
+    engine: ConversionEngine.CHROMIUM,
+    quality: ConversionQuality.B,
+    description: 'Chromium render followed by PDF extraction to Word',
+  },
+  {
+    input: InputFormat.URL,
+    output: OutputFormat.HTML,
+    engine: ConversionEngine.CHROMIUM,
+    quality: ConversionQuality.C,
+    description: 'Chromium render followed by semantic HTML extraction',
+  },
+  {
+    input: InputFormat.URL,
+    output: OutputFormat.MARKDOWN,
+    engine: ConversionEngine.CHROMIUM,
+    quality: ConversionQuality.C,
+    description: 'Chromium render followed by Markdown extraction',
+  },
+  {
+    input: InputFormat.URL,
+    output: OutputFormat.TXT,
+    engine: ConversionEngine.CHROMIUM,
+    quality: ConversionQuality.B,
+    description: 'Chromium render followed by text extraction',
+  },
+  {
+    input: InputFormat.HTML,
+    output: OutputFormat.PDF,
+    engine: ConversionEngine.CHROMIUM,
+    quality: ConversionQuality.A,
+    description: 'Gotenberg Chromium rendering',
+  },
+  {
+    input: InputFormat.MARKDOWN,
+    output: OutputFormat.PDF,
+    engine: ConversionEngine.CHROMIUM,
+    quality: ConversionQuality.A,
+    description: 'Markdown → HTML → Chromium',
+  },
+  {
+    input: InputFormat.DOCX,
+    output: OutputFormat.PDF,
+    engine: ConversionEngine.LIBREOFFICE,
+    quality: ConversionQuality.A,
+    description: 'LibreOffice via Gotenberg',
+  },
+  {
+    input: InputFormat.XLSX,
+    output: OutputFormat.PDF,
+    engine: ConversionEngine.LIBREOFFICE,
+    quality: ConversionQuality.A,
+    description: 'LibreOffice via Gotenberg',
+  },
+  {
+    input: InputFormat.CSV,
+    output: OutputFormat.XLSX,
+    engine: ConversionEngine.SHEETJS,
+    quality: ConversionQuality.A,
+    description: 'SheetJS spreadsheet generation',
+  },
 
   // Phase 2 — Extensions
-  { input: InputFormat.MARKDOWN, output: OutputFormat.DOCX, engine: ConversionEngine.PANDOC, quality: ConversionQuality.A, description: 'Pandoc with reference.docx' },
-  { input: InputFormat.MARKDOWN, output: OutputFormat.HTML, engine: ConversionEngine.PANDOC, quality: ConversionQuality.A, description: 'Pandoc markdown→HTML' },
-  { input: InputFormat.TXT, output: OutputFormat.PDF, engine: ConversionEngine.CHROMIUM, quality: ConversionQuality.A, description: 'Text → HTML template → Chromium' },
-  { input: InputFormat.TXT, output: OutputFormat.DOCX, engine: ConversionEngine.PANDOC, quality: ConversionQuality.A, description: 'Pandoc text→DOCX' },
-  { input: InputFormat.HTML, output: OutputFormat.DOCX, engine: ConversionEngine.PANDOC, quality: ConversionQuality.B, description: 'Pandoc HTML→DOCX (complex CSS may not map)' },
+  {
+    input: InputFormat.MARKDOWN,
+    output: OutputFormat.DOCX,
+    engine: ConversionEngine.PANDOC,
+    quality: ConversionQuality.A,
+    description: 'Pandoc with reference.docx',
+  },
+  {
+    input: InputFormat.MARKDOWN,
+    output: OutputFormat.HTML,
+    engine: ConversionEngine.PANDOC,
+    quality: ConversionQuality.A,
+    description: 'Pandoc markdown→HTML',
+  },
+  {
+    input: InputFormat.TXT,
+    output: OutputFormat.PDF,
+    engine: ConversionEngine.CHROMIUM,
+    quality: ConversionQuality.A,
+    description: 'Text → HTML template → Chromium',
+  },
+  {
+    input: InputFormat.TXT,
+    output: OutputFormat.DOCX,
+    engine: ConversionEngine.PANDOC,
+    quality: ConversionQuality.A,
+    description: 'Pandoc text→DOCX',
+  },
+  {
+    input: InputFormat.HTML,
+    output: OutputFormat.DOCX,
+    engine: ConversionEngine.PANDOC,
+    quality: ConversionQuality.B,
+    description: 'Pandoc HTML→DOCX (complex CSS may not map)',
+  },
 
   // Phase 3 — Full matrix
-  { input: InputFormat.DOCX, output: OutputFormat.HTML, engine: ConversionEngine.PANDOC, quality: ConversionQuality.B, description: 'Pandoc semantic HTML (not pixel-perfect)' },
-  { input: InputFormat.DOCX, output: OutputFormat.MARKDOWN, engine: ConversionEngine.PANDOC, quality: ConversionQuality.B, description: 'Pandoc DOCX→Markdown (complex layouts simplify)' },
-  { input: InputFormat.HTML, output: OutputFormat.MARKDOWN, engine: ConversionEngine.PANDOC, quality: ConversionQuality.B, description: 'Pandoc HTML→Markdown' },
-  { input: InputFormat.XLSX, output: OutputFormat.CSV, engine: ConversionEngine.SHEETJS, quality: ConversionQuality.A, description: 'SheetJS spreadsheet extraction' },
-  { input: InputFormat.JSON, output: OutputFormat.XLSX, engine: ConversionEngine.SHEETJS, quality: ConversionQuality.A, description: 'SheetJS JSON→spreadsheet' },
-  { input: InputFormat.PNG, output: OutputFormat.PDF, engine: ConversionEngine.PDF_LIB, quality: ConversionQuality.A, description: 'pdf-lib image embedding' },
-  { input: InputFormat.JPG, output: OutputFormat.PDF, engine: ConversionEngine.PDF_LIB, quality: ConversionQuality.A, description: 'pdf-lib image embedding' },
-  { input: InputFormat.JPEG, output: OutputFormat.PDF, engine: ConversionEngine.PDF_LIB, quality: ConversionQuality.A, description: 'pdf-lib image embedding' },
+  {
+    input: InputFormat.DOCX,
+    output: OutputFormat.HTML,
+    engine: ConversionEngine.PANDOC,
+    quality: ConversionQuality.B,
+    description: 'Pandoc semantic HTML (not pixel-perfect)',
+  },
+  {
+    input: InputFormat.DOCX,
+    output: OutputFormat.MARKDOWN,
+    engine: ConversionEngine.PANDOC,
+    quality: ConversionQuality.B,
+    description: 'Pandoc DOCX→Markdown (complex layouts simplify)',
+  },
+  {
+    input: InputFormat.HTML,
+    output: OutputFormat.MARKDOWN,
+    engine: ConversionEngine.PANDOC,
+    quality: ConversionQuality.B,
+    description: 'Pandoc HTML→Markdown',
+  },
+  {
+    input: InputFormat.XLSX,
+    output: OutputFormat.CSV,
+    engine: ConversionEngine.SHEETJS,
+    quality: ConversionQuality.A,
+    description: 'SheetJS spreadsheet extraction',
+  },
+  {
+    input: InputFormat.JSON,
+    output: OutputFormat.XLSX,
+    engine: ConversionEngine.SHEETJS,
+    quality: ConversionQuality.A,
+    description: 'SheetJS JSON→spreadsheet',
+  },
+  {
+    input: InputFormat.PNG,
+    output: OutputFormat.PDF,
+    engine: ConversionEngine.PDF_LIB,
+    quality: ConversionQuality.A,
+    description: 'pdf-lib image embedding',
+  },
+  {
+    input: InputFormat.JPG,
+    output: OutputFormat.PDF,
+    engine: ConversionEngine.PDF_LIB,
+    quality: ConversionQuality.A,
+    description: 'pdf-lib image embedding',
+  },
+  {
+    input: InputFormat.JPEG,
+    output: OutputFormat.PDF,
+    engine: ConversionEngine.PDF_LIB,
+    quality: ConversionQuality.A,
+    description: 'pdf-lib image embedding',
+  },
 ];
 
 // ─── Router ──────────────────────────────────────────────────
@@ -73,7 +235,10 @@ export class ConversionRouter {
   /**
    * Find the best conversion engine for a given input→output pair.
    */
-  findAdapter(input: InputFormat | string, output: OutputFormat | string): ConversionMatrixEntry | undefined {
+  findAdapter(
+    input: InputFormat | string,
+    output: OutputFormat | string,
+  ): ConversionMatrixEntry | undefined {
     const normIn = this.normalizeFormat(input);
     const normOut = this.normalizeFormat(output);
     return this.matrix.find(
@@ -94,18 +259,14 @@ export class ConversionRouter {
    * Get all available output formats for a given input format.
    */
   getAvailableOutputs(input: InputFormat): OutputFormat[] {
-    return this.matrix
-      .filter((entry) => entry.input === input)
-      .map((entry) => entry.output);
+    return this.matrix.filter((entry) => entry.input === input).map((entry) => entry.output);
   }
 
   /**
    * Get all available input formats for a given output format.
    */
   getAvailableInputs(output: OutputFormat): InputFormat[] {
-    return this.matrix
-      .filter((entry) => entry.output === output)
-      .map((entry) => entry.input);
+    return this.matrix.filter((entry) => entry.output === output).map((entry) => entry.input);
   }
 
   /**

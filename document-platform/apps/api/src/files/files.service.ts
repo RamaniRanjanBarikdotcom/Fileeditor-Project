@@ -34,7 +34,7 @@ export class FilesService implements OnModuleInit {
     orgId: string,
     file: { originalname: string; buffer: Buffer; mimetype: string; size: number },
   ) {
-    const maxSize = this.config.get<number>('MAX_UPLOAD_SIZE_BYTES', 26_214_400);
+    const maxSize = this.config.get<number>('MAX_UPLOAD_SIZE_BYTES', 250 * 1024 * 1024);
 
     // Validate
     const sanitizedName = sanitizeFilename(file.originalname);
@@ -55,9 +55,8 @@ export class FilesService implements OnModuleInit {
       // Security Check (SSRF protection)
       try {
         await this.urlSecurity.validateUrl(urlString);
-        const inspection = await this.urlInspector.inspect(
-          urlString,
-          (candidate) => this.urlSecurity.validateUrl(candidate),
+        const inspection = await this.urlInspector.inspect(urlString, (candidate) =>
+          this.urlSecurity.validateUrl(candidate),
         );
         // Store the final validated redirect target. The object itself remains
         // a URL document, not the remote page's MIME type.
@@ -74,8 +73,11 @@ export class FilesService implements OnModuleInit {
     await this.storage.upload('quarantine', storageKey, finalBuffer, mimeType);
 
     // Calculate expiry
-    const retentionHours = this.config.get<number>('FILE_RETENTION_HOURS', 24);
-    const expiresAt = new Date(Date.now() + retentionHours * 60 * 60 * 1000);
+    const retentionSeconds = Math.min(
+      600,
+      Math.max(60, this.config.get<number>('TEMP_FILE_MAX_TTL_SECONDS', 600)),
+    );
+    const expiresAt = new Date(Date.now() + retentionSeconds * 1000);
 
     // Create database record
     const storedFile = await this.prisma.storedFile.create({
@@ -121,18 +123,21 @@ export class FilesService implements OnModuleInit {
   /**
    * Upload content pasted by user (HTML, Markdown, text).
    */
-  async uploadPastedContent(
-    userId: string,
-    orgId: string,
-    content: string,
-    format: string,
-  ) {
+  async uploadPastedContent(userId: string, orgId: string, content: string, format: string) {
     const buffer = Buffer.from(content, 'utf-8');
-    
+
     // Determine extension and mimetype from format
-    const ext = format === 'html' ? 'html' : format === 'markdown' ? 'md' : format === 'url' ? 'url' : 'txt';
-    const mimetype = format === 'html' ? 'text/html' : format === 'markdown' ? 'text/markdown' : format === 'url' ? 'text/uri-list' : 'text/plain';
-    
+    const ext =
+      format === 'html' ? 'html' : format === 'markdown' ? 'md' : format === 'url' ? 'url' : 'txt';
+    const mimetype =
+      format === 'html'
+        ? 'text/html'
+        : format === 'markdown'
+          ? 'text/markdown'
+          : format === 'url'
+            ? 'text/uri-list'
+            : 'text/plain';
+
     const file = {
       originalname: `pasted-content.${ext}`,
       mimetype,
@@ -156,8 +161,14 @@ export class FilesService implements OnModuleInit {
         skip,
         take: pageSize,
         select: {
-          id: true, originalFilename: true, extension: true, mimeType: true,
-          sizeBytes: true, status: true, createdAt: true, expiresAt: true,
+          id: true,
+          originalFilename: true,
+          extension: true,
+          mimeType: true,
+          sizeBytes: true,
+          status: true,
+          createdAt: true,
+          expiresAt: true,
         },
       }),
       this.prisma.storedFile.count({
