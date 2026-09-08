@@ -1193,6 +1193,367 @@ body {
   }
 }
 
+/* Tool detail pages: one stable, centered workspace shared by every /tools/[slug] route. */
+.tool-detail-page {
+  min-height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 8%, rgba(99, 102, 241, 0.08), transparent 30rem), var(--bg);
+}
+
+.tool-detail-state {
+  width: min(100% - 2rem, 56rem);
+  min-height: 24rem;
+  margin: 0 auto;
+  padding: 7rem 0;
+  text-align: center;
+}
+
+.tool-detail-state > * + * {
+  margin-top: 1rem;
+}
+
+.tool-detail-hero {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  overflow: hidden;
+  padding: clamp(3.75rem, 7vw, 5.75rem) 0 clamp(3rem, 5vw, 4.25rem);
+}
+
+.tool-detail-hero-inner {
+  max-width: 62rem;
+  text-align: center;
+}
+
+.tool-detail-hero-inner > * + * {
+  margin-top: 1rem;
+}
+
+.tool-detail-breadcrumb {
+  display: flex;
+  min-width: 0;
+  margin-bottom: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.tool-detail-category {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem 0.85rem;
+  border-radius: 9999px;
+}
+
+.tool-detail-title {
+  max-width: 56rem;
+  margin-right: auto;
+  margin-left: auto;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.tool-detail-description {
+  max-width: 45rem;
+  margin-right: auto;
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: clamp(0.95rem, 1.4vw, 1.08rem);
+  line-height: 1.75;
+  text-wrap: pretty;
+}
+
+.tool-detail-converter-wrap {
+  max-width: 68rem;
+  padding-top: clamp(2rem, 4vw, 3.5rem);
+  padding-bottom: clamp(2rem, 4vw, 3.5rem);
+}
+
+.tool-detail-editor-card {
+  padding: clamp(2rem, 5vw, 3.5rem);
+  text-align: center;
+}
+
+.interactive-converter {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 1.5rem;
+}
+
+.converter-quota-bar {
+  display: flex;
+  min-width: 0;
+  padding: 0.9rem 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.converter-quota-copy,
+.converter-pricing-link {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.converter-quota-copy > span:last-child {
+  overflow-wrap: anywhere;
+}
+
+.converter-pricing-link {
+  flex: 0 0 auto;
+  color: var(--brand-500);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.converter-body {
+  display: flex;
+  min-width: 0;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.converter-privacy-note {
+  display: flex;
+  min-width: 0;
+  padding: 1rem 1.1rem;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+
+.converter-dropzone {
+  min-height: 14rem;
+  padding: clamp(2rem, 5vw, 3rem);
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-radius: 1.25rem;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+.converter-dropzone:hover {
+  transform: translateY(-1px);
+}
+
+.converter-options-grid {
+  display: grid;
+  min-width: 0;
+  padding-top: 1.25rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.converter-options-grid > * {
+  min-width: 0;
+}
+
+.converter-options-grid .input,
+.converter-body .input {
+  width: 100%;
+  min-width: 0;
+}
+
+.tool-detail-section {
+  width: 100%;
+  padding: clamp(3.25rem, 6vw, 5rem) 0;
+}
+
+.tool-detail-section:nth-of-type(even) {
+  background: color-mix(in srgb, var(--bg-muted) 48%, transparent);
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tool-detail-section-inner {
+  max-width: 72rem;
+}
+
+.tool-detail-section-heading {
+  max-width: 48rem;
+  margin: 0 auto 2.5rem;
+  text-align: center;
+}
+
+.tool-detail-section-heading p {
+  margin-top: 0.7rem;
+  line-height: 1.65;
+}
+
+.tool-detail-step-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.tool-detail-step-card {
+  min-width: 0;
+  min-height: 13rem;
+  padding: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.tool-detail-step-card p {
+  margin-top: auto;
+  padding-top: 0.35rem;
+}
+
+.tool-detail-step-number {
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-bottom: 1.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 0.65rem;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+.tool-detail-features-section {
+  padding-top: 1rem;
+}
+
+.tool-detail-features-card {
+  padding: clamp(1.5rem, 4vw, 2.25rem);
+}
+
+.tool-detail-features-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.1rem 2rem;
+}
+
+.tool-detail-features-grid > div {
+  min-width: 0;
+}
+
+.tool-detail-faq-section {
+  padding-top: clamp(3rem, 5vw, 4rem);
+}
+
+.tool-detail-faq-list {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.tool-detail-faq-card {
+  padding: 1.35rem 1.5rem;
+}
+
+.tool-detail-faq-card h3 {
+  line-height: 1.45;
+}
+
+.tool-detail-upgrade-section {
+  width: 100%;
+  padding: 1rem 0 clamp(4rem, 7vw, 6rem);
+}
+
+.tool-detail-upgrade-card {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(2.25rem, 6vw, 4rem);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 1.75rem;
+  text-align: center;
+}
+
+.tool-detail-upgrade-card::before {
+  content: '';
+  position: absolute;
+  width: 20rem;
+  height: 20rem;
+  top: -13rem;
+  right: -5rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+@media (max-width: 767px) {
+  .tool-detail-hero {
+    padding-top: 3rem;
+    padding-bottom: 2.75rem;
+  }
+
+  .tool-detail-converter-wrap {
+    padding-top: 1.25rem;
+    padding-bottom: 1.75rem;
+  }
+
+  .converter-quota-bar {
+    padding: 1rem;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .converter-pricing-link {
+    margin-left: 0.15rem;
+  }
+
+  .converter-body {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .converter-dropzone {
+    min-height: 12rem;
+    padding: 1.5rem 1rem;
+  }
+
+  .converter-options-grid,
+  .tool-detail-step-grid,
+  .tool-detail-features-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tool-detail-step-card {
+    min-height: 0;
+  }
+
+  .tool-detail-faq-card {
+    padding: 1.15rem;
+  }
+
+  .tool-detail-faq-card p {
+    padding-left: 0 !important;
+  }
+
+  .tool-detail-upgrade-card .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .converter-options-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 419px) {
   .home-stats-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -5875,5 +6236,97 @@ body {
   .tools-cta-actions,
   .tools-cta-actions .btn {
     width: 100%;
+  }
+}
+
+/* Final cross-route overrides: keep this block after every page-specific rule. */
+.site-main {
+  width: 100%;
+  min-width: 0;
+  padding-top: 4.5rem;
+}
+
+.home-hero {
+  padding-top: clamp(5rem, 7vw, 6.5rem);
+}
+
+.info-hero,
+.pricing-page-hero,
+.saas-hero,
+.automation-hero,
+.software-hero,
+.tools-hero {
+  padding-top: clamp(4.5rem, 6vw, 5.75rem);
+}
+
+.home-tool-description,
+.tool-directory-copy p,
+.tools-benefit-card > p:last-child,
+.pricing-page-description,
+.pricing-page-card li,
+.pricing-fit-grid article > span,
+.saas-pillar-grid p,
+.saas-capability-grid p,
+.saas-workflow-grid p,
+.automation-use-case-grid article > p,
+.automation-model-grid article > p,
+.software-product-copy > p:last-child,
+.software-use-case-card > p,
+.software-model-card > p:nth-of-type(2) {
+  font-size: 0.875rem;
+}
+
+@media (min-width: 1180px) {
+  .site-desktop-nav,
+  .site-desktop-actions {
+    display: flex;
+  }
+
+  .site-mobile-actions,
+  .site-mobile-menu {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1179px) {
+  .site-desktop-nav,
+  .site-desktop-actions {
+    display: none;
+  }
+
+  .site-mobile-actions {
+    display: flex;
+  }
+
+  .site-header-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+@media (max-width: 639px) {
+  .home-hero,
+  .info-hero,
+  .pricing-page-hero,
+  .saas-hero,
+  .automation-hero,
+  .software-hero,
+  .tools-hero {
+    padding-top: 3.75rem;
+    padding-bottom: 3.5rem;
+  }
+
+  .ts-display {
+    font-size: clamp(2.35rem, 12vw, 3.4rem);
+  }
+
+  .ts-h1,
+  .info-hero h1 {
+    font-size: clamp(2rem, 10vw, 3rem);
+  }
+
+  .site-footer-cta,
+  .tools-filter-panel,
+  .tools-cta {
+    border-radius: 1.25rem;
   }
 }

@@ -1,4 +1,4 @@
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import { Readable } from 'stream';
 import { createWriteStream } from 'fs';
@@ -33,8 +33,11 @@ export class PdfExtractorAdapter {
       // Save the stream to disk so we can use it with both pdf-parse and pdftotext
       await pipeline(inputStream, createWriteStream(inputPath));
 
+      const target = targetFormat.toLowerCase();
+
       // ── Step 1: Extract text ─────────────────────────────────────────────
       let extractedText = '';
+      let usedOcr = false;
 
       // Try fast pure-JS extraction first (always works, no system deps)
       try {
@@ -76,6 +79,7 @@ export class PdfExtractorAdapter {
         if (hasTesseract && hasPdftoPpm) {
           workerLogger.info({}, 'Attempting OCR on PDF (likely scanned)');
           extractedText = await this.ocrScannedPdf(inputPath, tmpDir, timeout);
+          usedOcr = extractedText.replace(/\s/g, '').length >= 20;
         }
       }
 
@@ -87,7 +91,6 @@ export class PdfExtractorAdapter {
       }
 
       // ── Step 2: Convert to target format ────────────────────────────────
-      const target = targetFormat.toLowerCase();
       if (target === 'txt') {
         return Readable.from(Buffer.from(extractedText, 'utf8'));
       }
@@ -100,15 +103,27 @@ export class PdfExtractorAdapter {
       }
 
       if (target === 'docx') {
+        // Digital PDFs contain enough geometry for pdf2docx to rebuild page size,
+        // text styling, columns, images, shapes and tables. The previous implementation
+        // flattened extraction into Courier paragraphs and necessarily lost that layout.
+        // OCR-only PDFs still use the editable text fallback below because pdf2docx
+        // cannot make text inside a scanned page image editable.
+        if (!usedOcr) {
+          const highFidelityDocx = await this.convertToLayoutAwareDocx(inputPath, tmpDir, timeout);
+          if (highFidelityDocx) return Readable.from(highFidelityDocx);
+        }
+
         const children: Paragraph[] = [];
         const pages = extractedText.split('\f');
         pages.forEach((pageText, pageIndex) => {
           if (pageIndex > 0) children.push(new Paragraph({ children: [new PageBreak()] }));
           for (const line of pageText.split(/\r?\n/)) {
-            children.push(new Paragraph({
-              children: [new TextRun({ text: line || ' ', font: 'Courier New', size: 20 })],
-              spacing: { after: 40 },
-            }));
+            children.push(
+              new Paragraph({
+                children: [new TextRun({ text: line || ' ', font: 'Courier New', size: 20 })],
+                spacing: { after: 40 },
+              }),
+            );
           }
         });
         const document = new Document({
@@ -125,10 +140,12 @@ export class PdfExtractorAdapter {
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;');
-        return Readable.from(Buffer.from(
-          `<!doctype html><html><head><meta charset="utf-8"><title>Extracted PDF</title></head><body><pre>${escaped}</pre></body></html>`,
-          'utf8',
-        ));
+        return Readable.from(
+          Buffer.from(
+            `<!doctype html><html><head><meta charset="utf-8"><title>Extracted PDF</title></head><body><pre>${escaped}</pre></body></html>`,
+            'utf8',
+          ),
+        );
       }
 
       if (target === 'markdown' || target === 'md') {
@@ -143,10 +160,87 @@ export class PdfExtractorAdapter {
     }
   }
 
+  /**
+   * Reconstruct a digital PDF as an editable DOCX with layout, images and tables.
+   *
+   * Uses the Python pdf2docx library via subprocess for layout-aware conversion.
+   * This preserves text formatting, images, tables, and page layout from the original PDF.
+   */
+  private async convertToLayoutAwareDocx(
+    inputPath: string,
+    tmpDir: string,
+    timeout: number,
+  ): Promise<Buffer | null> {
+    const configuredEngine = (process.env.PDF_TO_DOCX_ENGINE || 'auto').toLowerCase();
+    if (configuredEngine === 'text') return null;
+
+    try {
+      const outputPath = path.join(tmpDir, 'layout-aware.docx');
+      
+      // Use Python pdf2docx library for layout-aware conversion
+      const pythonScript = `
+import sys
+try:
+    import pymupdf as fitz  # PyMuPDF
+    from pdf2docx import Converter
+    
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+    
+    cv = Converter(input_file)
+    cv.convert(output_file, start=0, end=None)
+    cv.close()
+    
+    # Verify output was created
+    import os
+    if os.path.getsize(output_file) < 1000:
+        sys.exit(1)
+    sys.exit(0)
+except Exception as e:
+    print(str(e), file=sys.stderr)
+    sys.exit(1)
+`;
+      
+      const pythonProcess = spawn('python3', ['-c', pythonScript, inputPath, outputPath]);
+      
+      let stderrOutput = '';
+      pythonProcess.stderr.on('data', (data) => {
+        stderrOutput += data.toString();
+      });
+      
+      const exitCode = await new Promise<number>((resolve) => {
+        pythonProcess.on('close', resolve);
+      });
+      
+      if (exitCode !== 0) {
+        throw new Error(stderrOutput || 'Python pdf2docx conversion failed');
+      }
+      
+      const output = await fs.readFile(outputPath);
+      workerLogger.info(
+        { bytes: output.length },
+        'Created layout-aware editable DOCX with Python pdf2docx',
+      );
+      return output;
+    } catch (error: any) {
+      workerLogger.warn(
+        { err: error?.message || String(error) },
+        'Layout-aware PDF-to-DOCX failed; using the text-focused fallback',
+      );
+      return null;
+    }
+  }
+
   /** Check if a command-line tool is available on PATH. */
   private async commandExists(cmd: string): Promise<boolean> {
     try {
-      await execFileAsync('which', [cmd], { timeout: 3000 });
+      if (path.isAbsolute(cmd)) {
+        await fs.access(cmd);
+      } else {
+        await execFileAsync(process.platform === 'win32' ? 'where' : 'which', [cmd], {
+          timeout: 3000,
+        });
+      }
       return true;
     } catch {
       return false;

@@ -6,21 +6,31 @@ import net from 'node:net';
 const checks = [];
 const hostingerMode = process.argv.includes('--hostinger');
 const nodeMajor = Number(process.versions.node.split('.')[0]);
-checks.push({ name: `Node.js ${process.versions.node}`, ok: nodeMajor >= 20, hint: 'Install Node.js 20 or newer.' });
+checks.push({
+  name: `Node.js ${process.versions.node}`,
+  ok: nodeMajor >= 20,
+  hint: 'Install Node.js 20 or newer.',
+});
 
-const nativeCommands = hostingerMode ? [] : [
-  ['pandoc', ['--version']],
-  ['pdftotext', ['-v']],
-  ['pdftoppm', ['-v']],
-  ['tesseract', ['--version']],
-];
+const nativeCommands = hostingerMode
+  ? []
+  : [
+      ['pandoc', ['--version']],
+      ['pdftotext', ['-v']],
+      ['pdftoppm', ['-v']],
+      ['tesseract', ['--version']],
+      ['pdf2docx', ['--help']],
+    ];
 
 for (const [command, args] of nativeCommands) {
   const result = spawnSync(command, args, { stdio: 'ignore' });
   checks.push({
     name: command,
     ok: !result.error && result.status !== null,
-    hint: `Install ${command} (macOS: brew install pandoc poppler tesseract).`,
+    hint:
+      command === 'pdf2docx'
+        ? 'Install the layout-aware Word engine: python3 -m pip install pdf2docx==0.5.13.'
+        : `Install ${command} (macOS: brew install pandoc poppler tesseract).`,
   });
 }
 
@@ -28,24 +38,34 @@ try {
   await access('.env', constants.R_OK);
   checks.push({ name: 'Root .env file', ok: true, hint: '' });
 } catch {
-  checks.push({ name: 'Root .env file', ok: false, hint: 'Copy .env.example to .env and review its secrets.' });
+  checks.push({
+    name: 'Root .env file',
+    ok: false,
+    hint: 'Copy .env.example to .env and review its secrets.',
+  });
 }
 
-const services = hostingerMode ? [] : [
-  ['PostgreSQL', '127.0.0.1', 5432],
-  ['Redis', '127.0.0.1', 6379],
-  ['MinIO', '127.0.0.1', 9000],
-  ['Gotenberg', '127.0.0.1', 3100],
-];
+const services = hostingerMode
+  ? []
+  : [
+      ['PostgreSQL', '127.0.0.1', 5432],
+      ['Redis', '127.0.0.1', 6379],
+      ['MinIO', '127.0.0.1', 9000],
+      ['Gotenberg', '127.0.0.1', 3100],
+    ];
 
-const canConnect = (host, port) => new Promise((resolve) => {
-  const socket = net.createConnection({ host, port });
-  const finish = (ok) => { socket.destroy(); resolve(ok); };
-  socket.setTimeout(1500);
-  socket.once('connect', () => finish(true));
-  socket.once('timeout', () => finish(false));
-  socket.once('error', () => finish(false));
-});
+const canConnect = (host, port) =>
+  new Promise((resolve) => {
+    const socket = net.createConnection({ host, port });
+    const finish = (ok) => {
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(1500);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
+  });
 
 for (const [name, host, port] of services) {
   checks.push({
@@ -62,7 +82,9 @@ for (const check of checks) {
 }
 
 if (checks.some((check) => !check.ok)) {
-  console.log(`\n${hostingerMode ? 'Hostinger' : 'Native'} prerequisites are incomplete. See README.md for setup options.\n`);
+  console.log(
+    `\n${hostingerMode ? 'Hostinger' : 'Native'} prerequisites are incomplete. See README.md for setup options.\n`,
+  );
   process.exitCode = 1;
 } else {
   console.log(`\nAll ${hostingerMode ? 'Hostinger' : 'native'} prerequisites are available.\n`);

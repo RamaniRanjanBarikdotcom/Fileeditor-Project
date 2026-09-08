@@ -3,44 +3,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowRight,
-  Check,
-  ChevronRight,
-  Cloud,
-  FileOutput,
-  LockKeyhole,
-  Search,
-  ShieldCheck,
-  Sparkles,
-  WandSparkles,
-  Wrench,
-  Zap,
+  ArrowRight, Check, ChevronRight, Search, Sparkles, Wrench, Zap,
+  ShieldCheck, Download, Cpu,
 } from 'lucide-react';
 import { ToolDto } from '@docconv/shared-types';
 import { TOOL_PRESENTATION_MAP } from '../../lib/tools-registry';
 import { fetchApi } from '../../lib/api';
 import { listStaticToolDtos } from '../../lib/tool-dtos';
 
-type DirectoryTool = Pick<
-  ToolDto,
-  | 'slug'
-  | 'name'
-  | 'category'
-  | 'anonymousEnabled'
-  | 'acceptedFormats'
-  | 'outputFormats'
-  | 'seoMetadata'
->;
+type DirectoryTool = Pick<ToolDto, 'slug'|'name'|'category'|'anonymousEnabled'|'acceptedFormats'|'outputFormats'|'seoMetadata'>;
 
 const CATEGORY_BY_SLUG: Record<string, string> = {
-  'pdf-to-docx': 'Document',
-  'pdf-ocr': 'Document',
-  'url-to-pdf': 'Web',
-  'url-to-docx': 'Web',
-  'html-to-pdf': 'Developer',
-  'markdown-to-pdf': 'Developer',
-  'image-to-pdf': 'Image',
-  'document-editor': 'Studio',
+  'pdf-to-docx': 'Document', 'pdf-ocr': 'Document',
+  'url-to-pdf': 'Web', 'url-to-docx': 'Web',
+  'html-to-pdf': 'Developer', 'markdown-to-pdf': 'Developer',
+  'image-to-pdf': 'Image', 'document-editor': 'Studio',
 };
 
 const FORMAT_BY_SLUG: Record<string, { input: string[]; output: string[] }> = {
@@ -65,23 +42,6 @@ const FALLBACK_TOOLS: DirectoryTool[] = listStaticToolDtos().map((tool) => ({
 }));
 
 const CATEGORIES = ['All', 'PDF', 'Document', 'Web', 'Developer', 'Image', 'Studio'];
-const BENEFITS = [
-  {
-    icon: WandSparkles,
-    title: 'Choose the right tool',
-    description: 'Select a utility built for your exact source and output format.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Process securely',
-    description: 'Your job runs through isolated storage and a purpose-built conversion engine.',
-  },
-  {
-    icon: Cloud,
-    title: 'Download the result',
-    description: 'Get the finished file in your browser without installing any software.',
-  },
-];
 
 export default function ToolsDirectoryPage() {
   const [tools, setTools] = useState<DirectoryTool[]>(FALLBACK_TOOLS);
@@ -94,94 +54,92 @@ export default function ToolsDirectoryPage() {
     void fetchApi<ToolDto[]>('/tools').then((res) => {
       if (!active) return;
       if (res.success && res.data?.length) {
-        const apiBySlug = new Map(res.data.map((tool) => [tool.slug, tool]));
+        const apiBySlug = new Map(res.data.map((t) => [t.slug, t]));
         setTools([
-          ...FALLBACK_TOOLS.map((tool) => apiBySlug.get(tool.slug) || tool),
-          ...res.data.filter((tool) => !FALLBACK_TOOLS.some((fallback) => fallback.slug === tool.slug)),
+          ...FALLBACK_TOOLS.map((t) => apiBySlug.get(t.slug) || t),
+          ...res.data.filter((t) => !FALLBACK_TOOLS.some((f) => f.slug === t.slug)),
         ]);
       }
       setSyncing(false);
     });
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
   const filteredTools = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const q = searchQuery.trim().toLowerCase();
     return tools.filter((tool) => {
-      const matchesCategory =
-        selectedCategory === 'All' ||
-        tool.category.toLowerCase() === selectedCategory.toLowerCase();
-      const searchableText = [
-        tool.name,
-        tool.slug,
-        tool.category,
-        tool.seoMetadata?.description,
-        ...tool.acceptedFormats,
-        ...tool.outputFormats,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return matchesCategory && (!query || searchableText.includes(query));
+      const matchCat = selectedCategory === 'All' || tool.category.toLowerCase() === selectedCategory.toLowerCase();
+      const text = [tool.name, tool.slug, tool.category, tool.seoMetadata?.description, ...tool.acceptedFormats, ...tool.outputFormats].filter(Boolean).join(' ').toLowerCase();
+      return matchCat && (!q || text.includes(q));
     });
   }, [searchQuery, selectedCategory, tools]);
 
   return (
-    <div className="min-h-screen">
-      <section className="tools-hero relative overflow-hidden">
-        <div className="mesh-bg" />
-        <div className="absolute inset-0 dot-grid opacity-30 dark:opacity-15" />
-        <div
-          className="absolute -top-32 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full blur-3xl"
-          style={{ background: 'rgba(99,102,241,0.16)' }}
-        />
-        <div className="container-custom relative z-10">
-          <div className="tools-hero-content">
-            <div className="tools-breadcrumb">
-              <Link href="/" className="transition-colors hover:text-indigo-500">
-                Home
-              </Link>
-              <ChevronRight className="h-3.5 w-3.5" />
+    <div style={{ minHeight: '100vh' }}>
+
+      {/* Hero */}
+      <section style={{
+        position: 'relative', overflow: 'hidden',
+        padding: 'clamp(4.5rem,7vw,6rem) 0 clamp(3rem,5vw,4rem)',
+        background: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(99,102,241,0.18) 0%, transparent 60%), var(--bg-card)',
+        borderBottom: '1px solid var(--border)',
+      }}>
+        <div style={{
+          position: 'absolute', inset: 0,
+          backgroundImage: 'radial-gradient(circle, rgba(99,102,241,0.1) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+          maskImage: 'linear-gradient(to bottom, black, transparent 85%)',
+          pointerEvents: 'none',
+        }} />
+        <div className="container-custom" style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ maxWidth: '52rem', margin: '0 auto', textAlign: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginBottom: '1.25rem', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+              <Link href="/" style={{ color: 'inherit', textDecoration: 'none' }}>Home</Link>
+              <ChevronRight style={{ width: '0.85rem', height: '0.85rem' }} />
               <span style={{ color: 'var(--text-secondary)' }}>Free tools</span>
             </div>
-            <span className="badge badge-brand tools-hero-badge">
-              <Sparkles className="h-3.5 w-3.5" />{FALLBACK_TOOLS.length} tools available now
+            <span className="badge badge-brand" style={{ marginBottom: '1.25rem' }}>
+              <Sparkles style={{ width: '0.8rem', height: '0.8rem' }} />
+              {FALLBACK_TOOLS.length} tools available
             </span>
-            <h1 className="ts-h1 tools-hero-title" style={{ color: 'var(--text-primary)' }}>
+            <h1 className="ts-h1" style={{ color: 'var(--text-primary)', marginBottom: '1rem' }}>
               Every document tool you need,{' '}
-              <span className="gradient-text">in one clean workspace</span>
+              <span className="gradient-text">in one place</span>
             </h1>
-            <p className="tools-hero-description">
-              Convert PDFs, capture complete webpages with Chromium, extract scanned text, and
-              create polished files without installing software.
+            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1.7, maxWidth: '40rem', margin: '0 auto 2rem' }}>
+              Convert PDFs, capture webpages with Chromium, extract scanned text, and create polished files — no software required.
             </p>
-            <div className="tools-search-shell">
-              <div className="relative">
-                <Search
-                  className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2"
-                  style={{ color: 'var(--text-muted)' }}
-                />
+
+            {/* Search */}
+            <div style={{
+              width: 'min(100%, 38rem)', margin: '0 auto 1.75rem',
+              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              borderRadius: '0.9rem', padding: '0.35rem',
+              boxShadow: 'var(--shadow-lg)',
+            }}>
+              <div style={{ position: 'relative' }}>
+                <Search style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', width: '1rem', height: '1rem', color: 'var(--text-muted)' }} />
                 <input
                   type="search"
-                  id="tools-search"
                   value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="What do you want to convert? Try “URL to PDF”"
-                  className="tools-search-input"
-                  aria-label="Search all tools"
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder='Search tools — try "PDF to Word"'
+                  style={{
+                    width: '100%', height: '3rem', paddingLeft: '2.75rem', paddingRight: '1rem',
+                    background: 'var(--bg-muted)', border: '1px solid transparent',
+                    borderRadius: '0.6rem', fontSize: '0.88rem', color: 'var(--text-primary)',
+                    outline: 'none', fontFamily: 'inherit',
+                  }}
+                  aria-label="Search tools"
                 />
               </div>
             </div>
-            <div className="tools-trust-row">
-              {['No installation', '3 free jobs each day', 'Secure file handling'].map((label) => (
-                <span key={label} className="flex items-center gap-2">
-                  <span
-                    className="flex h-5 w-5 items-center justify-center rounded-full"
-                    style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}
-                  >
-                    <Check className="h-3 w-3" />
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: '0.6rem 1.5rem', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+              {['No installation required', '3 free jobs each day', 'Secure file handling'].map((label) => (
+                <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <span style={{ display: 'flex', width: '1.1rem', height: '1.1rem', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
+                    <Check style={{ width: '0.6rem', height: '0.6rem' }} />
                   </span>
                   {label}
                 </span>
@@ -191,134 +149,108 @@ export default function ToolsDirectoryPage() {
         </div>
       </section>
 
-      <section className="tools-directory-section">
+      {/* Directory */}
+      <section style={{ padding: 'clamp(3rem,5vw,4.5rem) 0' }}>
         <div className="container-custom">
-          <div className="tools-filter-panel">
+
+          {/* Filter bar */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            flexWrap: 'wrap', gap: '1rem',
+            padding: '1rem 1.25rem', marginBottom: '1.5rem',
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            borderRadius: '0.9rem', boxShadow: 'var(--shadow-xs)',
+            maxWidth: '72rem', margin: '0 auto 1.5rem',
+          }}>
             <div>
-              <p className="section-label">Explore the collection</p>
-              <h2>Choose a tool and start immediately</h2>
+              <p className="section-label" style={{ marginBottom: '0.2rem' }}>Explore the collection</p>
+              <p style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                {filteredTools.length} {filteredTools.length === 1 ? 'tool' : 'tools'} found
+                {syncing && <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400, marginLeft: '0.5rem' }}>syncing…</span>}
+              </p>
             </div>
-            <div className="tools-category-list" role="group" aria-label="Filter tools by category">
-              {CATEGORIES.map((category) => {
-                const isActive = selectedCategory === category;
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+              {CATEGORIES.map((cat) => {
+                const isActive = selectedCategory === cat;
                 return (
-                  <button
-                    key={category}
-                    type="button"
-                    onClick={() => setSelectedCategory(category)}
-                    className={`tools-category-button focus-ring${isActive ? ' tools-category-button-active' : ''}`}
+                  <button key={cat} type="button" onClick={() => setSelectedCategory(cat)}
                     style={{
+                      padding: '0.45rem 0.85rem', borderRadius: '9999px',
+                      fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer',
+                      border: isActive ? '1px solid transparent' : '1px solid var(--border)',
                       background: isActive ? 'var(--gradient-brand)' : 'var(--bg-muted)',
                       color: isActive ? '#fff' : 'var(--text-secondary)',
-                      border: isActive ? '1px solid transparent' : '1px solid var(--border)',
                       boxShadow: isActive ? 'var(--shadow-brand)' : 'none',
+                      transition: 'all 150ms ease',
                     }}
                   >
-                    {category}
+                    {cat}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <div className="tools-results-bar">
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              <strong style={{ color: 'var(--text-primary)' }}>{filteredTools.length}</strong>{' '}
-              {filteredTools.length === 1 ? 'tool' : 'tools'} found
-            </p>
-            {syncing && (
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                Syncing availability…
-              </span>
-            )}
-          </div>
-
+          {/* Grid */}
           {filteredTools.length === 0 ? (
-            <div className="card px-6 py-16 text-center">
-              <div
-                className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
-                style={{ background: 'var(--bg-muted)', border: '1px solid var(--border)' }}
-              >
-                <Wrench className="h-7 w-7" style={{ color: 'var(--text-muted)' }} />
+            <div style={{
+              maxWidth: '72rem', margin: '0 auto',
+              padding: '4rem 2rem', textAlign: 'center',
+              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              borderRadius: '1rem',
+            }}>
+              <div style={{ width: '3rem', height: '3rem', borderRadius: '0.75rem', background: 'var(--bg-muted)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+                <Wrench style={{ width: '1.25rem', height: '1.25rem', color: 'var(--text-muted)' }} />
               </div>
-              <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-                No matching tool
-              </h3>
-              <p
-                className="mx-auto mt-2 max-w-md text-sm leading-6"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                Try another format or reset the category to see the complete collection.
-              </p>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm mt-5"
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedCategory('All');
-                }}
-              >
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>No matching tool</h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>Try another format or reset the category filter.</p>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }}>
                 Show all tools
               </button>
             </div>
           ) : (
-            <div className="tools-card-grid">
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+              gap: '1rem', maxWidth: '72rem', margin: '0 auto',
+            }}>
               {filteredTools.map((tool) => {
-                const presentation = TOOL_PRESENTATION_MAP[tool.slug];
-                const Icon = presentation?.icon ?? Wrench;
-                const accent = presentation?.accentColor ?? '#6366f1';
-                const description =
-                  tool.seoMetadata?.description ??
-                  presentation?.features[0] ??
-                  'Fast, secure file processing in your browser.';
+                const pres = TOOL_PRESENTATION_MAP[tool.slug];
+                const Icon = pres?.icon ?? Wrench;
+                const accent = pres?.accentColor ?? '#6366f1';
+                const desc = tool.seoMetadata?.description ?? pres?.features[0] ?? 'Fast, secure file processing.';
                 return (
-                  <Link
-                    key={tool.slug}
-                    href={`/tools/${tool.slug}`}
-                    id={`tool-${tool.slug}`}
+                  <Link key={tool.slug} href={`/tools/${tool.slug}`}
                     className="tool-directory-card group"
                     style={{ '--tool-accent': accent } as React.CSSProperties}
                   >
                     <div className="tool-directory-topline">
-                      <div
-                        className="tool-icon-ring h-12 w-12"
-                        style={{ background: `${accent}14`, border: `1px solid ${accent}30` }}
-                      >
-                        <Icon className="h-5 w-5" style={{ color: accent }} />
+                      <div className="tool-icon-ring h-12 w-12" style={{ background: `${accent}14`, border: `1px solid ${accent}30` }}>
+                        <Icon style={{ width: '1.1rem', height: '1.1rem', color: accent }} />
                       </div>
-                      <span className="badge badge-neutral">{tool.category}</span>
+                      <span className="badge badge-neutral" style={{ fontSize: '0.62rem' }}>{tool.category}</span>
                     </div>
                     <div className="tool-directory-copy">
-                      <h3>{presentation?.name ?? tool.name}</h3>
-                      <p>{description}</p>
+                      <h3>{pres?.name ?? tool.name}</h3>
+                      <p>{desc}</p>
                     </div>
                     <div className="tool-directory-formats">
-                      {tool.acceptedFormats.slice(0, 2).map((format) => (
-                        <span key={`in-${format}`} className="tool-format-chip">
-                          {format}
-                        </span>
+                      {tool.acceptedFormats.slice(0, 2).map((f) => (
+                        <span key={`in-${f}`} className="tool-format-chip">{f}</span>
                       ))}
-                      <ArrowRight className="h-4 w-4" style={{ color: 'var(--text-muted)' }} />
-                      {tool.outputFormats.slice(0, 2).map((format) => (
-                        <span key={`out-${format}`} className="tool-format-chip">
-                          {format}
-                        </span>
+                      <ArrowRight style={{ width: '0.85rem', height: '0.85rem', color: 'var(--text-muted)' }} />
+                      {tool.outputFormats.slice(0, 2).map((f) => (
+                        <span key={`out-${f}`} className="tool-format-chip">{f}</span>
                       ))}
                     </div>
                     <div className="tool-directory-footer">
-                      <span
-                        className="flex items-center gap-1.5 text-xs font-medium"
-                        style={{ color: 'var(--text-muted)' }}
-                      >
-                        <Zap className="h-3.5 w-3.5" style={{ color: '#f59e0b' }} />
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        <Zap style={{ width: '0.8rem', height: '0.8rem', color: '#f59e0b' }} />
                         {tool.anonymousEnabled ? 'Free to try' : 'Account required'}
                       </span>
-                      <span
-                        className="flex items-center gap-1.5 text-sm font-bold"
-                        style={{ color: accent }}
-                      >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', fontWeight: 700, color: accent }}>
                         Open tool
-                        <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                        <ArrowRight style={{ width: '0.85rem', height: '0.85rem', transition: 'transform 150ms ease' }} className="group-hover:translate-x-1" />
                       </span>
                     </div>
                   </Link>
@@ -329,77 +261,49 @@ export default function ToolsDirectoryPage() {
         </div>
       </section>
 
-      <section className="tools-workflow-section">
+      {/* Bottom CTA */}
+      <section style={{ padding: 'clamp(3rem,5vw,4.5rem) 0', borderTop: '1px solid var(--border)' }}>
         <div className="container-custom">
-          <div className="tools-workflow-heading">
-            <p className="section-label">A simple workflow</p>
-            <h2 className="ts-h2" style={{ color: 'var(--text-primary)' }}>
-              From source to finished file in three steps
-            </h2>
-            <p>
-              Every utility shares one clear experience while using the best engine for its format.
-            </p>
-          </div>
-          <div className="tools-benefit-grid">
-            {BENEFITS.map(({ icon: Icon, title, description }, index) => (
-              <article key={title} className="tools-benefit-card">
-                <div
-                  className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl"
-                  style={{
-                    background: 'var(--gradient-brand-subtle)',
-                    color: 'var(--brand-500)',
-                    border: '1px solid rgba(99,102,241,0.2)',
-                  }}
-                >
-                  <Icon className="h-5 w-5" />
-                </div>
-                <p
-                  className="mb-2 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: 'var(--brand-500)' }}
-                >
-                  Step {index + 1}
-                </p>
-                <h3 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
-                  {title}
-                </h3>
-                <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-muted)' }}>
-                  {description}
-                </p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="tools-upgrade-section">
-        <div className="container-custom">
-          <div className="tools-cta relative overflow-hidden">
-            <div className="absolute -right-16 -top-24 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-            <div className="tools-cta-copy relative z-10">
-              <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white">
-                <LockKeyhole className="h-3.5 w-3.5" />
+          <div style={{
+            position: 'relative', overflow: 'hidden',
+            padding: 'clamp(2rem,4vw,3rem)', borderRadius: '1.5rem',
+            background: 'linear-gradient(130deg, #4338ca 0%, #6d28d9 55%, #9333ea 100%)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            boxShadow: '0 20px 60px rgba(79,70,229,0.28)',
+          }}>
+            <div style={{ position: 'absolute', top: -60, right: -60, width: 240, height: 240, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', pointerEvents: 'none' }} />
+            <div style={{ position: 'relative', zIndex: 1, maxWidth: '42rem' }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                padding: '0.3rem 0.75rem', borderRadius: '9999px',
+                background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
+                color: '#fff', fontSize: '0.65rem', fontWeight: 800,
+                letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '1.25rem',
+              }}>
                 Workspace plans
               </span>
-              <h2 className="text-2xl font-extrabold leading-tight text-white sm:text-3xl lg:text-4xl">
+              <h2 style={{ fontSize: 'clamp(1.5rem,3vw,2.25rem)', fontWeight: 900, color: '#fff', lineHeight: 1.15, letterSpacing: '-0.025em', marginBottom: '0.75rem' }}>
                 Need more files, history, and team access?
               </h2>
-              <p className="mt-4 max-w-xl text-sm leading-7 text-white/80 sm:text-base">
-                Move from free utilities to the complete AppToolkitLab workspace with larger quotas,
-                persistent history, purchased software, and business controls.
+              <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.75)', lineHeight: 1.65, marginBottom: '1.75rem', maxWidth: '36rem' }}>
+                Move from free utilities to the complete AppToolkitLab workspace with larger quotas, persistent history, and business controls.
               </p>
-              <div className="tools-cta-actions">
-                <Link
-                  href="/register"
-                  className="btn bg-white px-6 py-3 font-bold text-indigo-700 hover:-translate-y-0.5"
-                >
-                  Create free account
-                  <ArrowRight className="h-4 w-4" />
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.65rem' }}>
+                <Link href="/register" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                  padding: '0.75rem 1.5rem', borderRadius: '0.65rem',
+                  background: '#fff', color: '#4338ca',
+                  fontSize: '0.88rem', fontWeight: 800, textDecoration: 'none',
+                }}>
+                  Create free account <ArrowRight style={{ width: '0.85rem', height: '0.85rem' }} />
                 </Link>
-                <Link
-                  href="/pricing"
-                  className="btn border border-white/25 bg-white/10 px-6 py-3 font-bold text-white hover:bg-white/15"
-                >
-                  <FileOutput className="h-4 w-4" />
+                <Link href="/pricing" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                  padding: '0.75rem 1.25rem', borderRadius: '0.65rem',
+                  background: 'rgba(255,255,255,0.12)', color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.22)',
+                  fontSize: '0.88rem', fontWeight: 700, textDecoration: 'none',
+                }}>
                   Compare plans
                 </Link>
               </div>

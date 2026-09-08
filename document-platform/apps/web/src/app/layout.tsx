@@ -56,7 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <ThemeProvider>
           <Navbar />
-          <main className="w-full flex-1 pt-[4.5rem]">{children}</main>
+          <main className="site-main w-full flex-1">{children}</main>
           <Footer />
         </ThemeProvider>
       </body>

@@ -15,6 +15,10 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Disable SSR for PDF editor page (uses PDF.js which requires browser APIs)
+  experimental: {
+    optimizeCss: true,
+  },
 };
 
 export default nextConfig;

@@ -15,13 +15,13 @@ import {
 // Defines all supported conversion paths with their engines and quality ratings.
 
 export const CONVERSION_MATRIX: ConversionMatrixEntry[] = [
-  // PDF extraction. Text PDFs preserve reading order; scanned PDFs use OCR.
+  // PDF conversion. Digital PDFs use layout reconstruction; scanned PDFs use OCR fallback.
   {
     input: InputFormat.PDF,
     output: OutputFormat.DOCX,
     engine: ConversionEngine.PDF_EXTRACTOR,
-    quality: ConversionQuality.B,
-    description: 'PDF text/OCR extraction to editable Word document',
+    quality: ConversionQuality.A,
+    description: 'Layout-aware PDF reconstruction to editable Word with OCR fallback',
   },
   {
     input: InputFormat.PDF,

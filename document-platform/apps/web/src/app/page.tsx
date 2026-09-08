@@ -3,372 +3,169 @@
 import React from 'react';
 import Link from 'next/link';
 import {
-  Sparkles,
-  ArrowRight,
-  ShieldCheck,
-  Zap,
-  CheckCircle2,
-  FileText,
-  Globe,
-  Code2,
-  Image,
-  Edit3,
-  FileOutput,
-  ScanText,
-  Layers,
-  Terminal,
-  ShoppingBag,
-  Star,
-  Users,
-  TrendingUp,
-  Lock,
+  ArrowRight, Sparkles, ShieldCheck, Zap, CheckCircle2,
+  ShoppingBag, Star, TrendingUp, Lock,
 } from 'lucide-react';
 import { TOOL_PRESENTATION_MAP } from '../lib/tools-registry';
 
-const STATS = [
-  {
-    value: '8',
-    label: 'Free Tools',
-    sublabel: 'Focused document workflows',
-    icon: FileOutput,
-    accentColor: '#6366f1',
-  },
-  {
-    value: '3',
-    label: 'Product Paths',
-    sublabel: 'Tools, SaaS, and software',
-    icon: Users,
-    accentColor: '#a855f7',
-  },
-  {
-    value: 'Chromium',
-    label: 'Web Capture',
-    sublabel: 'Modern browser rendering',
-    icon: TrendingUp,
-    accentColor: '#10b981',
-  },
-  {
-    value: 'Private',
-    label: 'Processing Design',
-    sublabel: 'Controlled file access',
-    icon: ShieldCheck,
-    accentColor: '#f59e0b',
-  },
-];
-
 export default function HomePage() {
-  const tools = Object.values(TOOL_PRESENTATION_MAP);
-
-  const featuredSoftware = [
-    {
-      slug: 'apptoolkitlab-desktop-cli',
-      name: 'AppToolkitLab CLI Pro Engine',
-      category: 'Desktop CLI',
-      priceUSD: '$29',
-      priceINR: '₹2,499',
-      badge: 'Catalog Preview',
-      badgeColor: '#10b981',
-      desc: 'Planned command-line conversion product. Checkout remains disabled until a verified release asset is published.',
-      icon: Terminal,
-      accentColor: '#6366f1',
-    },
-    {
-      slug: 'nextjs-saas-starter-kit',
-      name: 'Next.js SaaS Enterprise Starter',
-      category: 'Boilerplate',
-      priceUSD: '$49',
-      priceINR: '₹3,999',
-      badge: 'Catalog Preview',
-      badgeColor: '#8b5cf6',
-      desc: 'Planned full-stack starter product. Checkout remains disabled until a verified release asset is published.',
-      icon: Code2,
-      accentColor: '#8b5cf6',
-    },
-  ];
+  const tools = Object.values(TOOL_PRESENTATION_MAP).slice(0, 8);
 
   return (
-    <div className="w-full" style={{ overflowX: 'hidden' }}>
-      {/* ─── HERO ─── */}
-      <section className="home-hero relative overflow-hidden w-full">
-        {/* Animated mesh background */}
-        <div className="absolute inset-0 -z-10">
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(99,102,241,0.25) 0%, transparent 70%)',
-            }}
-          />
-          <div
-            className="orb absolute"
-            style={{
-              width: '600px',
-              height: '600px',
-              borderRadius: '50%',
-              background:
-                'radial-gradient(circle, rgba(99,102,241,0.18) 0%, rgba(139,92,246,0.1) 40%, transparent 70%)',
-              top: '-100px',
-              left: '-100px',
-              filter: 'blur(40px)',
-            }}
-          />
-          <div
-            className="orb-r absolute"
-            style={{
-              width: '500px',
-              height: '500px',
-              borderRadius: '50%',
-              background:
-                'radial-gradient(circle, rgba(236,72,153,0.12) 0%, rgba(139,92,246,0.08) 40%, transparent 70%)',
-              bottom: '-80px',
-              right: '-80px',
-              filter: 'blur(50px)',
-            }}
-          />
-          {/* Grid overlay */}
-          <div
-            className="absolute inset-0 dot-grid opacity-40 dark:opacity-20"
-            style={{
-              maskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, black 40%, transparent 100%)',
-            }}
-          />
-        </div>
+    <div style={{ overflowX: 'hidden' }}>
 
-        <div className="container-custom relative z-10">
-          <div className="home-hero-inner">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 mb-8 anim-fade-up" id="hero-badge">
-              <span
-                className="badge badge-brand"
-                style={{ fontSize: '0.75rem', padding: '0.4rem 1rem' }}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                AppToolkitLab — A Gonexel Product
+      {/* HERO */}
+      <section style={{
+        position: 'relative',
+        padding: 'clamp(6rem,10vw,9rem) 0 clamp(4rem,6vw,6rem)',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 0,
+          background: 'radial-gradient(ellipse 90% 70% at 50% -5%, rgba(99,102,241,0.22) 0%, transparent 65%)',
+        }} />
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 0,
+          backgroundImage: 'radial-gradient(circle, rgba(99,102,241,0.12) 1px, transparent 1px)',
+          backgroundSize: '30px 30px',
+          maskImage: 'radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 80%)',
+        }} />
+        <div className="orb" style={{
+          position: 'absolute', width: 500, height: 500, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)',
+          top: -120, left: -80, filter: 'blur(50px)', zIndex: 0,
+        }} />
+        <div className="orb-r" style={{
+          position: 'absolute', width: 400, height: 400, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(236,72,153,0.1) 0%, transparent 70%)',
+          bottom: -60, right: -60, filter: 'blur(60px)', zIndex: 0,
+        }} />
+
+        <div className="container-custom" style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ maxWidth: '54rem', margin: '0 auto', textAlign: 'center' }}>
+            <div style={{ marginBottom: '1.75rem' }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                padding: '0.4rem 1rem', borderRadius: '9999px',
+                background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)',
+                color: 'var(--brand-400)', fontSize: '0.72rem', fontWeight: 800,
+                letterSpacing: '0.08em', textTransform: 'uppercase',
+              }}>
+                <Sparkles style={{ width: '0.8rem', height: '0.8rem' }} />
+                A Gonexel Product
               </span>
             </div>
 
-            {/* Headline */}
-            <h1
-              className="ts-display anim-fade-up anim-delay-1 mb-6"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              Every Document Tool,{' '}
-              <span className="block gradient-text" style={{ lineHeight: '1.1' }}>
-                SaaS Studio & Marketplace
-              </span>
-              <span className="block">In One Platform.</span>
+            <h1 style={{
+              fontSize: 'clamp(2.6rem,6vw,5rem)', fontWeight: 900,
+              lineHeight: 1.06, letterSpacing: '-0.035em',
+              color: 'var(--text-primary)', marginBottom: '1.5rem',
+            }}>
+              Document tools that{' '}
+              <span className="gradient-text">actually work</span>
+              <br />the way you think.
             </h1>
 
-            {/* Subheadline */}
-            <p
-              className="anim-fade-up anim-delay-2 mb-10"
-              style={{
-                fontSize: '1.125rem',
-                color: 'var(--text-secondary)',
-                maxWidth: '640px',
-                margin: '0 auto 2.5rem',
-                lineHeight: '1.7',
-              }}
-            >
-              Convert PDFs, extract text with OCR, capture webpages, and purchase software catalog
-              items from one consistent workspace.
+            <p style={{
+              fontSize: 'clamp(1rem,1.8vw,1.15rem)', color: 'var(--text-secondary)',
+              lineHeight: 1.75, maxWidth: '42rem', margin: '0 auto 2.5rem',
+            }}>
+              Convert PDFs, capture webpages, extract text with OCR, and edit documents —
+              all from one clean workspace. No installs. No friction.
             </p>
 
-            {/* CTAs */}
-            <div className="home-hero-actions anim-fade-up anim-delay-3">
-              <Link href="/tools" id="hero-explore-tools" className="btn btn-primary btn-lg">
-                <Zap className="w-5 h-5" />
-                <span>Explore 8 Free Tools</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '2.5rem' }}>
+              <Link href="/tools" className="btn btn-primary btn-lg">
+                <Zap style={{ width: '1rem', height: '1rem' }} />
+                Try free tools
               </Link>
-              <Link href="/software" id="hero-software-store" className="btn btn-secondary btn-lg">
-                <ShoppingBag className="w-5 h-5" style={{ color: 'var(--brand-500)' }} />
-                <span>Browse Software Store</span>
+              <Link href="/software" className="btn btn-secondary btn-lg">
+                <ShoppingBag style={{ width: '1rem', height: '1rem', color: 'var(--brand-500)' }} />
+                Browse software
               </Link>
             </div>
 
-            {/* Trust bar */}
-            <div className="home-hero-trust anim-fade-up anim-delay-4">
-              <span className="flex items-center gap-1.5">
-                <Zap className="w-4 h-4" style={{ color: '#f59e0b' }} />
-                Instant Browser Processing
-              </span>
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4" style={{ color: '#10b981' }} />
-                Isolated Worker Processing
-              </span>
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4" style={{ color: '#6366f1' }} />
-                No Credit Card Required
-              </span>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexWrap: 'wrap', gap: '0.6rem 1.75rem',
+              fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 500,
+            }}>
+              {[
+                { icon: Zap, label: 'Instant browser processing', color: '#f59e0b' },
+                { icon: ShieldCheck, label: 'Isolated worker jobs', color: '#10b981' },
+                { icon: CheckCircle2, label: 'No credit card needed', color: '#6366f1' },
+              ].map(({ icon: Icon, label, color }) => (
+                <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Icon style={{ width: '0.9rem', height: '0.9rem', color }} />
+                  {label}
+                </span>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* ─── STATS SHOWCASE SECTION ─── */}
-      <section className="home-stats-section">
+      {/* TOOLS GRID */}
+      <section style={{
+        padding: 'clamp(4rem,6vw,5.5rem) 0',
+        borderTop: '1px solid var(--border)',
+        background: 'var(--bg)',
+      }}>
         <div className="container-custom">
-          <div className="home-stats-panel">
-            {/* Ambient inner background gradient */}
-            <div
-              className="absolute inset-0 pointer-events-none -z-0"
-              style={{
-                background:
-                  'radial-gradient(ellipse 80% 80% at 50% 50%, rgba(99,102,241,0.08) 0%, transparent 80%)',
-              }}
-            />
-
-            <div className="home-stats-grid relative z-10">
-              {STATS.map((stat) => {
-                const Icon = stat.icon;
-                return (
-                  <div
-                    key={stat.label}
-                    className="home-stat-card"
-                    style={{ '--stat-accent': stat.accentColor } as React.CSSProperties}
-                  >
-                    {/* Icon container */}
-                    <div
-                      className="home-stat-icon"
-                      style={{
-                        backgroundColor: `${stat.accentColor}18`,
-                        border: `1px solid ${stat.accentColor}35`,
-                        color: stat.accentColor,
-                        boxShadow: `0 8px 20px -4px ${stat.accentColor}25`,
-                      }}
-                    >
-                      <Icon className="w-5 h-5" />
-                    </div>
-
-                    {/* Stat Value */}
-                    <div className="home-stat-value">{stat.value}</div>
-
-                    {/* Stat Label */}
-                    <div className="home-stat-label">{stat.label}</div>
-
-                    {/* Sublabel */}
-                    <div className="home-stat-sublabel">{stat.sublabel}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── FEATURED FREE TOOLS ─── */}
-      <section className="home-tools-section relative overflow-hidden">
-        {/* Ambient background glow */}
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[500px] rounded-full pointer-events-none -z-10"
-          style={{
-            background:
-              'radial-gradient(ellipse 60% 50% at 50% 50%, rgba(99,102,241,0.1) 0%, transparent 70%)',
-            filter: 'blur(60px)',
-          }}
-        />
-
-        <div className="container-custom">
-          {/* Centered Structured Header */}
-          <div className="home-tools-heading">
-            <div
-              className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider"
-              style={{
-                backgroundColor: 'rgba(99,102,241,0.15)',
-                color: 'var(--brand-400)',
-                border: '1px solid rgba(99,102,241,0.25)',
-              }}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Instant Browser Utilities</span>
-            </div>
-            <h2 className="ts-h2" style={{ color: 'var(--text-primary)' }}>
-              Featured Free Tools
+          <div style={{ textAlign: 'center', marginBottom: 'clamp(2.5rem,4vw,3.5rem)' }}>
+            <p className="section-label" style={{ marginBottom: '0.75rem' }}>17 tools and counting</p>
+            <h2 className="ts-h2" style={{ color: 'var(--text-primary)', marginBottom: '0.75rem' }}>
+              Everything you need, nothing you don&apos;t
             </h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: '1.6' }}>
-              High-speed, private document utilities that process directly in your browser with zero
-              registration required.
+            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1.65, maxWidth: '38rem', margin: '0 auto' }}>
+              Each tool is purpose-built for one job and does it exceptionally well.
             </p>
           </div>
 
-          {/* Symmetrical 4-Column Grid */}
-          <div className="home-tools-grid">
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+            gap: '1rem', maxWidth: '72rem', margin: '0 auto',
+          }}>
             {tools.map((tool) => {
               const Icon = tool.icon;
               return (
-                <Link
-                  key={tool.slug}
-                  href={`/tools/${tool.slug}`}
-                  id={`tool-card-${tool.slug}`}
+                <Link key={tool.slug} href={`/tools/${tool.slug}`}
                   className="home-tool-card group"
-                  style={
-                    {
-                      '--tool-accent': tool.accentColor,
-                    } as React.CSSProperties
-                  }
+                  style={{ '--tool-accent': tool.accentColor } as React.CSSProperties}
                 >
                   <div>
-                    {/* Top Row: Icon + Badge */}
-                    <div className="home-tool-card-topline">
-                      <div
-                        className="w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110"
-                        style={{
-                          backgroundColor: `${tool.accentColor}18`,
-                          border: `1px solid ${tool.accentColor}35`,
-                          color: tool.accentColor,
-                          boxShadow: `0 4px 12px ${tool.accentColor}20`,
-                        }}
-                      >
-                        <Icon className="w-6 h-6" />
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                      <div style={{
+                        width: '2.5rem', height: '2.5rem', borderRadius: '0.65rem',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: `${tool.accentColor}15`, border: `1px solid ${tool.accentColor}30`,
+                        color: tool.accentColor, flexShrink: 0,
+                        transition: 'transform 200ms ease',
+                      }} className="group-hover:scale-110">
+                        <Icon style={{ width: '1.1rem', height: '1.1rem' }} />
                       </div>
                       {tool.badge && (
-                        <span
-                          className="home-tool-badge"
-                          style={{
-                            backgroundColor: `${tool.accentColor}15`,
-                            color: tool.accentColor,
-                            border: `1px solid ${tool.accentColor}30`,
-                          }}
-                        >
+                        <span style={{
+                          fontSize: '0.58rem', fontWeight: 800, letterSpacing: '0.04em',
+                          textTransform: 'uppercase', padding: '0.22rem 0.5rem',
+                          borderRadius: '9999px', background: `${tool.accentColor}12`,
+                          color: tool.accentColor, border: `1px solid ${tool.accentColor}25`,
+                        }}>
                           {tool.badge}
                         </span>
                       )}
                     </div>
-
-                    {/* Title */}
-                    <h3
-                      className="home-tool-title"
-                      style={{
-                        color: 'var(--text-primary)',
-                        lineHeight: 1.3,
-                      }}
-                    >
-                      {tool.name}
-                    </h3>
-
-                    {/* Description */}
+                    <h3 className="home-tool-title">{tool.name}</h3>
                     <p className="home-tool-description">{tool.features[0]}</p>
                   </div>
-
-                  {/* Bottom Footer */}
                   <div className="home-tool-card-footer">
-                    <span
-                      style={{
-                        fontSize: '0.75rem',
-                        color: 'var(--text-muted)',
-                        fontWeight: 600,
-                      }}
-                    >
-                      ⚡ 3 Free / Day
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                      <Zap style={{ width: '0.75rem', height: '0.75rem', display: 'inline', color: '#f59e0b', marginRight: '0.25rem' }} />
+                      Free to try
                     </span>
-                    <span
-                      className="flex items-center gap-1.5 text-xs font-bold transition-transform group-hover:translate-x-0.5"
-                      style={{
-                        color: tool.accentColor,
-                      }}
-                    >
-                      <span>Use Tool</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', fontWeight: 700, color: tool.accentColor }}>
+                      Open <ArrowRight style={{ width: '0.75rem', height: '0.75rem' }} />
                     </span>
                   </div>
                 </Link>
@@ -376,324 +173,173 @@ export default function HomePage() {
             })}
           </div>
 
-          {/* Centered Bottom CTA */}
-          <div className="home-tools-action">
-            <Link href="/tools" className="btn btn-secondary btn-md inline-flex items-center gap-2">
-              <span>Explore All Tools in Directory</span>
-              <ArrowRight className="w-4 h-4" />
+          <div style={{ textAlign: 'center', marginTop: '2.5rem' }}>
+            <Link href="/tools" className="btn btn-secondary btn-md">
+              View all tools <ArrowRight style={{ width: '0.85rem', height: '0.85rem' }} />
             </Link>
           </div>
         </div>
       </section>
 
-      {/* ─── SOFTWARE STORE ─── */}
-      <section
-        style={{
-          backgroundColor: 'var(--bg-card)',
-          borderTop: '1px solid var(--border)',
-          borderBottom: '1px solid var(--border)',
-          padding: '6rem 0',
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Subtle gradient overlay */}
-        <div
-          className="absolute inset-0 -z-0"
-          style={{
-            background:
-              'radial-gradient(ellipse 60% 80% at 100% 50%, rgba(99,102,241,0.06) 0%, transparent 70%)',
-          }}
-        />
-
-        <div className="container-custom relative z-10">
-          <div className="flex flex-col items-center text-center mb-14">
-            <p className="section-label mb-3">Digital Assets & Software Store</p>
-            <h2 className="ts-h2 mb-4" style={{ color: 'var(--text-primary)' }}>
-              Buy Production-Ready Software & Developer Kits
-            </h2>
-            <p
-              style={{
-                color: 'var(--text-secondary)',
-                fontSize: '1.0625rem',
-                lineHeight: '1.6',
-                maxWidth: '600px',
-                margin: '0 auto',
-              }}
-            >
-              Explore our curated catalog of source code, templates, and standalone tools available
-              for one-time purchase.
-            </p>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
-              gap: '1.5rem',
-              maxWidth: '880px',
-              margin: '0 auto',
-            }}
-          >
-            {featuredSoftware.map((item) => {
-              const Icon = item.icon;
-              return (
-                <div
-                  key={item.slug}
-                  className="card card-hover group relative overflow-hidden flex flex-col justify-between"
-                  style={{ padding: '2rem' }}
-                >
-                  {/* Gradient accent top-left */}
-                  <div
-                    className="absolute top-0 left-0 w-32 h-32 -z-0 opacity-20"
-                    style={{
-                      background: `radial-gradient(circle at 0 0, ${item.accentColor}, transparent 70%)`,
-                    }}
-                  />
-
-                  <div className="relative z-10 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div
-                        className="tool-icon-ring"
-                        style={{
-                          width: '2.75rem',
-                          height: '2.75rem',
-                          backgroundColor: `${item.accentColor}15`,
-                          border: `1px solid ${item.accentColor}25`,
-                        }}
-                      >
-                        <Icon className="w-5 h-5" style={{ color: item.accentColor }} />
-                      </div>
-                      <span
-                        className="badge"
-                        style={{
-                          backgroundColor: `${item.badgeColor}15`,
-                          color: item.badgeColor,
-                          border: `1px solid ${item.badgeColor}25`,
-                        }}
-                      >
-                        {item.badge}
-                      </span>
-                    </div>
-
-                    <div>
-                      <p
-                        style={{
-                          fontSize: '0.6875rem',
-                          fontWeight: 700,
-                          letterSpacing: '0.05em',
-                          textTransform: 'uppercase',
-                          color: 'var(--brand-500)',
-                          marginBottom: '0.375rem',
-                        }}
-                      >
-                        {item.category}
-                      </p>
-                      <h3
-                        className="ts-h3"
-                        style={{
-                          color: 'var(--text-primary)',
-                          fontSize: '1.125rem',
-                          transition: 'color 0.15s',
-                        }}
-                      >
-                        {item.name}
-                      </h3>
-                      <p
-                        style={{
-                          fontSize: '0.875rem',
-                          color: 'var(--text-muted)',
-                          lineHeight: '1.6',
-                          marginTop: '0.5rem',
-                        }}
-                      >
-                        {item.desc}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div
-                    className="flex items-center justify-between relative z-10 mt-6 pt-5"
-                    style={{ borderTop: '1px solid var(--border)' }}
-                  >
-                    <div>
-                      <span
-                        style={{
-                          fontSize: '1.75rem',
-                          fontWeight: 800,
-                          color: 'var(--text-primary)',
-                          letterSpacing: '-0.03em',
-                        }}
-                      >
-                        {item.priceUSD}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: '0.8125rem',
-                          color: 'var(--text-muted)',
-                          marginLeft: '0.375rem',
-                        }}
-                      >
-                        / {item.priceINR} one-time
-                      </span>
-                    </div>
-                    <Link href={`/software/${item.slug}`} className="btn btn-primary btn-sm">
-                      View Product
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                  </div>
+      {/* WHY SECTION */}
+      <section style={{
+        padding: 'clamp(4rem,6vw,5.5rem) 0',
+        background: 'var(--bg-card)',
+        borderTop: '1px solid var(--border)',
+        borderBottom: '1px solid var(--border)',
+      }}>
+        <div className="container-custom">
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: '1px', background: 'var(--border)',
+            borderRadius: '1.25rem', overflow: 'hidden',
+            border: '1px solid var(--border)',
+          }}>
+            {[
+              { icon: ShieldCheck, color: '#10b981', title: 'Private by design', body: 'Browser tools never upload your file. Server jobs use isolated storage with automatic expiry.' },
+              { icon: Zap, color: '#f59e0b', title: 'Fast every time', body: 'Browser processing is instant. Server jobs run in dedicated workers with no shared queues.' },
+              { icon: CheckCircle2, color: '#6366f1', title: 'No account needed', body: 'Every tool works anonymously. Create an account only when you need history or higher limits.' },
+              { icon: TrendingUp, color: '#a855f7', title: 'Built to scale', body: 'From a single PDF to thousands of batch jobs — the same API powers both seamlessly.' },
+            ].map(({ icon: Icon, color, title, body }) => (
+              <div key={title} style={{ padding: '2rem 1.75rem', background: 'var(--bg-card)' }}>
+                <div style={{
+                  width: '2.5rem', height: '2.5rem', borderRadius: '0.65rem',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: `${color}12`, border: `1px solid ${color}28`,
+                  color, marginBottom: '1.25rem',
+                }}>
+                  <Icon style={{ width: '1.1rem', height: '1.1rem' }} />
                 </div>
-              );
-            })}
-          </div>
-
-          <div className="text-center mt-10">
-            <Link href="/software" className="btn btn-secondary btn-md">
-              <ShoppingBag className="w-4 h-4" />
-              Browse All Products
-            </Link>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>{title}</h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.65 }}>{body}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ─── PRICING PREVIEW ─── */}
-      <section className="home-pricing-section">
-        <div className="container-custom relative z-10">
-          <div className="home-pricing-heading">
-            <p className="section-label">Transparent Pricing</p>
-            <h2 className="ts-h2" style={{ color: 'var(--text-primary)' }}>
-              Simple, High-Value SaaS Plans
+      {/* PRICING */}
+      <section style={{ padding: 'clamp(4rem,6vw,5.5rem) 0', background: 'var(--bg)' }}>
+        <div className="container-custom">
+          <div style={{ textAlign: 'center', marginBottom: 'clamp(2.5rem,4vw,3.5rem)' }}>
+            <p className="section-label" style={{ marginBottom: '0.75rem' }}>Simple pricing</p>
+            <h2 className="ts-h2" style={{ color: 'var(--text-primary)', marginBottom: '0.75rem' }}>
+              Start free. Scale when ready.
             </h2>
-            <p>
-              Start completely free or scale with Pro & Business tiers for priority batch queues and
-              API access.
+            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1.65, maxWidth: '36rem', margin: '0 auto' }}>
+              No hidden fees. Cancel anytime. Every plan includes the full tool suite.
             </p>
           </div>
 
           <div className="home-pricing-grid">
-            {/* Free */}
-            <article className="pricing-plan-card">
-              <div className="pricing-plan-heading">
-                <div>
-                  <p className="pricing-plan-audience">For getting started</p>
-                  <h3>Free Starter</h3>
+            {[
+              { name: 'Free', audience: 'For getting started', price: '$0', period: 'forever',
+                features: ['10 operations / day', '25 MB file limit', 'All browser tools', 'No account required'],
+                cta: 'Start for free', href: '/register', primary: false },
+              { name: 'Pro', audience: 'For professionals', price: '$9', period: '/mo or \u20b9749',
+                features: ['500 operations / month', '100 MB file limit', 'Priority processing', 'Conversion history'],
+                cta: 'Get Pro', href: '/pricing', primary: true, badge: 'Most popular' },
+              { name: 'Business', audience: 'For teams', price: '$29', period: '/mo or \u20b92,499',
+                features: ['5,000 ops / month', '250 MB file limit', 'REST API access', '10 team seats'],
+                cta: 'Get Business', href: '/pricing', primary: false },
+            ].map((plan) => (
+              <article key={plan.name} className={`pricing-plan-card${plan.primary ? ' pricing-plan-card-popular' : ''}`}>
+                <div className="pricing-plan-heading">
+                  <div>
+                    <p className="pricing-plan-audience">{plan.audience}</p>
+                    <h3>{plan.name}</h3>
+                  </div>
+                  {plan.badge && (
+                    <span className="pricing-plan-badge">
+                      <Star style={{ width: '0.6rem', height: '0.6rem' }} fill="currentColor" />
+                      {plan.badge}
+                    </span>
+                  )}
                 </div>
-              </div>
-              <div className="pricing-plan-price">
-                <span>$0</span>
-                <small>/ forever</small>
-              </div>
-              <p className="pricing-plan-summary">
-                Essential document tools for occasional personal projects.
-              </p>
-              <ul className="pricing-plan-features">
-                {['10 operations per day', '25 MB file size', '10-minute temporary files'].map(
-                  (f) => (
+                <div className="pricing-plan-price">
+                  <span className={plan.primary ? 'gradient-text' : ''}>{plan.price}</span>
+                  <small>{plan.period}</small>
+                </div>
+                <ul className="pricing-plan-features">
+                  {plan.features.map(f => (
                     <li key={f} className="feature-item">
-                      <CheckCircle2
-                        className="w-4 h-4"
-                        style={{ color: 'var(--success)', flexShrink: 0 }}
-                      />
+                      <CheckCircle2 style={{ width: '0.9rem', height: '0.9rem', color: plan.primary ? 'var(--brand-500)' : 'var(--success)', flexShrink: 0 }} />
                       {f}
                     </li>
-                  ),
-                )}
-              </ul>
-              <Link href="/register" className="btn btn-secondary btn-md pricing-plan-action">
-                Start Free Today
-              </Link>
-            </article>
-
-            {/* Pro — highlighted */}
-            <article className="pricing-plan-card pricing-plan-card-popular">
-              <div className="pricing-plan-heading">
-                <div>
-                  <p className="pricing-plan-audience">For professionals</p>
-                  <h3>Pro Developer</h3>
-                </div>
-                <span className="pricing-plan-badge">
-                  <Star className="w-3 h-3" fill="currentColor" />
-                  Most popular
-                </span>
-              </div>
-              <div className="pricing-plan-price">
-                <span className="gradient-text">$9</span>
-                <small>
-                  / month <em>or ₹749</em>
-                </small>
-              </div>
-              <p className="pricing-plan-summary">
-                Higher limits and priority processing for regular workflows.
-              </p>
-              <ul className="pricing-plan-features">
-                {[
-                  '500 operations per month',
-                  '100 MB file size',
-                  '10-minute temporary files',
-                  'Priority worker queues',
-                ].map((f) => (
-                  <li key={f} className="feature-item">
-                    <CheckCircle2
-                      className="w-4 h-4 shrink-0"
-                      style={{ color: 'var(--brand-500)', flexShrink: 0 }}
-                    />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              <Link href="/pricing" className="btn btn-primary btn-md pricing-plan-action">
-                Get Pro Plan
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </article>
-
-            {/* Business */}
-            <article className="pricing-plan-card">
-              <div className="pricing-plan-heading">
-                <div>
-                  <p className="pricing-plan-audience">For growing teams</p>
-                  <h3>Business</h3>
-                </div>
-              </div>
-              <div className="pricing-plan-price">
-                <span>$29</span>
-                <small>
-                  / month <em>or ₹2,499</em>
-                </small>
-              </div>
-              <p className="pricing-plan-summary">
-                Team access, API capacity, and room for production workloads.
-              </p>
-              <ul className="pricing-plan-features">
-                {[
-                  '5,000 ops / month',
-                  '250 MB file size',
-                  '10-minute temporary files',
-                  'Full REST API + 10 Team Seats',
-                ].map((f) => (
-                  <li key={f} className="feature-item">
-                    <CheckCircle2
-                      className="w-4 h-4"
-                      style={{ color: 'var(--success)', flexShrink: 0 }}
-                    />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              <Link href="/pricing" className="btn btn-secondary btn-md pricing-plan-action">
-                Get Business Plan
-              </Link>
-            </article>
+                  ))}
+                </ul>
+                <Link href={plan.href} className={`btn ${plan.primary ? 'btn-primary' : 'btn-secondary'} btn-md pricing-plan-action`}>
+                  {plan.cta} {plan.primary && <ArrowRight style={{ width: '0.85rem', height: '0.85rem' }} />}
+                </Link>
+              </article>
+            ))}
           </div>
 
           <div className="home-pricing-compare">
             <Link href="/pricing">
-              Compare all features in full detail
-              <ArrowRight className="w-4 h-4" />
+              Compare all features in detail
+              <ArrowRight style={{ width: '0.85rem', height: '0.85rem' }} />
             </Link>
           </div>
         </div>
       </section>
+
+      {/* BOTTOM CTA */}
+      <section style={{ padding: 'clamp(3rem,5vw,4.5rem) 0', borderTop: '1px solid var(--border)' }}>
+        <div className="container-custom">
+          <div style={{
+            position: 'relative', overflow: 'hidden',
+            padding: 'clamp(2.5rem,5vw,4rem)', borderRadius: '1.5rem',
+            background: 'linear-gradient(130deg, #4338ca 0%, #6d28d9 50%, #9333ea 100%)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            boxShadow: '0 24px 70px rgba(79,70,229,0.3)',
+            textAlign: 'center',
+          }}>
+            <div style={{ position: 'absolute', top: -80, right: -80, width: 300, height: 300, borderRadius: '50%', background: 'rgba(255,255,255,0.07)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', bottom: -60, left: -60, width: 240, height: 240, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                padding: '0.35rem 0.85rem', borderRadius: '9999px',
+                background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
+                color: '#fff', fontSize: '0.68rem', fontWeight: 800, letterSpacing: '0.08em',
+                textTransform: 'uppercase', marginBottom: '1.5rem',
+              }}>
+                <Lock style={{ width: '0.7rem', height: '0.7rem' }} />
+                Free forever plan available
+              </span>
+              <h2 style={{ fontSize: 'clamp(1.75rem,4vw,2.75rem)', fontWeight: 900, color: '#fff', lineHeight: 1.15, letterSpacing: '-0.03em', marginBottom: '1rem' }}>
+                Ready to convert your first file?
+              </h2>
+              <p style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.75)', lineHeight: 1.65, maxWidth: '36rem', margin: '0 auto 2rem' }}>
+                No account required to start. Pick a tool, drop your file, and download the result in seconds.
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <Link href="/tools" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                  padding: '0.85rem 2rem', borderRadius: '0.75rem',
+                  background: '#fff', color: '#4338ca',
+                  fontSize: '0.95rem', fontWeight: 800, textDecoration: 'none',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                }}>
+                  Browse all tools <ArrowRight style={{ width: '0.9rem', height: '0.9rem' }} />
+                </Link>
+                <Link href="/register" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                  padding: '0.85rem 1.75rem', borderRadius: '0.75rem',
+                  background: 'rgba(255,255,255,0.12)', color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.25)',
+                  fontSize: '0.95rem', fontWeight: 700, textDecoration: 'none',
+                }}>
+                  Create free account
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </div>
   );
 }

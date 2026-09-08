@@ -2,7 +2,10 @@ FROM node:22-bookworm-slim
 
 WORKDIR /app
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends openssl pandoc poppler-utils tesseract-ocr \
+    && apt-get install -y --no-install-recommends openssl pandoc poppler-utils tesseract-ocr python3 python3-venv \
+    && python3 -m venv /opt/pdf2docx \
+    && /opt/pdf2docx/bin/pip install --no-cache-dir pdf2docx==0.5.13 \
+    && ln -s /opt/pdf2docx/bin/pdf2docx /usr/local/bin/pdf2docx \
     && rm -rf /var/lib/apt/lists/* \
     && corepack enable
 

@@ -11,7 +11,6 @@ import {
   Sparkles,
   Zap,
   ArrowRight,
-  Settings2,
   RefreshCw,
 } from 'lucide-react';
 import { ToolDto } from '@docconv/shared-types';
@@ -293,7 +292,7 @@ export function InteractiveToolConverter({ tool }: Props) {
 
   return (
     <div
-      className="w-full rounded-3xl overflow-hidden"
+      className="interactive-converter"
       style={{
         backgroundColor: 'var(--bg-card)',
         border: '1px solid var(--border)',
@@ -302,13 +301,13 @@ export function InteractiveToolConverter({ tool }: Props) {
     >
       {/* Top Banner: Anonymous Quota Meter */}
       <div
-        className="px-6 py-3.5 flex items-center justify-between text-xs font-semibold"
+        className="converter-quota-bar"
         style={{
           backgroundColor: 'var(--bg-muted)',
           borderBottom: '1px solid var(--border)',
         }}
       >
-        <div className="flex items-center gap-2">
+        <div className="converter-quota-copy">
           <span
             className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full"
             style={{
@@ -329,7 +328,7 @@ export function InteractiveToolConverter({ tool }: Props) {
         </div>
         <Link
           href="/pricing"
-          className="flex items-center gap-1 font-semibold transition-colors"
+          className="converter-pricing-link"
           style={{ color: 'var(--brand-500)', textDecoration: 'none' }}
         >
           <span>Compare higher monthly limits</span>
@@ -337,7 +336,7 @@ export function InteractiveToolConverter({ tool }: Props) {
         </Link>
       </div>
 
-      <div className="p-6 md:p-8 space-y-6">
+      <div className="converter-body">
         {/* Converter Main Area */}
         {jobStatus === 'completed' ? (
           <div className="text-center py-10 space-y-5">
@@ -419,7 +418,7 @@ export function InteractiveToolConverter({ tool }: Props) {
         ) : (
           <>
             <div
-              className="flex items-start gap-3 rounded-2xl p-4 text-sm"
+              className="converter-privacy-note"
               style={{
                 background: isBrowserTool ? 'rgba(16,185,129,0.08)' : 'rgba(99,102,241,0.08)',
                 border: `1px solid ${isBrowserTool ? 'rgba(16,185,129,0.22)' : 'rgba(99,102,241,0.22)'}`,
@@ -478,7 +477,7 @@ export function InteractiveToolConverter({ tool }: Props) {
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={handleFileDrop}
                   onClick={() => fileInputRef.current?.click()}
-                  className="rounded-2xl p-8 md:p-10 text-center cursor-pointer transition-all group"
+                  className="converter-dropzone group"
                   style={{
                     backgroundColor: 'var(--bg-muted)',
                     border: '2px dashed var(--border)',
@@ -545,7 +544,7 @@ export function InteractiveToolConverter({ tool }: Props) {
 
             {/* Conversion Options */}
             <div
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-4"
+              className="converter-options-grid"
               style={{ borderTop: '1px solid var(--border)' }}
             >
               <div>

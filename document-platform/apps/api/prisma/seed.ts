@@ -105,16 +105,48 @@ async function main() {
   // ─── 2. Server-Authoritative Tools ───────────────────────────
 
   const tools = [
-    ...([
-      ['merge-pdf', 'Merge PDF', 'pdf.merge', 'Combine multiple PDF files privately in your browser.'],
-      ['split-pdf', 'Split PDF', 'pdf.split', 'Export every PDF page as an individual PDF.'],
-      ['extract-pdf-pages', 'Extract PDF Pages', 'pdf.extractPages', 'Create a new PDF from selected pages.'],
-      ['delete-pdf-pages', 'Delete PDF Pages', 'pdf.deletePages', 'Remove selected pages from a PDF.'],
-      ['rotate-pdf', 'Rotate PDF', 'pdf.rotate', 'Rotate every page in a PDF.'],
-      ['watermark-pdf', 'Watermark PDF', 'pdf.watermark', 'Apply a text watermark to every PDF page.'],
-      ['number-pdf-pages', 'Add PDF Page Numbers', 'pdf.addPageNumbers', 'Add page numbers to a PDF.'],
-      ['pdf-metadata', 'Edit PDF Metadata', 'pdf.editMetadata', 'Set PDF title, author, subject, and keywords.'],
-    ] as const).map(([slug, name, operation, description], index) => ({
+    ...(
+      [
+        [
+          'merge-pdf',
+          'Merge PDF',
+          'pdf.merge',
+          'Combine multiple PDF files privately in your browser.',
+        ],
+        ['split-pdf', 'Split PDF', 'pdf.split', 'Export every PDF page as an individual PDF.'],
+        [
+          'extract-pdf-pages',
+          'Extract PDF Pages',
+          'pdf.extractPages',
+          'Create a new PDF from selected pages.',
+        ],
+        [
+          'delete-pdf-pages',
+          'Delete PDF Pages',
+          'pdf.deletePages',
+          'Remove selected pages from a PDF.',
+        ],
+        ['rotate-pdf', 'Rotate PDF', 'pdf.rotate', 'Rotate every page in a PDF.'],
+        [
+          'watermark-pdf',
+          'Watermark PDF',
+          'pdf.watermark',
+          'Apply a text watermark to every PDF page.',
+        ],
+        [
+          'number-pdf-pages',
+          'Add PDF Page Numbers',
+          'pdf.addPageNumbers',
+          'Add page numbers to a PDF.',
+        ],
+        [
+          'pdf-metadata',
+          'Edit PDF Metadata',
+          'pdf.editMetadata',
+          'Set PDF title, author, subject, and keywords.',
+        ],
+      ] as const
+    ).map(([slug, name, operation, description], index) => ({
       slug,
       name,
       category: 'PDF',
@@ -152,11 +184,12 @@ async function main() {
       seoMetadata: {
         title: 'Free PDF to Word Converter Online — Editable DOCX Output',
         description:
-          'Convert PDF documents to editable Microsoft Word (DOCX) files with OCR text extraction. Fast, secure, and free online.',
+          'Convert PDFs into editable Microsoft Word files while preserving page layout, text styling, images, and tables. OCR fallback supports scanned documents.',
         keywords: [
           'pdf to word',
           'convert pdf to docx',
           'pdf text extraction',
+          'preserve pdf layout',
           'editable word converter',
         ],
       },
