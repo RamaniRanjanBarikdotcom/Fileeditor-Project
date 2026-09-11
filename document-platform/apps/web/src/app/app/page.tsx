@@ -1,19 +1,14 @@
 'use client';
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { fetchWithAuth } from '../../lib/api';
 import {
   UploadCloud,
-  File as FileIcon,
   CheckCircle,
-  XCircle,
   Loader2,
   Download,
   Sparkles,
-  X,
   Link as LinkIcon,
-  Zap,
 } from 'lucide-react';
 
 interface FormatOption {
@@ -110,7 +105,6 @@ function getAvailableFormats(inputType: 'file' | 'url', file: File | null): Form
 }
 
 export default function WorkspaceConverterPage() {
-  const router = useRouter();
   const [inputType, setInputType] = useState<'file' | 'url'>('file');
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState('');
@@ -125,13 +119,10 @@ export default function WorkspaceConverterPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const availableFormats = getAvailableFormats(inputType, file);
-
-  useEffect(() => {
-    if (availableFormats.length > 0 && !availableFormats.some((f) => f.value === targetFormat)) {
-      setTargetFormat(availableFormats[0].value);
-    }
-  }, [file, inputType]);
+  const availableFormats = useMemo(() => getAvailableFormats(inputType, file), [inputType, file]);
+  const effectiveTargetFormat = availableFormats.some((format) => format.value === targetFormat)
+    ? targetFormat
+    : availableFormats[0]?.value || 'pdf';
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -141,29 +132,12 @@ export default function WorkspaceConverterPage() {
     }
   }, []);
 
-  useEffect(() => {
-    const activeJobId = localStorage.getItem('active_job_workspace');
-    const activeJobStartTime = localStorage.getItem('active_job_time_workspace');
-    if (activeJobId && activeJobStartTime) {
-      setJobId(activeJobId);
-      setStatus('converting');
-      setProgress(60);
-      startPolling(activeJobId, parseInt(activeJobStartTime, 10));
-    }
-
-    return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
-  }, []);
-
-  const handleCancel = () => {
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+  const clearStoredJob = useCallback(() => {
     localStorage.removeItem('active_job_workspace');
     localStorage.removeItem('active_job_time_workspace');
-    handleReset();
-  };
+  }, []);
 
-  const startPolling = (id: string, startTime: number) => {
+  const startPolling = useCallback((id: string, startTime: number) => {
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
 
     // TODO (SSE): Replace polling with Server-Sent Events for push-based updates.
@@ -177,8 +151,7 @@ export default function WorkspaceConverterPage() {
 
           if (data.data.status === 'COMPLETED') {
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-            localStorage.removeItem('active_job_workspace');
-            localStorage.removeItem('active_job_time_workspace');
+            clearStoredJob();
             setProgress(100);
 
             const downloadRes = await fetchWithAuth(`/api/v1/conversions/${id}/download-url`, {
@@ -194,10 +167,9 @@ export default function WorkspaceConverterPage() {
 
             setDownloadUrl(downloadData.data.url);
             setStatus('success');
-          } else if (data.data.status === 'FAILED') {
+          } else if (['FAILED', 'CANCELLED', 'EXPIRED'].includes(data.data.status)) {
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-            localStorage.removeItem('active_job_workspace');
-            localStorage.removeItem('active_job_time_workspace');
+            clearStoredJob();
             setStatus('error');
             setError('Conversion failed. Please try a different document format.');
           }
@@ -205,15 +177,50 @@ export default function WorkspaceConverterPage() {
 
         if (Date.now() - startTime > 240000) {
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-          localStorage.removeItem('active_job_workspace');
-          localStorage.removeItem('active_job_time_workspace');
+          clearStoredJob();
           setStatus('error');
           setError('Conversion timed out. Please try again.');
         }
-      } catch (e) {
+      } catch {
         // ignore errors to keep polling
       }
     }, 1500);
+  }, [clearStoredJob]);
+
+  useEffect(() => {
+    const activeJobId = localStorage.getItem('active_job_workspace');
+    const activeJobStartTime = localStorage.getItem('active_job_time_workspace');
+    if (activeJobId && activeJobStartTime) {
+      // Restoring an external localStorage-backed job is intentionally performed after hydration.
+      // oxlint-disable-next-line react/set-state-in-effect
+      setJobId(activeJobId);
+      setStatus('converting');
+      setProgress(60);
+      startPolling(activeJobId, parseInt(activeJobStartTime, 10));
+    }
+
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, [startPolling]);
+
+  const handleCancel = async () => {
+    if (jobId) {
+      try {
+        await fetchWithAuth(`/api/v1/conversions/${jobId}/cancel`, { method: 'POST' });
+      } catch {
+        // The local state is still cleared; the server may already be unreachable.
+      }
+    }
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    clearStoredJob();
+    setFile(null);
+    setUrl('');
+    setStatus('idle');
+    setProgress(0);
+    setError(null);
+    setJobId(null);
+    setDownloadUrl(null);
   };
 
   const handleConvert = async () => {
@@ -260,7 +267,7 @@ export default function WorkspaceConverterPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sourceFileId,
-          targetFormat,
+          targetFormat: effectiveTargetFormat,
         }),
       });
       const convData = await convRes.json();
@@ -283,8 +290,7 @@ export default function WorkspaceConverterPage() {
 
   const handleReset = () => {
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    localStorage.removeItem('active_job_workspace');
-    localStorage.removeItem('active_job_time_workspace');
+    clearStoredJob();
     setFile(null);
     setUrl('');
     setStatus('idle');
@@ -428,7 +434,7 @@ export default function WorkspaceConverterPage() {
                     key={fmt.value}
                     onClick={() => setTargetFormat(fmt.value)}
                     className={`p-3 rounded-xl border text-left transition-all ${
-                      targetFormat === fmt.value
+                      effectiveTargetFormat === fmt.value
                         ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 shadow-sm'
                         : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40'
                     }`}

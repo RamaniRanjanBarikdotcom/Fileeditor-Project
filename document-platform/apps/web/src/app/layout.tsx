@@ -55,8 +55,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         }}
       >
         <ThemeProvider>
+          <a className="skip-link" href="#main-content">Skip to main content</a>
           <Navbar />
-          <main className="site-main w-full flex-1">{children}</main>
+          <main id="main-content" className="site-main w-full flex-1">{children}</main>
           <Footer />
         </ThemeProvider>
       </body>

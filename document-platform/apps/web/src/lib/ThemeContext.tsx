@@ -16,12 +16,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // Mount state gates persistence so an existing preference is not overwritten on first render.
+    // oxlint-disable-next-line react/set-state-in-effect
     setMounted(true);
     const stored =
       localStorage.getItem('apptoolkitlab-theme') ||
       localStorage.getItem('toolsuite-theme') ||
       localStorage.getItem('docconv-theme');
     if (stored === 'light' || stored === 'dark') {
+      // The saved browser preference can only be applied after client hydration.
+      // oxlint-disable-next-line react/set-state-in-effect
       setTheme(stored);
     }
   }, []);

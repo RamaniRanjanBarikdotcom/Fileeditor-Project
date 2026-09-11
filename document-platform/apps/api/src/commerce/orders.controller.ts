@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Param, UseGuards, Req } from '@nestjs/common';
-import { OrdersService, CheckoutDto, VerifyRazorpayPaymentDto } from './orders.service';
+import { OrdersService } from './orders.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrencyCode } from '@prisma/client';
 import { IsNotEmpty, IsString, IsEnum, IsOptional, IsUrl } from 'class-validator';
@@ -13,11 +13,11 @@ export class CreateCheckoutSessionDto {
   @IsNotEmpty()
   currency!: CurrencyCode;
 
-  @IsString()
+  @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
   @IsNotEmpty()
   successUrl!: string;
 
-  @IsString()
+  @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
   @IsNotEmpty()
   cancelUrl!: string;
 }

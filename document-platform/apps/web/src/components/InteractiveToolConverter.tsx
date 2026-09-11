@@ -59,11 +59,12 @@ export function InteractiveToolConverter({ tool }: Props) {
   const clearActiveJob = useCallback(() => {
     localStorage.removeItem(`active_job_${tool.slug}`);
     localStorage.removeItem(`active_job_time_${tool.slug}`);
+    localStorage.removeItem(`active_job_format_${tool.slug}`);
     setActiveJobId(null);
   }, [tool.slug]);
 
   const startPolling = useCallback(
-    (jobId: string, startTime: number) => {
+    (jobId: string, startTime: number, outputFormat: string) => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       setActiveJobId(jobId);
       const clientDeadlineMs = isUrlTool ? 330_000 : 270_000;
@@ -96,7 +97,7 @@ export function InteractiveToolConverter({ tool }: Props) {
               }
 
               setDownloadItems([
-                { url: downloadRes.data.url, name: `converted.${selectedFormat}` },
+                { url: downloadRes.data.url, name: `converted.${outputFormat}` },
               ]);
               setJobStatus('completed');
               setIsUploading(false);
@@ -138,11 +139,14 @@ export function InteractiveToolConverter({ tool }: Props) {
 
     const storedJobId = localStorage.getItem(`active_job_${tool.slug}`);
     const activeJobStartTime = localStorage.getItem(`active_job_time_${tool.slug}`);
+    const activeJobFormat = localStorage.getItem(`active_job_format_${tool.slug}`);
     if (storedJobId && activeJobStartTime) {
+      // Restoring an external localStorage-backed job is intentionally performed after hydration.
+      // oxlint-disable-next-line react/set-state-in-effect
       setJobStatus('converting');
       setIsUploading(true);
       setProgress(60);
-      startPolling(storedJobId, Number(activeJobStartTime));
+      startPolling(storedJobId, Number(activeJobStartTime), activeJobFormat || selectedFormat);
     }
 
     return () => {
@@ -150,7 +154,7 @@ export function InteractiveToolConverter({ tool }: Props) {
       localDownloadRefs.current.forEach((url) => URL.revokeObjectURL(url));
       localDownloadRefs.current = [];
     };
-  }, [startPolling, tool.slug]);
+  }, [selectedFormat, startPolling, tool.slug]);
 
   const handleCancel = async () => {
     if (isBrowserTool && cancelBrowserProcessing()) {
@@ -262,7 +266,8 @@ export function InteractiveToolConverter({ tool }: Props) {
       const startTime = Date.now();
       localStorage.setItem(`active_job_${tool.slug}`, jobId);
       localStorage.setItem(`active_job_time_${tool.slug}`, startTime.toString());
-      startPolling(jobId, startTime);
+      localStorage.setItem(`active_job_format_${tool.slug}`, selectedFormat);
+      startPolling(jobId, startTime, selectedFormat);
     } catch (err: any) {
       setIsUploading(false);
       setJobStatus('failed');

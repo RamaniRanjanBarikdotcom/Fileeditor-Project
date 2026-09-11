@@ -87,10 +87,14 @@ export class RazorpayService {
       .update(`${params.razorpayOrderId}|${params.razorpayPaymentId}`)
       .digest('hex');
 
-    return crypto.timingSafeEqual(
-      Buffer.from(expectedSignature),
-      Buffer.from(params.razorpaySignature),
-    );
+    try {
+      return crypto.timingSafeEqual(
+        Buffer.from(expectedSignature),
+        Buffer.from(params.razorpaySignature),
+      );
+    } catch {
+      return false;
+    }
   }
 
   /**

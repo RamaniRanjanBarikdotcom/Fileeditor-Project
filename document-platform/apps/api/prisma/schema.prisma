@@ -514,6 +514,7 @@ model LicenseKey {
   id               String        @id @default(uuid())
   keyHash          String        @unique @map("key_hash")
   keyMasked        String        @map("key_masked") // e.g. TOOL-****-****-XXXX
+  keyCiphertext    String?       @map("key_ciphertext") // AES-GCM encrypted; never log this value
   productId        String        @map("product_id")
   userId           String        @map("user_id")
   orderId          String?       @map("order_id")
@@ -522,6 +523,7 @@ model LicenseKey {
   activationsCount Int           @default(0) @map("activations_count")
   expiresAt        DateTime?     @map("expires_at")
   createdAt        DateTime      @default(now()) @map("created_at")
+  deliveredAt      DateTime?     @map("delivered_at")
 
   product     Product             @relation(fields: [productId], references: [id])
   user        User                @relation(fields: [userId], references: [id])
@@ -529,6 +531,7 @@ model LicenseKey {
   activations LicenseActivation[]
 
   @@index([userId, productId])
+  @@unique([orderId, productId])
   @@map("license_keys")
 }
 

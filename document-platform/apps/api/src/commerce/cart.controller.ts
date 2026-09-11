@@ -39,8 +39,16 @@ export class CartController {
   }
 
   @Delete('items/:id')
-  async removeItem(@Req() req: any, @Param('id') id: string) {
-    const data = await this.cartService.removeItem(req.user.userId, id);
+  async removeItem(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Query('currency') currency?: CurrencyCode,
+  ) {
+    const data = await this.cartService.removeItem(
+      req.user.userId,
+      id,
+      currency || CurrencyCode.USD,
+    );
     return { success: true, data };
   }
 

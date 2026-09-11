@@ -1,12 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Settings, Key, ShieldCheck, User, Building, Lock } from 'lucide-react';
 import { fetchApi } from '../../../lib/api';
 
 export default function WorkspaceSettingsPage() {
   const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
@@ -14,7 +12,6 @@ export default function WorkspaceSettingsPage() {
       if (res.success && res.data) {
         setProfile(res.data);
       }
-      setLoading(false);
     }
     load();
   }, []);

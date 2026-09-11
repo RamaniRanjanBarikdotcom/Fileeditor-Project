@@ -1,4 +1,4 @@
-import { execFile, spawn } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { Readable } from 'stream';
 import { createWriteStream } from 'fs';
@@ -163,8 +163,8 @@ export class PdfExtractorAdapter {
   /**
    * Reconstruct a digital PDF as an editable DOCX with layout, images and tables.
    *
-   * Uses the Python pdf2docx library via subprocess for layout-aware conversion.
-   * This preserves text formatting, images, tables, and page layout from the original PDF.
+   * The queue worker remains Node.js: it invokes the isolated pdf2docx CLI and
+   * retains control of timeouts, output validation, fallback, and cleanup.
    */
   private async convertToLayoutAwareDocx(
     inputPath: string,
@@ -174,55 +174,35 @@ export class PdfExtractorAdapter {
     const configuredEngine = (process.env.PDF_TO_DOCX_ENGINE || 'auto').toLowerCase();
     if (configuredEngine === 'text') return null;
 
+    const executable = process.env.PDF2DOCX_BIN || 'pdf2docx';
+    if (!(await this.commandExists(executable))) {
+      const message =
+        `The layout-aware PDF-to-Word engine was not found at '${executable}'. ` +
+        'Install pdf2docx 0.5.13 or set PDF2DOCX_BIN to its executable path.';
+      if (configuredEngine === 'pdf2docx') throw new Error(message);
+      workerLogger.warn({ executable }, `${message} Using the text-focused fallback.`);
+      return null;
+    }
+
     try {
       const outputPath = path.join(tmpDir, 'layout-aware.docx');
-      
-      // Use Python pdf2docx library for layout-aware conversion
-      const pythonScript = `
-import sys
-try:
-    import pymupdf as fitz  # PyMuPDF
-    from pdf2docx import Converter
-    
-    input_file = sys.argv[1]
-    output_file = sys.argv[2]
-    
-    cv = Converter(input_file)
-    cv.convert(output_file, start=0, end=None)
-    cv.close()
-    
-    # Verify output was created
-    import os
-    if os.path.getsize(output_file) < 1000:
-        sys.exit(1)
-    sys.exit(0)
-except Exception as e:
-    print(str(e), file=sys.stderr)
-    sys.exit(1)
-`;
-      
-      const pythonProcess = spawn('python3', ['-c', pythonScript, inputPath, outputPath]);
-      
-      let stderrOutput = '';
-      pythonProcess.stderr.on('data', (data) => {
-        stderrOutput += data.toString();
+      await execFileAsync(executable, ['convert', inputPath, outputPath], {
+        timeout,
+        maxBuffer: 10 * 1024 * 1024,
+        windowsHide: true,
       });
-      
-      const exitCode = await new Promise<number>((resolve) => {
-        pythonProcess.on('close', resolve);
-      });
-      
-      if (exitCode !== 0) {
-        throw new Error(stderrOutput || 'Python pdf2docx conversion failed');
-      }
-      
+
       const output = await fs.readFile(outputPath);
+      if (output.length < 1_000 || output.subarray(0, 2).toString('ascii') !== 'PK') {
+        throw new Error('pdf2docx returned an invalid or empty DOCX package');
+      }
       workerLogger.info(
-        { bytes: output.length },
-        'Created layout-aware editable DOCX with Python pdf2docx',
+        { bytes: output.length, executable },
+        'Created layout-aware editable DOCX with pdf2docx',
       );
       return output;
     } catch (error: any) {
+      if (configuredEngine === 'pdf2docx') throw error;
       workerLogger.warn(
         { err: error?.message || String(error) },
         'Layout-aware PDF-to-DOCX failed; using the text-focused fallback',

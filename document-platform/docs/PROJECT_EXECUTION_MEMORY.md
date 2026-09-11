@@ -739,6 +739,8 @@ This section is append-only. Add a new row instead of silently changing project 
 | 2026-09-03 | CORE-006                      | `PLANNED`       | `IMPLEMENTED` | Moved private PDF/image processing into a lazily bundled module Web Worker and wired cancellation to worker termination                                                             | Next.js production compilation and six deterministic browser-engine tests pass; cross-browser runtime verification remains                                      |
 | 2026-09-06 | Public-page layout audit      | —               | `VERIFIED`    | Removed duplicated fixed-header spacing, normalized public hero rhythm and body copy, and moved crowded tablet navigation to the mobile menu                                        | Next.js production build generated 29 routes; 30 root, detail, legal, authentication and workspace URLs returned HTTP 200; diff check passed                    |
 | 2026-09-06 | Tool-detail responsive repair | —               | `VERIFIED`    | Rebuilt the shared `/tools/[slug]` layout and converter shell with explicit centered containers, responsive option grids, consistent section rhythm, and mobile overflow protection | Formatting, lint (warnings only), browser-processing tests 6/6, local and Docker production builds passed; all 16 registered tool-detail URLs returned HTTP 200 |
+| 2026-09-10 | UI and runtime route repair   | —               | `VERIFIED`    | Fixed shared navigation/workspace responsiveness, landmarks, focus states, catalog failure copy, PDF editor dependency resolution and development runtime 500s                         | Chrome checked six representative page families; 46 public, tool, auth, workspace and SEO routes returned HTTP 200; web production build passed                |
+| 2026-09-10 | Commerce security remediation | `PLANNED`       | `IMPLEMENTED` | Added atomic order fulfillment, encrypted usable license delivery, exact return-origin checks, customer-bound Razorpay verification, cart preservation and stronger CSRF/IP handling   | Prisma validation, API build and full monorepo tests pass; dedicated concurrent webhook and license lifecycle E2E coverage remains                              |
 
 ---
 
@@ -832,3 +834,27 @@ externally blocked; they are not silently represented as completed.
 - Functional impact: none; upload, browser worker, server job, polling, quota and download behavior were preserved
 - Verification: Prettier passed; web lint completed with pre-existing warnings only; browser-processing suite passed 6/6; host and Docker Next.js builds generated all 29 routes; all 16 tool URLs returned HTTP 200 after the Docker web image was rebuilt
 - Visual QA limitation: macOS Computer Use permission remains unavailable, so automated screenshot comparison could not be captured; the user can refresh the already-running Docker site at `http://localhost:5173/tools/rotate-pdf`
+
+### PDF fidelity repair and full project audit — 2026-09-10 Asia/Kolkata
+
+- Scope: PDF-to-DOCX fidelity, Node/Docker parity and repository-wide architecture, product, security and test audit
+- Root cause: the reduced-quality PDF path extracted plain text and rebuilt paragraphs, necessarily losing geometry, fonts, images and tables; the partial layout-aware implementation invoked system Python instead of the isolated `pdf2docx` environment
+- Changes made: worker now invokes the configurable `pdf2docx` CLI with a timeout, buffer limit and DOCX package validation; explicit `pdf2docx` mode fails visibly instead of silently degrading; Docker worker is configured to use `/usr/local/bin/pdf2docx`
+- Tests passed: complete monorepo production build; URL security 7/7; processing core 2/2; worker 11/11; API router 5/5; browser processing 6/6; real local PDF-to-DOCX conversion; Docker worker rebuild; real in-container PDF-to-DOCX conversion produced a valid OOXML archive
+- Audit result: architecture is fundamentally sound, but the complete SaaS/marketplace is not production-ready; critical gaps include unusable masked-only license delivery, non-atomic fulfillment, missing recurring subscriptions/admin/billing/team applications and managed-Node conversion capability mismatch
+- Security result: production dependency audit reports 23 findings (1 critical, 12 high, 7 moderate, 3 low); CSRF origin, forwarded-IP trust, checkout ownership/redirects, upload scanning and production secret defaults require hardening
+- Durable audit: `docs/PROJECT_AUDIT_2026-09-10.md`
+- Deployment result: both full native Node and Docker worker designs are supported; restricted managed Node mode cannot run queued/native conversion tools without a separate worker service
+- Next action: repair atomic license fulfillment and payment security before enabling marketplace sales, then select and validate the production deployment topology
+
+### UI, route and commerce hardening — 2026-09-10 Asia/Kolkata
+
+- Scope: all public page families, dynamic tool pages, authentication pages, workspace routes, PDF editor runtime, converter recovery, checkout fulfillment and customer license delivery
+- Runtime defects fixed: undeclared direct PDF.js worker dependency and an enabled optional CSS optimizer without `critters`; both had caused development-only HTTP 500 responses despite a successful webpack production build
+- UI changes: exact fixed-header offset, centered shared content widths, tablet-safe navigation breakpoint, mobile workspace navigation, single root main landmark, skip link, keyboard focus indicators and reduced-motion support
+- Commerce changes: exact checkout origin allowlist, authenticated Razorpay order binding, serializable fulfillment claim, transaction-scoped license issuance, encrypted full-key delivery and cart clearing only after payment
+- Tests passed: Prisma schema validation; API build; Next.js production build; full monorepo tests (URL security 7/7, processing core 2/2, worker 11/11, API router 5/5, browser PDF 6/6); lint command
+- Live verification: 46/46 routes returned HTTP 200, including all 17 tool URLs, PDF editor, five workspace routes, legal/auth pages and SEO files
+- Visual verification: Chrome screenshots inspected tools directory, Rotate PDF detail, software, automations, SaaS and pricing at desktop width; spacing, centering and shared navigation were consistent
+- Remaining production work: subscriptions/admin, dependency audit remediation, malware scanning, organization-level authorization, engine-by-engine readiness and dedicated payment/license concurrency E2E tests
+- User-owned changes preserved: yes; no unrelated changes were reverted

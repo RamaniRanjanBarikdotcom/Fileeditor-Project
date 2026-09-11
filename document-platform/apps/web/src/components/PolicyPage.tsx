@@ -64,7 +64,7 @@ export function PolicyPage({
           </p>
         </aside>
 
-        <main className="policy-content">
+        <div className="policy-content">
           {showDraftNotice && (
             <div className="policy-notice" role="note">
               <FileWarning className="h-5 w-5" />
@@ -79,7 +79,7 @@ export function PolicyPage({
             </div>
           )}
           <div className="policy-prose">{children}</div>
-        </main>
+        </div>
       </div>
     </div>
   );

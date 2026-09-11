@@ -121,7 +121,11 @@ export class CartService {
   /**
    * Remove item from cart.
    */
-  async removeItem(userId: string, cartItemId: string) {
+  async removeItem(
+    userId: string,
+    cartItemId: string,
+    currency: CurrencyCode = CurrencyCode.USD,
+  ) {
     const cart = await this.prisma.cart.findFirst({ where: { userId } });
     if (!cart) throw new NotFoundException('Cart not found.');
 
@@ -129,7 +133,7 @@ export class CartService {
       where: { id: cartItemId, cartId: cart.id },
     });
 
-    return this.getOrCreateCart(userId, CurrencyCode.USD);
+    return this.getOrCreateCart(userId, currency);
   }
 
   /**

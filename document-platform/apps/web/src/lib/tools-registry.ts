@@ -16,7 +16,6 @@ import {
   ListOrdered,
   Tags,
   LucideIcon,
-  PenTool,
 } from 'lucide-react';
 
 export interface ToolPresentation {

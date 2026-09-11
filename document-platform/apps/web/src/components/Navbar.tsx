@@ -30,7 +30,6 @@ export function Navbar() {
   }, []);
 
   useEffect(() => {
-    setOpen(false);
     let alive = true;
     void fetchApi('/auth/me').then((r) => { if (alive) setLoggedIn(r.success); });
     return () => { alive = false; };
@@ -79,7 +78,7 @@ export function Navbar() {
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden lg:flex items-center" style={{
+        <nav className="hidden xl:flex items-center" style={{
           gap: '0.15rem',
           padding: '0.2rem',
           background: 'color-mix(in srgb, var(--bg-muted) 70%, transparent)',
@@ -104,7 +103,7 @@ export function Navbar() {
         </nav>
 
         {/* Desktop actions */}
-        <div className="hidden lg:flex items-center gap-2" style={{ flexShrink: 0 }}>
+        <div className="hidden xl:flex items-center gap-2" style={{ flexShrink: 0 }}>
           <button
             onClick={toggleTheme}
             aria-label="Toggle theme"
@@ -152,7 +151,7 @@ export function Navbar() {
         </div>
 
         {/* Mobile actions */}
-        <div className="flex lg:hidden items-center gap-1.5">
+        <div className="flex xl:hidden items-center gap-1.5">
           <button onClick={toggleTheme} aria-label="Toggle theme" style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             width: '2rem', height: '2rem', borderRadius: '0.55rem',
@@ -161,7 +160,12 @@ export function Navbar() {
           }}>
             {theme === 'dark' ? <Sun style={{ width: '0.9rem', height: '0.9rem' }} /> : <Moon style={{ width: '0.9rem', height: '0.9rem' }} />}
           </button>
-          <button onClick={() => setOpen(o => !o)} aria-label="Toggle menu" style={{
+          <button
+            onClick={() => setOpen(o => !o)}
+            aria-label="Toggle menu"
+            aria-expanded={open}
+            aria-controls="mobile-site-menu"
+            style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             width: '2rem', height: '2rem', borderRadius: '0.55rem',
             background: 'var(--bg-muted)', border: '1px solid var(--border)',
@@ -174,7 +178,7 @@ export function Navbar() {
 
       {/* Mobile menu */}
       {open && (
-        <div style={{
+        <div id="mobile-site-menu" style={{
           position: 'absolute', top: '100%', left: 0, right: 0,
           background: 'color-mix(in srgb, var(--bg-card) 98%, transparent)',
           borderBottom: '1px solid var(--border)',
@@ -186,7 +190,7 @@ export function Navbar() {
           <div className="container-custom py-4">
             <nav style={{ display: 'grid', gap: '0.25rem' }}>
               {NAV_LINKS.map((link) => (
-                <Link key={link.href} href={link.href} style={{
+                <Link key={link.href} href={link.href} onClick={() => setOpen(false)} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: '0.7rem 0.85rem', borderRadius: '0.7rem',
                   fontSize: '0.9rem', fontWeight: 600, textDecoration: 'none',
@@ -200,13 +204,13 @@ export function Navbar() {
             </nav>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
               {loggedIn ? (
-                <Link href="/app" className="btn btn-primary" style={{ gridColumn: '1/-1', justifyContent: 'center' }}>
+                <Link href="/app" onClick={() => setOpen(false)} className="btn btn-primary" style={{ gridColumn: '1/-1', justifyContent: 'center' }}>
                   Go to workspace <ArrowRight style={{ width: '0.9rem', height: '0.9rem' }} />
                 </Link>
               ) : (
                 <>
-                  <Link href="/login" className="btn btn-secondary" style={{ justifyContent: 'center' }}>Sign in</Link>
-                  <Link href="/register" className="btn btn-primary" style={{ justifyContent: 'center' }}>
+                  <Link href="/login" onClick={() => setOpen(false)} className="btn btn-secondary" style={{ justifyContent: 'center' }}>Sign in</Link>
+                  <Link href="/register" onClick={() => setOpen(false)} className="btn btn-primary" style={{ justifyContent: 'center' }}>
                     Start free <ArrowRight style={{ width: '0.9rem', height: '0.9rem' }} />
                   </Link>
                 </>

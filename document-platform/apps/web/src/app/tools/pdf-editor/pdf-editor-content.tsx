@@ -25,11 +25,6 @@ interface TextItem {
   pageNum: number;
 }
 
-interface Edit {
-  id: string;
-  newStr: string;
-}
-
 export default function PDFEditorContent() {
   const [file, setFile] = useState<File | null>(null);
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
@@ -68,7 +63,6 @@ export default function PDFEditorContent() {
     const items: TextItem[] = [];
     for (let p = 1; p <= doc.numPages; p++) {
       const pdfPage = await doc.getPage(p);
-      const vp = pdfPage.getViewport({ scale: 1 });
       const tc = await pdfPage.getTextContent();
       tc.items.forEach((item: any, i: number) => {
         if (!item.str?.trim()) return;
@@ -150,7 +144,6 @@ export default function PDFEditorContent() {
       for (const item of editedItems) {
         const pdfPage = pages[item.pageNum - 1];
         if (!pdfPage) continue;
-        const { height: pageH } = pdfPage.getSize();
         const newText = edits.get(item.id) ?? item.str;
 
         // White out original text area

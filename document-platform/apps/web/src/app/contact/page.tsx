@@ -47,7 +47,7 @@ export default function ContactPage() {
           </p>
         </div>
       </header>
-      <main className="info-section">
+      <div className="info-section">
         <div className="container-custom">
           <div className="policy-notice">
             <ShieldAlert />
@@ -84,7 +84,7 @@ export default function ContactPage() {
             </Link>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

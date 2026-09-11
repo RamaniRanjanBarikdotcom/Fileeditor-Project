@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../common/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
-import { LicenseStatus } from '@prisma/client';
+import { LicenseStatus, Prisma } from '@prisma/client';
 
 @Injectable()
 export class LicensesService {
@@ -42,6 +42,39 @@ export class LicensesService {
     return `TOOL-****-${key.slice(-4)}`;
   }
 
+  private getEncryptionKey(): Buffer {
+    const configured = process.env.LICENSE_ENCRYPTION_KEY || process.env.JWT_SECRET;
+    if (!configured && process.env.NODE_ENV === 'production') {
+      throw new Error('LICENSE_ENCRYPTION_KEY must be configured in production.');
+    }
+    return crypto
+      .createHash('sha256')
+      .update(configured || 'apptoolkitlab-local-license-key')
+      .digest();
+  }
+
+  private encryptKey(key: string): string {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', this.getEncryptionKey(), iv);
+    const ciphertext = Buffer.concat([cipher.update(key, 'utf8'), cipher.final()]);
+    return [iv, cipher.getAuthTag(), ciphertext].map((part) => part.toString('base64url')).join('.');
+  }
+
+  decryptKey(ciphertext: string): string {
+    const [ivPart, tagPart, dataPart] = ciphertext.split('.');
+    if (!ivPart || !tagPart || !dataPart) throw new Error('Invalid encrypted license payload.');
+    const decipher = crypto.createDecipheriv(
+      'aes-256-gcm',
+      this.getEncryptionKey(),
+      Buffer.from(ivPart, 'base64url'),
+    );
+    decipher.setAuthTag(Buffer.from(tagPart, 'base64url'));
+    return Buffer.concat([
+      decipher.update(Buffer.from(dataPart, 'base64url')),
+      decipher.final(),
+    ]).toString('utf8');
+  }
+
   /**
    * Issue a new license key upon successful checkout.
    */
@@ -51,18 +84,20 @@ export class LicensesService {
     orderId?: string;
     maxActivations?: number;
     expiresAt?: Date;
-  }) {
+  }, transaction?: Prisma.TransactionClient) {
     const key = this.generateKeyString();
     const keyHash = this.hashKey(key);
     const keyMasked = this.maskKey(key);
 
-    const record = await this.prisma.licenseKey.create({
+    const db = transaction || this.prisma;
+    const record = await db.licenseKey.create({
       data: {
         userId: params.userId,
         productId: params.productId,
         orderId: params.orderId,
         keyHash,
         keyMasked,
+        keyCiphertext: this.encryptKey(key),
         status: LicenseStatus.ACTIVE,
         maxActivations: params.maxActivations ?? 3,
         expiresAt: params.expiresAt,
@@ -89,89 +124,82 @@ export class LicensesService {
   }) {
     const keyHash = this.hashKey(params.key);
 
-    const license = await this.prisma.licenseKey.findUnique({
-      where: { keyHash },
-      include: {
-        product: true,
-        activations: true,
-      },
-    });
+    const performActivation = () =>
+      this.prisma.$transaction(
+        async (tx) => {
+          const license = await tx.licenseKey.findUnique({
+            where: { keyHash },
+            include: { product: true },
+          });
 
-    if (!license) {
-      throw new NotFoundException('Invalid license key.');
-    }
+          if (!license) throw new NotFoundException('Invalid license key.');
+          if (license.status !== LicenseStatus.ACTIVE) {
+            throw new ForbiddenException(`License is ${license.status.toLowerCase()}.`);
+          }
+          if (license.expiresAt && license.expiresAt < new Date()) {
+            throw new ForbiddenException('License key has expired.');
+          }
 
-    if (license.status !== LicenseStatus.ACTIVE) {
-      throw new ForbiddenException(`License is ${license.status.toLowerCase()}.`);
-    }
+          const existing = await tx.licenseActivation.findUnique({
+            where: {
+              licenseKeyId_machineHash: {
+                licenseKeyId: license.id,
+                machineHash: params.machineHash,
+              },
+            },
+          });
 
-    if (license.expiresAt && license.expiresAt < new Date()) {
-      throw new ForbiddenException('License key has expired.');
-    }
+          if (existing) {
+            const activation = await tx.licenseActivation.update({
+              where: { id: existing.id },
+              data: {
+                lastPingAt: new Date(),
+                ipAddress: params.ipAddress,
+                deviceInfo: params.deviceInfo || existing.deviceInfo,
+              },
+            });
+            return { license, activation, activationsUsed: license.activationsCount };
+          }
 
-    // Check if machine is already activated
-    const existingActivation = license.activations.find(
-      (act: any) => act.machineHash === params.machineHash,
-    );
+          const slot = await tx.licenseKey.updateMany({
+            where: {
+              id: license.id,
+              status: LicenseStatus.ACTIVE,
+              activationsCount: { lt: license.maxActivations },
+            },
+            data: { activationsCount: { increment: 1 } },
+          });
+          if (slot.count !== 1) {
+            throw new BadRequestException(
+              `Activation limit reached (${license.activationsCount}/${license.maxActivations} seats used). Please deactivate an existing machine first.`,
+            );
+          }
 
-    if (existingActivation) {
-      // Update ping
-      await this.prisma.licenseActivation.update({
-        where: { id: existingActivation.id },
-        data: {
-          lastPingAt: new Date(),
-          ipAddress: params.ipAddress,
-          deviceInfo: params.deviceInfo || existingActivation.deviceInfo,
+          const activation = await tx.licenseActivation.create({
+            data: {
+              licenseKeyId: license.id,
+              machineHash: params.machineHash,
+              deviceInfo: params.deviceInfo || 'Unknown Device',
+              ipAddress: params.ipAddress,
+            },
+          });
+          return { license, activation, activationsUsed: license.activationsCount + 1 };
         },
-      });
-
-      const token = this.jwtService.sign(
-        {
-          licenseId: license.id,
-          activationId: existingActivation.id,
-          machineHash: params.machineHash,
-          productId: license.productId,
-          productSlug: license.product.slug,
-          productName: license.product.name,
-        },
-        { expiresIn: '30d' },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
 
-      return {
-        success: true,
-        activated: true,
-        activationToken: token,
-        license: {
-          id: license.id,
-          keyMasked: license.keyMasked,
-          productName: license.product.name,
-          activationsUsed: license.activations.length,
-          maxActivations: license.maxActivations,
-        },
-      };
+    let result: Awaited<ReturnType<typeof performActivation>> | undefined;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        result = await performActivation();
+        break;
+      } catch (error: any) {
+        if (error?.code !== 'P2034' || attempt === 2) throw error;
+      }
     }
+    if (!result) throw new Error('License activation could not be completed.');
 
-    // Check max activations limit
-    if (license.activations.length >= license.maxActivations) {
-      throw new BadRequestException(
-        `Activation limit reached (${license.activations.length}/${license.maxActivations} seats used). Please deactivate an existing machine first.`,
-      );
-    }
-
-    // Create new activation
-    const activation = await this.prisma.licenseActivation.create({
-      data: {
-        licenseKeyId: license.id,
-        machineHash: params.machineHash,
-        deviceInfo: params.deviceInfo || 'Unknown Device',
-        ipAddress: params.ipAddress,
-      },
-    });
-
-    await this.prisma.licenseKey.update({
-      where: { id: license.id },
-      data: { activationsCount: license.activations.length + 1 },
-    });
+    const { license, activation, activationsUsed } = result;
 
     const token = this.jwtService.sign(
       {
@@ -193,7 +221,7 @@ export class LicensesService {
         id: license.id,
         keyMasked: license.keyMasked,
         productName: license.product.name,
-        activationsUsed: license.activations.length + 1,
+        activationsUsed,
         maxActivations: license.maxActivations,
       },
     };
@@ -205,7 +233,14 @@ export class LicensesService {
   async getUserLicenses(userId: string) {
     return this.prisma.licenseKey.findMany({
       where: { userId },
-      include: {
+      select: {
+        id: true,
+        keyMasked: true,
+        status: true,
+        maxActivations: true,
+        activationsCount: true,
+        expiresAt: true,
+        createdAt: true,
         product: { select: { id: true, name: true, slug: true, type: true } },
         activations: {
           select: {

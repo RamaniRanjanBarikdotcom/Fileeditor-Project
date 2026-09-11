@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Clock, FileText, Download, CheckCircle, XCircle, Loader2, ArrowRight } from 'lucide-react';
+import { Clock, FileText, Download, Loader2 } from 'lucide-react';
 import { fetchWithAuth } from '../../../lib/api';
 
 export default function WorkspaceHistoryPage() {

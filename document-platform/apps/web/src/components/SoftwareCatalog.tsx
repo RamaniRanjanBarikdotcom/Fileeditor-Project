@@ -125,7 +125,16 @@ export function SoftwareCatalog() {
   };
 
   useEffect(() => {
-    void load();
+    let active = true;
+    void fetchApi<CatalogProduct[]>('/products?type=SOFTWARE').then((response) => {
+      if (!active) return;
+      if (response.success && response.data) setProducts(response.data);
+      else setError(response.error?.message || 'The catalog is temporarily unavailable.');
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (

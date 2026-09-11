@@ -115,7 +115,7 @@ export default function FAQPage() {
           </p>
         </div>
       </header>
-      <main className="info-section">
+      <div className="info-section">
         <div className="container-custom faq-layout">
           <aside className="faq-nav">
             <p>Browse topics</p>
@@ -160,7 +160,7 @@ export default function FAQPage() {
             </div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

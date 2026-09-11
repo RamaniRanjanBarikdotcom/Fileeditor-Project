@@ -14,6 +14,7 @@ import { RazorpayService } from './razorpay.service';
 import { PaymentsService } from './payments.service';
 import { PrismaService } from '../common/prisma.service';
 import { PaymentProvider } from '@prisma/client';
+import * as crypto from 'crypto';
 
 @Controller('webhooks')
 export class WebhooksController {
@@ -117,8 +118,17 @@ export class WebhooksController {
       throw new BadRequestException('Invalid signature');
     }
 
-    const eventId = body.event_id || `rzp_${Date.now()}`;
+    const eventId =
+      body.event_id || `rzp_${crypto.createHash('sha256').update(rawBody).digest('hex')}`;
     const eventType = body.event;
+
+    const existingEvent = await this.prisma.webhookEvent.findUnique({
+      where: { eventId },
+    });
+    if (existingEvent?.processedAt) {
+      this.logger.log(`Razorpay event ${eventId} already processed.`);
+      return { received: true };
+    }
 
     const webhookRecord = await this.prisma.webhookEvent.upsert({
       where: {

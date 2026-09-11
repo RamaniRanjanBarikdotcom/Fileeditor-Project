@@ -22,15 +22,12 @@ export class CsrfOriginGuard implements CanActivate {
 
     const origin = req.headers['origin'] as string | undefined;
     const referer = req.headers['referer'] as string | undefined;
-    const requestedWith = req.headers['x-requested-with'] as string | undefined;
-    const clientSecret = req.headers['x-toolsuite-client'] as string | undefined;
-
-    // Allow requests with our custom application header
+    // Bearer-authenticated native/API clients do not rely on ambient cookies,
+    // so they are not vulnerable to browser CSRF. License activation likewise
+    // authenticates with the license itself rather than a browser session.
     if (
-      requestedWith === 'AppToolkitLabApp' ||
-      requestedWith === 'ToolSuiteApp' ||
-      requestedWith === 'XMLHttpRequest' ||
-      clientSecret
+      req.headers.authorization?.startsWith('Bearer ') ||
+      req.originalUrl?.startsWith('/api/v1/licenses/activate')
     ) {
       return true;
     }
@@ -39,10 +36,23 @@ export class CsrfOriginGuard implements CanActivate {
       'CORS_ORIGIN',
       'http://localhost:3000,http://localhost:5173,http://localhost:4000',
     );
-    const allowedOrigins = allowedOriginsConfig.split(',').map((o) => o.trim());
+    const allowedOrigins = new Set(
+      allowedOriginsConfig
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map((value) => {
+          try { return new URL(value).origin; } catch { return ''; }
+        })
+        .filter(Boolean),
+    );
+
+    const getOrigin = (value: string): string | null => {
+      try { return new URL(value).origin; } catch { return null; }
+    };
 
     if (origin) {
-      const isAllowedOrigin = allowedOrigins.some((allowed) => origin.startsWith(allowed));
+      const isAllowedOrigin = allowedOrigins.has(getOrigin(origin) || '');
       if (!isAllowedOrigin && process.env.NODE_ENV === 'production') {
         throw new ForbiddenException(`Untrusted origin: ${origin}`);
       }
@@ -50,14 +60,14 @@ export class CsrfOriginGuard implements CanActivate {
     }
 
     if (referer) {
-      const isAllowedReferer = allowedOrigins.some((allowed) => referer.startsWith(allowed));
+      const isAllowedReferer = allowedOrigins.has(getOrigin(referer) || '');
       if (!isAllowedReferer && process.env.NODE_ENV === 'production') {
         throw new ForbiddenException(`Untrusted referer: ${referer}`);
       }
       return true;
     }
 
-    // In production, block state mutations without Origin/Referer/Custom Header
+    // In production, block cookie-authenticated mutations without Origin/Referer.
     if (process.env.NODE_ENV === 'production') {
       throw new ForbiddenException(
         'CSRF/Origin validation failed: Missing origin or validation headers.',

@@ -120,6 +120,11 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: local-development-secret-change-before-production
       JWT_REFRESH_SECRET: local-development-refresh-secret-change-before-production
+      LICENSE_ENCRYPTION_KEY: local-development-license-secret-change-before-production
+      CHECKOUT_RETURN_ORIGINS: http://localhost:5173
+      SWAGGER_ENABLED: "false"
+      FEATURE_SUBSCRIPTIONS: "false"
+      FEATURE_ADMIN: "false"
       STORAGE_ENDPOINT: http://minio:9000
       STORAGE_PUBLIC_ENDPOINT: http://localhost:9000
       STORAGE_ACCESS_KEY: minioadmin
@@ -143,7 +148,7 @@ services:
     command:
       - /bin/sh
       - -c
-      - corepack pnpm --filter @docconv/api exec prisma db push --skip-generate && corepack pnpm --filter @docconv/api exec prisma db seed && node apps/api/dist/main.js
+      - corepack pnpm --filter @docconv/api exec prisma db execute --file prisma/migrations/20260910000000_secure_license_fulfillment/migration.sql --schema prisma/schema.prisma && corepack pnpm --filter @docconv/api exec prisma db push --skip-generate && corepack pnpm --filter @docconv/api exec prisma db seed && node apps/api/dist/main.js
     depends_on:
       postgres:
         condition: service_healthy
@@ -185,6 +190,8 @@ services:
       MAX_OUTPUT_SIZE_BYTES: 104857600
       MAX_OCR_PAGES: 100
       OCR_LANGUAGES: eng
+      PDF_TO_DOCX_ENGINE: pdf2docx
+      PDF2DOCX_BIN: /usr/local/bin/pdf2docx
     depends_on:
       api:
         condition: service_healthy

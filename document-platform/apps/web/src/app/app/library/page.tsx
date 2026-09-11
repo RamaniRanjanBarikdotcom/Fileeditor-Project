@@ -10,10 +10,7 @@ import {
   Check,
   Loader2,
   Terminal,
-  Code2,
-  Sparkles,
   ArrowRight,
-  ShieldCheck,
 } from 'lucide-react';
 import { fetchApi } from '../../../lib/api';
 
@@ -54,8 +51,8 @@ export default function CustomerLibraryPage() {
     setDownloadingId(null);
   };
 
-  const handleCopyKey = (keyMasked: string, id: string) => {
-    navigator.clipboard.writeText(keyMasked);
+  const handleCopyKey = (key: string, id: string) => {
+    navigator.clipboard.writeText(key);
     setCopiedKeyId(id);
     setTimeout(() => setCopiedKeyId(null), 2000);
   };
@@ -164,11 +161,14 @@ export default function CustomerLibraryPage() {
                       Activation License Key:
                     </span>
                     <div className="flex items-center gap-2 font-mono font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 w-fit">
-                      <span>{item.license.keyMasked}</span>
+                      <span>{item.license.key || item.license.keyMasked}</span>
                       <button
-                        onClick={() => handleCopyKey(item.license.keyMasked, item.license.id)}
+                        onClick={() =>
+                          item.license.key && handleCopyKey(item.license.key, item.license.id)
+                        }
+                        disabled={!item.license.key}
                         className="text-slate-400 hover:text-indigo-600 ml-1"
-                        title="Copy Key"
+                        title={item.license.key ? 'Copy license key' : 'Legacy key cannot be revealed'}
                       >
                         {copiedKeyId === item.license.id ? (
                           <Check className="w-3.5 h-3.5 text-emerald-500" />

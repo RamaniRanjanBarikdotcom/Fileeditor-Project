@@ -128,7 +128,16 @@ export default function AutomationsPage() {
   };
 
   useEffect(() => {
-    void loadCatalog();
+    let active = true;
+    void fetchApi<Product[]>('/products?type=AUTOMATION').then((response) => {
+      if (!active) return;
+      if (response.success && response.data) setItems(response.data);
+      else setError(response.error?.message || 'The automation catalog is temporarily unavailable.');
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (

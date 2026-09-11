@@ -6,12 +6,8 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import {
   Download,
-  Loader2,
-  CheckCircle,
-  XCircle,
   Type,
   Code,
-  Sparkles,
   FileDown,
 } from 'lucide-react';
 import { fetchWithAuth } from '../../../lib/api';
@@ -25,7 +21,6 @@ export default function WorkspaceEditorPage() {
     '# Title\n\nStart typing your markdown here...',
   );
   const [status, setStatus] = useState<'idle' | 'converting' | 'complete' | 'error'>('idle');
-  const [progress, setProgress] = useState(0);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { theme } = useTheme();
@@ -43,7 +38,6 @@ export default function WorkspaceEditorPage() {
   const handleExport = async (targetFormat: string = 'pdf') => {
     try {
       setStatus('converting');
-      setProgress(15);
       setError(null);
 
       let content = '';
@@ -73,7 +67,6 @@ export default function WorkspaceEditorPage() {
         throw new Error(uploadData.error?.message || 'Failed to upload document');
 
       const sourceFileId = uploadData.data.id;
-      setProgress(45);
 
       const convRes = await fetchWithAuth('/api/v1/conversions', {
         method: 'POST',
@@ -93,10 +86,8 @@ export default function WorkspaceEditorPage() {
         const res = await fetchWithAuth(`/api/v1/conversions/${jobId}`);
         const data = await res.json();
         if (data.success && data.data) {
-          setProgress(Math.max(60, data.data.progress || 70));
           if (data.data.status === 'COMPLETED') {
             clearInterval(poll);
-            setProgress(100);
             const downloadRes = await fetchWithAuth(`/api/v1/conversions/${jobId}/download-url`, {
               method: 'POST',
             });

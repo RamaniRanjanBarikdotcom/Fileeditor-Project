@@ -81,7 +81,7 @@ export default function BlogPage() {
           </p>
         </div>
       </header>
-      <main>
+      <div>
         <section className="info-section">
           <div className="container-custom">
             <div className="blog-grid">
@@ -221,7 +221,7 @@ export default function BlogPage() {
             </article>
           </div>
         </section>
-      </main>
+      </div>
     </div>
   );
 }

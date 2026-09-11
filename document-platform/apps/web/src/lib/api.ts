@@ -34,7 +34,18 @@ export async function fetchApi<T = any>(
     credentials: 'include',
   };
 
-  let response = await fetch(url, fetchOptions);
+  let response: Response;
+  try {
+    response = await fetch(url, fetchOptions);
+  } catch {
+    return {
+      success: false,
+      error: {
+        code: 'NETWORK_ERROR' as any,
+        message: 'The server is unavailable. Check your connection and try again.',
+      },
+    };
+  }
 
   // If 401 Unauthorized, try to refresh token automatically
   if (
@@ -71,13 +82,17 @@ export async function fetchApi<T = any>(
     const data = await response.json();
     return data;
   } catch {
+    const message =
+      response.status >= 500
+        ? 'The service is temporarily unavailable. Please try again shortly.'
+        : `The request failed (${response.status}). Please try again.`;
     return {
       success: response.ok,
       error: response.ok
         ? undefined
         : {
             code: 'INTERNAL_ERROR' as any,
-            message: `HTTP ${response.status}: ${response.statusText}`,
+            message,
           },
     };
   }

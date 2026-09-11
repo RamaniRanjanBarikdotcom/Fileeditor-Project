@@ -65,7 +65,7 @@ export default function AboutPage() {
         </div>
       </header>
 
-      <main>
+      <div>
         <section className="info-section">
           <div className="container-custom">
             <div className="info-section-heading">
@@ -310,7 +310,7 @@ export default function AboutPage() {
             </div>
           </div>
         </section>
-      </main>
+      </div>
     </div>
   );
 }

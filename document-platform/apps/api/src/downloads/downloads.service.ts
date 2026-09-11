@@ -1,13 +1,17 @@
 import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { StorageClient, createStorageConfig } from '@docconv/storage';
+import { LicensesService } from '../licenses/licenses.service';
 
 @Injectable()
 export class DownloadsService {
   private readonly logger = new Logger(DownloadsService.name);
   private readonly storage: StorageClient;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly licensesService: LicensesService,
+  ) {
     this.storage = new StorageClient(createStorageConfig(process.env as Record<string, string>));
   }
 
@@ -100,6 +104,8 @@ export class DownloadsService {
             },
             licenses: {
               where: { userId },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
               include: {
                 activations: true,
               },
@@ -133,6 +139,9 @@ export class DownloadsService {
           ? {
               id: license.id,
               keyMasked: license.keyMasked,
+              key: license.keyCiphertext
+                ? this.licensesService.decryptKey(license.keyCiphertext)
+                : null,
               status: license.status,
               activationsUsed: license.activations.length,
               maxActivations: license.maxActivations,

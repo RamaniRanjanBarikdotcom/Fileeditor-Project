@@ -28,8 +28,8 @@ export class FeatureFlagsService {
         Boolean(this.config.get<string>('RAZORPAY_KEY_ID')) &&
           Boolean(this.config.get<string>('RAZORPAY_KEY_SECRET')),
       ),
-      subscriptionsEnabled: this.parseFlag('FEATURE_SUBSCRIPTIONS', true),
-      adminPortalEnabled: this.parseFlag('FEATURE_ADMIN_PORTAL', true),
+      subscriptionsEnabled: this.parseFlag('FEATURE_SUBSCRIPTIONS', false),
+      adminPortalEnabled: this.parseFlag('FEATURE_ADMIN_PORTAL', false),
       anonymousUsageEnabled: this.parseFlag('FEATURE_ANONYMOUS_USAGE', true),
     };
   }

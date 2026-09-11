@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Sparkles, Mail, Lock, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
+import { Sparkles, Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
 import { fetchApi, setAccessToken } from '../../lib/api';
 
 export default function LoginPage() {

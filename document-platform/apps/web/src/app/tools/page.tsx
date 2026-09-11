@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight, Check, ChevronRight, Search, Sparkles, Wrench, Zap,
-  ShieldCheck, Download, Cpu,
 } from 'lucide-react';
 import { ToolDto } from '@docconv/shared-types';
 import { TOOL_PRESENTATION_MAP } from '../../lib/tools-registry';

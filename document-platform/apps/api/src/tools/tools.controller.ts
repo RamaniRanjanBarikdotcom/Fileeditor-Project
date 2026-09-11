@@ -9,8 +9,6 @@ import {
   Res,
   UseInterceptors,
   UploadedFile,
-  HttpCode,
-  HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
@@ -150,9 +148,9 @@ export class ToolsController {
   }
 
   private getClientIp(req: Request): string {
-    const forwarded = req.headers['x-forwarded-for'];
-    const forwardedIp = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0];
-    return forwardedIp?.trim() || req.ip || '127.0.0.1';
+    // Express derives this from the configured trusted proxy chain. Reading
+    // x-forwarded-for directly would allow callers to rotate spoofed addresses.
+    return req.ip || req.socket.remoteAddress || '127.0.0.1';
   }
 
   private ensureAnonymousIdentity(req: Request, res: Response) {

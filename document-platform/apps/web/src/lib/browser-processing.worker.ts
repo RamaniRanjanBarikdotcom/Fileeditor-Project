@@ -14,5 +14,3 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   const result = await processInBrowser(operation, files, options);
   self.postMessage({ id, result });
 };
-
-export {};

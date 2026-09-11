@@ -6,6 +6,7 @@ import { PaymentsService } from '../payments/payments.service';
 import { CartService } from './cart.service';
 import { CurrencyCode, OrderStatus, PaymentProvider } from '@prisma/client';
 import * as crypto from 'crypto';
+import { ConfigService } from '@nestjs/config';
 
 export interface CheckoutDto {
   productId?: string;
@@ -31,7 +32,38 @@ export class OrdersService {
     private readonly razorpayService: RazorpayService,
     private readonly paymentsService: PaymentsService,
     private readonly cartService: CartService,
+    private readonly config: ConfigService,
   ) {}
+
+  private validateReturnUrl(rawUrl: string): string {
+    let parsed: URL;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      throw new BadRequestException('Checkout return URL is invalid.');
+    }
+    const configured = [
+      this.config.get<string>('CHECKOUT_RETURN_ORIGINS'),
+      this.config.get<string>('PUBLIC_WEB_URL'),
+      this.config.get<string>('CORS_ORIGIN'),
+    ]
+      .filter(Boolean)
+      .join(',');
+    const allowed = new Set(
+      (configured || 'http://localhost:3000,http://localhost:5173,https://apptoolkitlab.com')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map((value) => {
+          try { return new URL(value).origin; } catch { return ''; }
+        })
+        .filter(Boolean),
+    );
+    if (!allowed.has(parsed.origin)) {
+      throw new BadRequestException('Checkout return URL origin is not allowed.');
+    }
+    return parsed.toString();
+  }
 
   private generateOrderNumber(): string {
     const d = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -45,6 +77,8 @@ export class OrdersService {
   async createCheckoutSession(userId: string, dto: CheckoutDto) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found.');
+    const successUrl = this.validateReturnUrl(dto.successUrl);
+    const cancelUrl = this.validateReturnUrl(dto.cancelUrl);
 
     let orderItems: {
       productId: string;
@@ -162,18 +196,14 @@ export class OrdersService {
           amountMinorUnits: it.unitPriceMinorUnits,
           quantity: it.quantity,
         })),
-        successUrl: dto.successUrl,
-        cancelUrl: dto.cancelUrl,
+        successUrl,
+        cancelUrl,
       });
 
       await this.prisma.order.update({
         where: { id: order.id },
         data: { providerOrderId: stripeSession.sessionId },
       });
-
-      if (!dto.productId) {
-        await this.cartService.clearCart(userId);
-      }
 
       return {
         provider: PaymentProvider.STRIPE,
@@ -194,10 +224,6 @@ export class OrdersService {
         data: { providerOrderId: rzpOrder.razorpayOrderId },
       });
 
-      if (!dto.productId) {
-        await this.cartService.clearCart(userId);
-      }
-
       return {
         provider: PaymentProvider.RAZORPAY,
         orderId: order.id,
@@ -214,6 +240,16 @@ export class OrdersService {
    * Verify Razorpay Client Signature and Fulfill Order.
    */
   async verifyClientRazorpayPayment(userId: string, dto: VerifyRazorpayPaymentDto) {
+    const order = await this.prisma.order.findFirst({
+      where: {
+        id: dto.orderId,
+        userId,
+        paymentProvider: PaymentProvider.RAZORPAY,
+        providerOrderId: dto.razorpayOrderId,
+      },
+      select: { id: true },
+    });
+    if (!order) throw new NotFoundException('Payment order not found.');
     const isValid = this.razorpayService.verifyPaymentSignature({
       razorpayOrderId: dto.razorpayOrderId,
       razorpayPaymentId: dto.razorpayPaymentId,

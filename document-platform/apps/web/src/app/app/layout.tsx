@@ -4,26 +4,19 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  FileText,
   Clock,
   Settings,
   LogOut,
   ArrowLeftRight,
   Edit,
-  Sun,
-  Moon,
-  ChevronRight,
   ShoppingBag,
   Sparkles,
-  Zap,
 } from 'lucide-react';
-import { useTheme } from '../../lib/ThemeContext';
 import { fetchApi, setAccessToken } from '../../lib/api';
 
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { theme, toggleTheme } = useTheme();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -74,10 +67,23 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
     },
   ];
 
+  if (loading) {
+    return (
+      <div className="flex min-h-[calc(100dvh-4rem)] items-center justify-center bg-white dark:bg-slate-950">
+        <div className="flex items-center gap-3 text-sm font-medium text-slate-500 dark:text-slate-400" role="status">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+          Opening your workspace…
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
   return (
-    <div className="flex h-[calc(100vh-4rem)] bg-white dark:bg-slate-950 font-sans">
+    <div className="flex min-h-[calc(100dvh-4rem)] flex-col bg-white font-sans dark:bg-slate-950 lg:h-[calc(100dvh-4rem)] lg:flex-row">
       {/* Workspace Sidebar */}
-      <aside className="w-64 min-w-64 flex flex-col bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">
+      <aside className="flex w-full flex-col border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900 lg:w-64 lg:min-w-64 lg:border-b-0 lg:border-r">
         {/* Workspace Brand / Org Header */}
         <div className="h-16 flex items-center px-5 border-b border-slate-200 dark:border-slate-800 gap-3">
           <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-sm">
@@ -94,8 +100,8 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 py-2">
+        <nav className="flex gap-2 overflow-x-auto p-2 lg:flex-1 lg:flex-col lg:gap-0 lg:space-y-1 lg:overflow-y-auto lg:p-3">
+          <div className="hidden text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 py-2 lg:block">
             Workspace Tools
           </div>
           {navItems.map((item) => {
@@ -105,7 +111,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
               <Link
                 key={item.name}
                 href={item.path}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-medium transition-all lg:gap-3 ${
                   isActive
                     ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20 font-semibold'
                     : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800'
@@ -119,12 +125,12 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
             );
           })}
 
-          <div className="pt-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 py-2">
+          <div className="hidden pt-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 py-2 lg:block">
             Marketplace & Store
           </div>
           <Link
             href="/software"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800"
+            className="flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-200/60 dark:text-slate-300 dark:hover:bg-slate-800 lg:gap-3"
           >
             <ShoppingBag className="w-4 h-4 text-indigo-500" />
             <span>Software Store</span>
@@ -132,7 +138,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
         </nav>
 
         {/* User Card & Logout */}
-        <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="hidden items-center justify-between border-t border-slate-200 p-3 dark:border-slate-800 lg:flex">
           <div className="flex flex-col overflow-hidden">
             <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
               {user?.email || 'Authenticated User'}
@@ -149,9 +155,9 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950 p-6 md:p-8">
+      <section className="min-w-0 flex-1 overflow-y-auto bg-slate-50/50 p-4 dark:bg-slate-950 sm:p-6 md:p-8">
         {children}
-      </main>
+      </section>
     </div>
   );
 }

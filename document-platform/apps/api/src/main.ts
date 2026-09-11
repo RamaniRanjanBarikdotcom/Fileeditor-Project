@@ -71,29 +71,33 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
 
   // ─── Swagger / OpenAPI ─────────────────────────────────────
-  const config = new DocumentBuilder()
-    .setTitle('AppToolkitLab Platform API')
-    .setDescription('Enterprise Multi-Tool, SaaS Subscription & Software Marketplace API')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .addTag('auth', 'Authentication, session & user verification endpoints')
-    .addTag('feature-flags', 'Platform feature flag status')
-    .addTag('tools', 'Server-authoritative tool registry & execution')
-    .addTag('files', 'File upload and storage management')
-    .addTag('conversions', 'Document conversion operations & quota management')
-    .addTag('templates', 'Document templates')
-    .addTag('presets', 'Conversion presets')
-    .addTag('health', 'Health check endpoints')
-    .build();
+  const swaggerEnabled =
+    process.env.SWAGGER_ENABLED === 'true' || process.env.NODE_ENV !== 'production';
+  if (swaggerEnabled) {
+    const config = new DocumentBuilder()
+      .setTitle('AppToolkitLab Platform API')
+      .setDescription('Enterprise Multi-Tool, SaaS Subscription & Software Marketplace API')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .addTag('auth', 'Authentication, session & user verification endpoints')
+      .addTag('feature-flags', 'Platform feature flag status')
+      .addTag('tools', 'Server-authoritative tool registry & execution')
+      .addTag('files', 'File upload and storage management')
+      .addTag('conversions', 'Document conversion operations & quota management')
+      .addTag('templates', 'Document templates')
+      .addTag('presets', 'Conversion presets')
+      .addTag('health', 'Health check endpoints')
+      .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   // ─── Start Server ─────────────────────────────────────────
   const port = process.env.PORT || 4201;
   await app.listen(port);
   console.log(`🚀 AppToolkitLab API running on http://localhost:${port}`);
-  console.log(`📚 Swagger docs at http://localhost:${port}/api/docs`);
+  if (swaggerEnabled) console.log(`📚 Swagger docs at http://localhost:${port}/api/docs`);
 }
 
 bootstrap();
