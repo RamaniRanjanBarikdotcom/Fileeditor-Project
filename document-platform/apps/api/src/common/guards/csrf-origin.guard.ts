@@ -1,12 +1,16 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 
 @Injectable()
 export class CsrfOriginGuard implements CanActivate {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly jwtService: JwtService,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<Request>();
     const method = req.method.toUpperCase();
 
@@ -20,16 +24,25 @@ export class CsrfOriginGuard implements CanActivate {
       return true;
     }
 
-    const origin = req.headers['origin'] as string | undefined;
-    const referer = req.headers['referer'] as string | undefined;
-    // Bearer-authenticated native/API clients do not rely on ambient cookies,
-    // so they are not vulnerable to browser CSRF. License activation likewise
-    // authenticates with the license itself rather than a browser session.
-    if (
-      req.headers.authorization?.startsWith('Bearer ') ||
-      req.originalUrl?.startsWith('/api/v1/licenses/activate')
-    ) {
+    // License activation authenticates with the license key payload
+    if (req.originalUrl?.startsWith('/api/v1/licenses/activate')) {
       return true;
+    }
+
+    // Bearer-authenticated API clients do not rely on ambient cookies.
+    // However, we MUST cryptographically verify the JWT to prevent bypass via forged or unverified Bearer headers.
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7).trim();
+      if (token) {
+        try {
+          const secret = this.config.get<string>('JWT_SECRET', 'dev-secret-change-me');
+          await this.jwtService.verifyAsync(token, { secret });
+          return true; // Verified Bearer token
+        } catch {
+          // Token is invalid, expired, or forged - fall through to strict origin/referer verification
+        }
+      }
     }
 
     const allowedOriginsConfig = this.config.get<string>(
@@ -50,6 +63,9 @@ export class CsrfOriginGuard implements CanActivate {
     const getOrigin = (value: string): string | null => {
       try { return new URL(value).origin; } catch { return null; }
     };
+
+    const origin = req.headers['origin'] as string | undefined;
+    const referer = req.headers['referer'] as string | undefined;
 
     if (origin) {
       const isAllowedOrigin = allowedOrigins.has(getOrigin(origin) || '');

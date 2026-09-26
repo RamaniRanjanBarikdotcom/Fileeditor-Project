@@ -7,6 +7,8 @@ const FOOTER_GROUPS = [
     title: 'Popular tools',
     links: [
       { name: 'PDF to Word', href: '/tools/pdf-to-docx' },
+      { name: 'PDF to Markdown', href: '/tools/pdf-to-markdown' },
+      { name: 'PDF to Images', href: '/tools/pdf-to-images' },
       { name: 'PDF OCR Extractor', href: '/tools/pdf-ocr' },
       { name: 'URL to PDF', href: '/tools/url-to-pdf' },
       { name: 'URL to Word', href: '/tools/url-to-docx' },

@@ -1,15 +1,18 @@
 import { Injectable, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma.service';
+import { MalwareScanStatus } from '@prisma/client';
 import { StorageClient, createStorageConfig } from '@docconv/storage';
 import { validateFile, sanitizeFilename, getExtension } from '@docconv/file-validation';
 import { MIME_TYPES } from '@docconv/shared-types';
 import { UrlInspectorService } from './url-inspector.service';
 import { UrlSecurityService } from '@docconv/url-security';
+import { ClamAvScanner } from './clamav.scanner';
 
 @Injectable()
 export class FilesService implements OnModuleInit {
   private storage: StorageClient;
+  private readonly clamScanner = new ClamAvScanner();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -36,27 +39,38 @@ export class FilesService implements OnModuleInit {
   ) {
     const maxSize = this.config.get<number>('MAX_UPLOAD_SIZE_BYTES', 250 * 1024 * 1024);
 
-    // Validate
+    // Basic validation
     const sanitizedName = sanitizeFilename(file.originalname);
     const validation = validateFile(sanitizedName, file.buffer, maxSize);
+
     if (!validation.valid) {
       const messages = validation.errors.map((e) => e.message).join('; ');
-      throw new BadRequestException(messages);
+      throw new BadRequestException(`File validation failed: ${messages}`);
     }
 
     let ext = getExtension(sanitizedName) ?? 'bin';
+    let detectedType = validation.detectedType || ext;
     let mimeType = MIME_TYPES[ext] ?? file.mimetype;
-    let detectedType = validation.detectedType;
     let finalBuffer = file.buffer;
 
-    // Phase 1 URL Logic: Verify SSRF and Inspect URL before storing
-    if (ext === 'url') {
-      const urlString = finalBuffer.toString('utf-8').trim();
-      // Security Check (SSRF protection)
+    // Reject HTML disguises
+    if (ext === 'html' || ext === 'htm') {
+      const htmlText = finalBuffer.toString('utf-8');
+      if (
+        htmlText.includes('%PDF') ||
+        htmlText.includes('PK\x03\x04') ||
+        htmlText.includes('\xd0\xcf\x11\xe0')
+      ) {
+        throw new BadRequestException('File content does not match HTML extension.');
+      }
+    }
+
+    if (ext === 'url' || file.mimetype === 'text/uri-list') {
+      const rawUrl = file.buffer.toString('utf8').trim();
       try {
-        await this.urlSecurity.validateUrl(urlString);
-        const inspection = await this.urlInspector.inspect(urlString, (candidate) =>
-          this.urlSecurity.validateUrl(candidate),
+        const inspection = await this.urlInspector.inspect(
+          rawUrl,
+          (candidate) => this.urlSecurity.validateUrl(candidate),
         );
         // Store the final validated redirect target. The object itself remains
         // a URL document, not the remote page's MIME type.
@@ -71,6 +85,26 @@ export class FilesService implements OnModuleInit {
 
     // Upload to quarantine storage
     await this.storage.upload('quarantine', storageKey, finalBuffer, mimeType);
+
+    // Scan buffer with ClamAV
+    const scanResult = await this.clamScanner.scanBuffer(finalBuffer);
+
+    if (scanResult.status === 'FAILED' && scanResult.virus) {
+      await this.storage.delete('quarantine', storageKey).catch(() => undefined);
+      throw new BadRequestException(`Malware detected in uploaded file: ${scanResult.virus}`);
+    }
+
+    if (scanResult.status !== 'PASSED' && process.env.NODE_ENV === 'production') {
+      await this.storage.delete('quarantine', storageKey).catch(() => undefined);
+      throw new BadRequestException('File security scan failed. Upload rejected.');
+    }
+
+    let malwareScanStatus: MalwareScanStatus = MalwareScanStatus.SKIPPED;
+    if (scanResult.status === 'PASSED') {
+      malwareScanStatus = MalwareScanStatus.CLEAN;
+    } else if (scanResult.status === 'FAILED') {
+      malwareScanStatus = scanResult.virus ? MalwareScanStatus.INFECTED : MalwareScanStatus.ERROR;
+    }
 
     // Calculate expiry
     const retentionSeconds = Math.min(
@@ -91,12 +125,12 @@ export class FilesService implements OnModuleInit {
         detectedType,
         sizeBytes: BigInt(finalBuffer.length),
         status: 'QUARANTINE',
-        malwareScanStatus: 'SKIPPED', // ClamAV disabled in dev
+        malwareScanStatus,
         expiresAt,
       },
     });
 
-    // Move to inputs (since malware scanning is skipped in dev)
+    // Move to inputs
     const inputKey = this.storage.generateStorageKey(orgId, userId, 'inputs', ext);
     await this.storage.move('quarantine', storageKey, 'inputs', inputKey);
 
@@ -227,5 +261,31 @@ export class FilesService implements OnModuleInit {
     }
 
     return { success: true };
+  }
+
+  /** Store an application-generated asset without pretending it is a user upload. */
+  async storeGeneratedAsset(
+    organizationId: string,
+    userId: string,
+    buffer: Buffer,
+    mimeType: string,
+    extension: string,
+  ) {
+    const storageKey = this.storage.generateStorageKey(
+      organizationId,
+      userId,
+      'outputs',
+      extension,
+    );
+    await this.storage.upload('outputs', storageKey, buffer, mimeType);
+    return { storageKey, sizeBytes: buffer.length };
+  }
+
+  deleteGeneratedAsset(storageKey: string) {
+    return this.storage.delete('outputs', storageKey);
+  }
+
+  getGeneratedAssetUrl(storageKey: string, filename?: string) {
+    return this.storage.getSignedDownloadUrl('outputs', storageKey, 900, filename);
   }
 }

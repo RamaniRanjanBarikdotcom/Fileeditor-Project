@@ -19,6 +19,7 @@ import {
   Users,
 } from 'lucide-react';
 import { fetchApi } from '../lib/api';
+import { useFeatureFlags } from '../lib/use-feature-flags';
 
 type Currency = 'USD' | 'INR';
 type CatalogPrice = { currency: Currency; amountMinorUnits: number; provider: string };
@@ -110,6 +111,7 @@ const SOFTWARE_FAQS = [
 ];
 
 export function SoftwareCatalog() {
+  const featureFlags = useFeatureFlags();
   const [currency, setCurrency] = useState<Currency>('USD');
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,7 +187,7 @@ export function SoftwareCatalog() {
             <div className="software-trust-row">
               <span>
                 <ShieldCheck className="h-4 w-4" />
-                Secure routed checkout
+                {featureFlags.storeCheckout ? 'Secure routed checkout' : 'Preview catalog'}
               </span>
               <span>
                 <Package className="h-4 w-4" />
@@ -262,7 +264,11 @@ export function SoftwareCatalog() {
                 const Icon = index % 2 ? Code2 : Terminal;
                 const accent = index % 2 ? '#a855f7' : '#6366f1';
                 const price = product.prices.find((item) => item.currency === currency);
-                const available = Boolean(product.currentRelease && price);
+                const providerEnabled =
+                  currency === 'INR' ? featureFlags.razorpayEnabled : featureFlags.stripeEnabled;
+                const available = Boolean(
+                  product.currentRelease && price && featureFlags.storeCheckout && providerEnabled,
+                );
                 return (
                   <article
                     key={product.id}

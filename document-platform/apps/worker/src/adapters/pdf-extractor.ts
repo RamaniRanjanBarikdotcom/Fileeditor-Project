@@ -7,7 +7,19 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { workerLogger } from '@docconv/logging';
-import { Document, Packer, PageBreak, Paragraph, TextRun } from 'docx';
+import type { ConversionOptions } from '@docconv/shared-types';
+import {
+  Document,
+  HorizontalPositionRelativeFrom,
+  ImageRun,
+  Packer,
+  PageBreak,
+  Paragraph,
+  TextRun,
+  VerticalPositionRelativeFrom,
+} from 'docx';
+import { PDFDocument } from 'pdf-lib';
+import JSZip from 'jszip';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { PDFParse } = require('pdf-parse');
 
@@ -24,7 +36,12 @@ const execFileAsync = promisify(execFile);
  * The primary path works out-of-the-box in dev without Homebrew packages.
  */
 export class PdfExtractorAdapter {
-  async convert(inputStream: Readable, targetFormat: string): Promise<Readable> {
+  async convert(
+    inputStream: Readable,
+    targetFormat: string,
+    options: ConversionOptions = {},
+    signal?: AbortSignal,
+  ): Promise<Readable> {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docconv-pdf-'));
     const inputPath = path.join(tmpDir, 'input.pdf');
     const timeout = Number(process.env.CONVERSION_TIMEOUT_MS || 120_000);
@@ -32,26 +49,56 @@ export class PdfExtractorAdapter {
     try {
       // Save the stream to disk so we can use it with both pdf-parse and pdftotext
       await pipeline(inputStream, createWriteStream(inputPath));
+      await this.validateSourcePdf(inputPath, timeout, signal);
 
       const target = targetFormat.toLowerCase();
+
+      // This mode intentionally prioritizes appearance over editability. It is
+      // handled before text extraction so scanned and vector-only PDFs work too.
+      if (target === 'docx' && options.pdfFidelityMode === 'visual') {
+        return Readable.from(await this.convertToVisualDocx(inputPath, tmpDir, timeout, signal));
+      }
+      if (target === 'docx' && options.pdfFidelityMode === 'fixed') {
+        return Readable.from(
+          await this.convertToFixedEditableDocx(inputPath, tmpDir, timeout, signal),
+        );
+      }
+      if (target === 'zip') {
+        return Readable.from(
+          await this.convertToImageArchive(inputPath, tmpDir, timeout, options, signal),
+        );
+      }
 
       // ── Step 1: Extract text ─────────────────────────────────────────────
       let extractedText = '';
       let usedOcr = false;
 
-      // Try fast pure-JS extraction first (always works, no system deps)
-      try {
-        const pdfBuffer = await fs.readFile(inputPath);
-        const parser = new PDFParse({ data: pdfBuffer });
-        try {
-          const parsed = await parser.getText();
-          extractedText = parsed.text || '';
-        } finally {
-          await parser.destroy();
+      if (options.pdfFidelityMode === 'ocr') {
+        const hasTesseract = await this.commandExists('tesseract');
+        const hasPdftoPpm = await this.commandExists('pdftoppm');
+        if (!hasTesseract || !hasPdftoPpm) {
+          throw new Error(
+            'OCR requires tesseract and poppler-utils (pdftoppm) to be installed on the server.',
+          );
         }
-        workerLogger.debug({ chars: extractedText.length }, 'pdf-parse extracted text');
-      } catch (pdfParseErr: any) {
-        workerLogger.warn({ err: pdfParseErr.message }, 'pdf-parse failed, trying pdftotext');
+        workerLogger.info({}, 'Forcing OCR mode on PDF extraction');
+        extractedText = await this.ocrScannedPdf(inputPath, tmpDir, timeout, signal);
+        usedOcr = true;
+      } else {
+        // Try fast pure-JS extraction first (always works, no system deps)
+        try {
+          const pdfBuffer = await fs.readFile(inputPath);
+          const parser = new PDFParse({ data: pdfBuffer });
+          try {
+            const parsed = await parser.getText();
+            extractedText = parsed.text || '';
+          } finally {
+            await parser.destroy();
+          }
+          workerLogger.debug({ chars: extractedText.length }, 'pdf-parse extracted text');
+        } catch (pdfParseErr: any) {
+          workerLogger.warn({ err: pdfParseErr.message }, 'pdf-parse failed, trying pdftotext');
+        }
       }
 
       // If pdf-parse gave us nothing, try pdftotext (if installed)
@@ -63,6 +110,7 @@ export class PdfExtractorAdapter {
             await execFileAsync('pdftotext', ['-layout', '-enc', 'UTF-8', inputPath, textPath], {
               timeout,
               maxBuffer: 10 * 1024 * 1024,
+              signal,
             });
             extractedText = await fs.readFile(textPath, 'utf8').catch(() => '');
             workerLogger.debug({ chars: extractedText.length }, 'pdftotext extracted text');
@@ -78,7 +126,7 @@ export class PdfExtractorAdapter {
         const hasPdftoPpm = await this.commandExists('pdftoppm');
         if (hasTesseract && hasPdftoPpm) {
           workerLogger.info({}, 'Attempting OCR on PDF (likely scanned)');
-          extractedText = await this.ocrScannedPdf(inputPath, tmpDir, timeout);
+          extractedText = await this.ocrScannedPdf(inputPath, tmpDir, timeout, signal);
           usedOcr = extractedText.replace(/\s/g, '').length >= 20;
         }
       }
@@ -109,7 +157,12 @@ export class PdfExtractorAdapter {
         // OCR-only PDFs still use the editable text fallback below because pdf2docx
         // cannot make text inside a scanned page image editable.
         if (!usedOcr) {
-          const highFidelityDocx = await this.convertToLayoutAwareDocx(inputPath, tmpDir, timeout);
+          const highFidelityDocx = await this.convertToLayoutAwareDocx(
+            inputPath,
+            tmpDir,
+            timeout,
+            signal,
+          );
           if (highFidelityDocx) return Readable.from(highFidelityDocx);
         }
 
@@ -149,7 +202,7 @@ export class PdfExtractorAdapter {
       }
 
       if (target === 'markdown' || target === 'md') {
-        return Readable.from(Buffer.from(extractedText, 'utf8'));
+        return Readable.from(Buffer.from(extractedTextToMarkdown(extractedText), 'utf8'));
       }
 
       throw new Error(`PDF conversion to '${targetFormat}' is not supported.`);
@@ -158,6 +211,180 @@ export class PdfExtractorAdapter {
         workerLogger.warn({ error, tmpDir }, 'Failed to clean up PDF conversion files');
       });
     }
+  }
+
+  /**
+   * Render pages with Poppler rather than a browser canvas. Poppler consumes
+   * embedded Type 1/Type 1C/CFF/TrueType/OpenType glyph programs directly and
+   * uses fontconfig fallbacks for the uncommon PDFs that omit their fonts.
+   */
+  private async convertToImageArchive(
+    inputPath: string,
+    tmpDir: string,
+    timeout: number,
+    options: ConversionOptions,
+    signal?: AbortSignal,
+  ): Promise<Buffer> {
+    if (!(await this.commandExists('pdftoppm'))) {
+      throw new Error('High-compatibility PDF image export requires Poppler pdftoppm.');
+    }
+
+    const format = options.imageFormat === 'jpg' ? 'jpg' : 'png';
+    const dpi = options.imageDpi === 96 || options.imageDpi === 300 ? options.imageDpi : 150;
+    const pagePrefix = path.join(tmpDir, 'rendered-page');
+    const args =
+      format === 'jpg'
+        ? ['-jpeg', '-jpegopt', 'quality=94', '-r', String(dpi), inputPath, pagePrefix]
+        : ['-png', '-r', String(dpi), inputPath, pagePrefix];
+
+    await execFileAsync('pdftoppm', args, {
+      timeout,
+      maxBuffer: 50 * 1024 * 1024,
+      windowsHide: true,
+      signal,
+    });
+
+    const pattern = new RegExp(`^rendered-page-?(\\d+)\\.${format}$`);
+    const images = (await fs.readdir(tmpDir))
+      .map((name) => ({ name, page: Number(name.match(pattern)?.[1] || 0) }))
+      .filter((item) => item.page > 0)
+      .sort((a, b) => a.page - b.page);
+    if (!images.length) throw new Error('Poppler did not render any PDF pages.');
+
+    const maxPages = Number(process.env.MAX_PDF_IMAGE_PAGES || 200);
+    if (images.length > maxPages) {
+      throw new Error(`PDF exceeds the image export limit (${maxPages} pages).`);
+    }
+
+    const padding = Math.max(3, String(images.length).length);
+    const archive = new JSZip();
+    for (const image of images) {
+      const bytes = await fs.readFile(path.join(tmpDir, image.name));
+      if (!bytes.length) throw new Error(`Poppler returned an empty image for page ${image.page}.`);
+      archive.file(`page-${String(image.page).padStart(padding, '0')}.${format}`, bytes);
+    }
+
+    return archive.generateAsync({
+      type: 'nodebuffer',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 },
+    });
+  }
+
+  /**
+   * Create a visually exact Word document by rendering every PDF page and
+   * anchoring that image to a same-sized Word page. Text is intentionally not
+   * editable in this mode; editable reconstruction is provided separately.
+   */
+  private async convertToVisualDocx(
+    inputPath: string,
+    tmpDir: string,
+    timeout: number,
+    signal?: AbortSignal,
+  ): Promise<Buffer> {
+    if (!(await this.commandExists('pdftoppm'))) {
+      throw new Error('Exact visual Word export requires Poppler pdftoppm on the worker.');
+    }
+
+    const pdfBytes = await fs.readFile(inputPath);
+    const pdf = await PDFDocument.load(pdfBytes, { ignoreEncryption: false });
+    const pagePrefix = path.join(tmpDir, 'visual-page');
+    const dpi = 180;
+    await execFileAsync('pdftoppm', ['-png', '-r', String(dpi), inputPath, pagePrefix], {
+      timeout,
+      maxBuffer: 50 * 1024 * 1024,
+      signal,
+    });
+    const images = (await fs.readdir(tmpDir))
+      .filter((name) => /^visual-page-?\d+\.png$/.test(name))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    if (!images.length || images.length !== pdf.getPageCount()) {
+      throw new Error('The visual Word renderer did not produce every PDF page.');
+    }
+
+    const sections = await Promise.all(
+      images.map(async (imageName, index) => {
+        const page = pdf.getPage(index);
+        const { width, height } = page.getSize();
+        const displayWidth = Math.round((width * 96) / 72);
+        const displayHeight = Math.round((height * 96) / 72);
+        return {
+          properties: {
+            page: {
+              size: { width: Math.round(width * 20), height: Math.round(height * 20) },
+              margin: { top: 0, right: 0, bottom: 0, left: 0, header: 0, footer: 0, gutter: 0 },
+            },
+          },
+          children: [
+            new Paragraph({
+              spacing: { before: 0, after: 0, line: 1 },
+              children: [
+                new ImageRun({
+                  type: 'png',
+                  data: await fs.readFile(path.join(tmpDir, imageName)),
+                  transformation: { width: displayWidth, height: displayHeight },
+                  floating: {
+                    horizontalPosition: {
+                      relative: HorizontalPositionRelativeFrom.PAGE,
+                      offset: 0,
+                    },
+                    verticalPosition: { relative: VerticalPositionRelativeFrom.PAGE, offset: 0 },
+                    behindDocument: false,
+                    allowOverlap: true,
+                    lockAnchor: true,
+                    margins: { top: 0, right: 0, bottom: 0, left: 0 },
+                  },
+                }),
+              ],
+            }),
+          ],
+        };
+      }),
+    );
+
+    const document = new Document({
+      creator: 'AppToolkitLab',
+      title: 'Visually preserved PDF export',
+      description: 'Each PDF page is preserved as an exact full-page image.',
+      sections,
+    });
+    return Packer.toBuffer(document);
+  }
+
+  private async convertToFixedEditableDocx(
+    inputPath: string,
+    tmpDir: string,
+    timeout: number,
+    signal?: AbortSignal,
+  ): Promise<Buffer> {
+    const python =
+      process.env.PDF_FIXED_DOCX_PYTHON ||
+      ((await this.commandExists('/opt/pdf2docx/bin/python'))
+        ? '/opt/pdf2docx/bin/python'
+        : 'python3');
+    const script =
+      process.env.PDF_FIXED_DOCX_SCRIPT ||
+      path.resolve(__dirname, '../../scripts/pdf_to_fixed_docx.py');
+    if (!(await this.commandExists(python))) {
+      throw new Error(
+        'Fixed-position editable Word export requires the pdf2docx Python environment.',
+      );
+    }
+    await fs.access(script).catch(() => {
+      throw new Error(`Fixed-position Word converter script was not found at '${script}'.`);
+    });
+    const outputPath = path.join(tmpDir, 'fixed-editable.docx');
+    await execFileAsync(python, [script, inputPath, outputPath, '--dpi', '180'], {
+      timeout,
+      maxBuffer: 20 * 1024 * 1024,
+      windowsHide: true,
+      signal,
+    });
+    const output = await fs.readFile(outputPath);
+    if (output.length < 1_000 || output.subarray(0, 2).toString('ascii') !== 'PK') {
+      throw new Error('Fixed-position converter returned an invalid DOCX package.');
+    }
+    return output;
   }
 
   /**
@@ -170,6 +397,7 @@ export class PdfExtractorAdapter {
     inputPath: string,
     tmpDir: string,
     timeout: number,
+    signal?: AbortSignal,
   ): Promise<Buffer | null> {
     const configuredEngine = (process.env.PDF_TO_DOCX_ENGINE || 'auto').toLowerCase();
     if (configuredEngine === 'text') return null;
@@ -190,6 +418,7 @@ export class PdfExtractorAdapter {
         timeout,
         maxBuffer: 10 * 1024 * 1024,
         windowsHide: true,
+        signal,
       });
 
       const output = await fs.readFile(outputPath);
@@ -227,12 +456,62 @@ export class PdfExtractorAdapter {
     }
   }
 
+  private async validateSourcePdf(
+    inputPath: string,
+    timeout: number,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (await this.commandExists('pdfinfo')) {
+      try {
+        await execFileAsync('pdfinfo', [inputPath], {
+          timeout: Math.min(timeout, 30_000),
+          maxBuffer: 2 * 1024 * 1024,
+          windowsHide: true,
+          signal,
+        });
+        return;
+      } catch (error: any) {
+        const details = `${error?.stderr || ''} ${error?.message || ''}`;
+        if (/password|encrypted|incorrect password/i.test(details)) {
+          throw new Error(
+            'This PDF is encrypted or password-protected. Unlock it with the correct password before conversion.',
+          );
+        }
+        throw new Error(
+          `This PDF is corrupt or unsupported and cannot be converted safely: ${details.trim().slice(0, 300)}`,
+        );
+      }
+    }
+
+    try {
+      const bytes = await fs.readFile(inputPath);
+      const document = await PDFDocument.load(bytes, { ignoreEncryption: false });
+      if (document.getPageCount() < 1) throw new Error('the document has no pages');
+    } catch (error: any) {
+      const message = error?.message || 'invalid PDF structure';
+      if (/encrypted|password/i.test(message)) {
+        throw new Error(
+          'This PDF is encrypted or password-protected. Unlock it with the correct password before conversion.',
+        );
+      }
+      throw new Error(
+        `This PDF is corrupt or unsupported and cannot be converted safely: ${message}`,
+      );
+    }
+  }
+
   /** OCR a scanned PDF using pdftoppm + tesseract. */
-  private async ocrScannedPdf(inputPath: string, tmpDir: string, timeout: number): Promise<string> {
+  private async ocrScannedPdf(
+    inputPath: string,
+    tmpDir: string,
+    timeout: number,
+    signal?: AbortSignal,
+  ): Promise<string> {
     const pagePrefix = path.join(tmpDir, 'page');
     await execFileAsync('pdftoppm', ['-png', '-r', '180', inputPath, pagePrefix], {
       timeout,
       maxBuffer: 50 * 1024 * 1024,
+      signal,
     });
 
     const pageImages = (await fs.readdir(tmpDir))
@@ -252,11 +531,46 @@ export class PdfExtractorAdapter {
       const { stdout } = await execFileAsync(
         'tesseract',
         [path.join(tmpDir, pageImage), 'stdout', '-l', language, '--psm', '3'],
-        { timeout, maxBuffer: 10 * 1024 * 1024 },
+        { timeout, maxBuffer: 10 * 1024 * 1024, signal },
       );
       pages.push(stdout);
     }
 
     return pages.join('\n\n\f\n\n');
   }
+}
+
+/** Convert layout-preserving extracted text into useful, readable Markdown. */
+export function extractedTextToMarkdown(source: string): string {
+  const pages = source.replace(/\r\n/g, '\n').split('\f');
+  const output: string[] = [];
+  for (const [pageIndex, page] of pages.entries()) {
+    const lines = page.split('\n').map((line) => line.trimEnd());
+    const nonEmpty = lines.filter((line) => line.trim());
+    if (!nonEmpty.length) continue;
+    if (pages.length > 1) output.push(`## Page ${pageIndex + 1}`, '');
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) {
+        if (output.at(-1) !== '') output.push('');
+        continue;
+      }
+      if (/^[\u2022\u25cf\u25e6*-]\s+/.test(line)) {
+        output.push(`- ${line.replace(/^[\u2022\u25cf\u25e6*-]\s+/, '')}`);
+      } else if (/^\d+[.)]\s+/.test(line)) {
+        output.push(line.replace(/^(\d+)[)]\s+/, '$1. '));
+      } else if (
+        line.length <= 90 &&
+        !/[.!?;:]$/.test(line) &&
+        (line === line.toUpperCase() || /^[A-Z][A-Za-z0-9 '&,/()-]+$/.test(line))
+      ) {
+        output.push(`### ${line}`);
+      } else {
+        output.push(line);
+      }
+    }
+    while (output.at(-1) === '') output.pop();
+    output.push('');
+  }
+  return `${output.join('\n').trim()}\n`;
 }

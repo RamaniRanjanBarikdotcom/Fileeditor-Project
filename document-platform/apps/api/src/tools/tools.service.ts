@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
-import { SubscriptionPlanTier } from '@prisma/client';
+import { PlatformRole, SubscriptionPlanTier, SubscriptionStatus } from '@prisma/client';
 import { createProcessingContext } from '@docconv/processing-core';
 import { getToolDefinition } from '@docconv/tool-registry';
 
@@ -82,6 +82,7 @@ export class ToolsService {
     userTier: SubscriptionPlanTier | null,
     fileSizeBytes: number,
     inputFormat: string,
+    platformRole?: PlatformRole,
   ) {
     const tool = await this.getToolBySlug(toolSlug);
 
@@ -89,8 +90,8 @@ export class ToolsService {
     const context = createProcessingContext(process.env);
     const serverAvailable = Boolean(
       definition &&
-        ((definition.capability.node.supported && context.nodeEnabled) ||
-          (definition.capability.native.supported && context.nativeEnabled)),
+      ((definition.capability.node.supported && context.nodeEnabled) ||
+        (definition.capability.native.supported && context.nativeEnabled)),
     );
     if (definition && !serverAvailable) {
       throw new BadRequestException(
@@ -101,7 +102,7 @@ export class ToolsService {
     }
 
     // 1. Check anonymous support if not logged in
-    if (!userTier && !tool.anonymousEnabled) {
+    if (!userTier && platformRole !== PlatformRole.ADMIN && !tool.anonymousEnabled) {
       throw new ForbiddenException(
         `Tool '${tool.name}' requires at least a Free registered account.`,
       );
@@ -112,7 +113,7 @@ export class ToolsService {
     // explicitly opts in via anonymousEnabled.
     const userRank = userTier ? PLAN_HIERARCHY[userTier] : PLAN_HIERARCHY.FREE;
     const requiredRank = PLAN_HIERARCHY[tool.minimumPlan];
-    if (userRank < requiredRank) {
+    if (platformRole !== PlatformRole.ADMIN && userRank < requiredRank) {
       throw new ForbiddenException(
         `Tool '${tool.name}' requires the ${tool.minimumPlan} plan or higher. Please upgrade to access.`,
       );
@@ -141,15 +142,59 @@ export class ToolsService {
     return tool;
   }
 
+  async getAuthenticatedAccess(userId: string, organizationId: string) {
+    const now = new Date();
+    const [user, organization] = await Promise.all([
+      this.prisma.user.findFirst({
+        where: {
+          id: userId,
+          memberships: { some: { organizationId } },
+        },
+        select: { platformRole: true },
+      }),
+      this.prisma.organization.findUnique({
+        where: { id: organizationId },
+        include: {
+          plan: true,
+          subscriptions: {
+            where: { status: SubscriptionStatus.ACTIVE, currentPeriodEnd: { gt: now } },
+            include: { plan: true },
+            orderBy: { currentPeriodEnd: 'desc' },
+            take: 1,
+          },
+        },
+      }),
+    ]);
+    if (!user || !organization) {
+      throw new ForbiddenException('The requested workspace is not available to this account.');
+    }
+    return {
+      platformRole: user.platformRole,
+      tier:
+        organization.subscriptions[0]?.plan.tier ||
+        organization.plan?.tier ||
+        SubscriptionPlanTier.FREE,
+    };
+  }
+
   private withCapabilities<T extends { slug: string; maxFileSizeBytes: bigint }>(tool: T) {
     const definition = getToolDefinition(tool.slug);
     if (!definition) return { ...tool, maxFileSizeBytes: Number(tool.maxFileSizeBytes) };
     const context = createProcessingContext(process.env);
     const capability = {
       ...definition.capability,
-      browser: { ...definition.capability.browser, supported: definition.capability.browser.supported && context.browserEnabled },
-      node: { ...definition.capability.node, supported: definition.capability.node.supported && context.nodeEnabled },
-      native: { ...definition.capability.native, supported: definition.capability.native.supported && context.nativeEnabled },
+      browser: {
+        ...definition.capability.browser,
+        supported: definition.capability.browser.supported && context.browserEnabled,
+      },
+      node: {
+        ...definition.capability.node,
+        supported: definition.capability.node.supported && context.nodeEnabled,
+      },
+      native: {
+        ...definition.capability.native,
+        supported: definition.capability.native.supported && context.nativeEnabled,
+      },
     };
     return {
       ...tool,

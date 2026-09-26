@@ -1,0 +1,10 @@
+{
+  "blogStudio": {
+    "title": "Blog-Studio",
+    "generate": "Artikel generieren",
+    "history": "Artikelverlauf",
+    "settings": "Einstellungen",
+    "providers": "KI-Anbieter",
+    "prompts": "Eingabeaufforderungen"
+  }
+}

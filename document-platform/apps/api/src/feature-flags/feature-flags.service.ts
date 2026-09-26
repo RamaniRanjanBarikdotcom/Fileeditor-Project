@@ -9,6 +9,19 @@ export interface FeatureFlags {
   subscriptionsEnabled: boolean;
   adminPortalEnabled: boolean;
   anonymousUsageEnabled: boolean;
+  teamsEnabled: boolean;
+  apiKeysEnabled: boolean;
+  blogStudio: boolean;
+  blogStudioCheckout: boolean;
+  blogStudioImages: boolean;
+  blogDesktopSales: boolean;
+  blogStudioFullSuite: boolean;
+  blogStudioPublishing: boolean;
+  blogStudioScheduler: boolean;
+  blogStudioScraping: boolean;
+  blogStudioByok: boolean;
+  blogStudioSync: boolean;
+  blogStudioAnalytics: boolean;
 }
 
 @Injectable()
@@ -16,9 +29,10 @@ export class FeatureFlagsService {
   constructor(private readonly config: ConfigService) {}
 
   getFlags(): FeatureFlags {
+    const fullSuite = this.parseFlag('FEATURE_BLOG_STUDIO_FULL_SUITE', true);
     return {
       publicTools: this.parseFlag('FEATURE_PUBLIC_TOOLS', true),
-      storeCheckout: this.parseFlag('FEATURE_STORE_CHECKOUT', true),
+      storeCheckout: this.parseFlag('FEATURE_STORE_CHECKOUT', false),
       stripeEnabled: this.parseFlag(
         'FEATURE_STRIPE',
         Boolean(this.config.get<string>('STRIPE_SECRET_KEY')),
@@ -31,6 +45,19 @@ export class FeatureFlagsService {
       subscriptionsEnabled: this.parseFlag('FEATURE_SUBSCRIPTIONS', false),
       adminPortalEnabled: this.parseFlag('FEATURE_ADMIN_PORTAL', false),
       anonymousUsageEnabled: this.parseFlag('FEATURE_ANONYMOUS_USAGE', true),
+      teamsEnabled: this.parseFlag('FEATURE_TEAMS', false),
+      apiKeysEnabled: this.parseFlag('FEATURE_API_KEYS', false),
+      blogStudio: this.parseFlag('FEATURE_BLOG_STUDIO', true),
+      blogStudioCheckout: this.parseFlag('FEATURE_BLOG_STUDIO_CHECKOUT', true),
+      blogStudioImages: this.parseFlag('FEATURE_BLOG_STUDIO_IMAGES', true),
+      blogDesktopSales: this.parseFlag('FEATURE_BLOG_DESKTOP_SALES', true),
+      blogStudioFullSuite: fullSuite,
+      blogStudioPublishing: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_PUBLISHING', true),
+      blogStudioScheduler: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_SCHEDULER', true),
+      blogStudioScraping: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_SCRAPING', true),
+      blogStudioByok: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_BYOK', true),
+      blogStudioSync: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_SYNC', true),
+      blogStudioAnalytics: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_ANALYTICS', true),
     };
   }
 

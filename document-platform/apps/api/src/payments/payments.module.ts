@@ -6,11 +6,13 @@ import { WebhooksController } from './webhooks.controller';
 import { PrismaModule } from '../common/prisma.module';
 import { LicensesModule } from '../licenses/licenses.module';
 import { ConfigModule } from '@nestjs/config';
+import { SaasSubscriptionsController } from './saas-subscriptions.controller';
+import { SaasSubscriptionsService } from './saas-subscriptions.service';
 
 @Module({
   imports: [PrismaModule, LicensesModule, ConfigModule],
-  controllers: [WebhooksController],
-  providers: [StripeService, RazorpayService, PaymentsService],
-  exports: [StripeService, RazorpayService, PaymentsService],
+  controllers: [WebhooksController, SaasSubscriptionsController],
+  providers: [StripeService, RazorpayService, PaymentsService, SaasSubscriptionsService],
+  exports: [StripeService, RazorpayService, PaymentsService, SaasSubscriptionsService],
 })
 export class PaymentsModule {}

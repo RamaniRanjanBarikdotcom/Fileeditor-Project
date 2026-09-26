@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: file:; connect-src https://api.openai.com; object-src 'none'; base-uri 'none'; form-action 'self'"
+    />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Blog Studio Desktop</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <small>APPTOOLKITLAB BY GONEXEL</small>
+          <h1>Blog Studio Desktop</h1>
+        </div>
+        <div class="header-actions">
+          <span id="license-state" class="license-state">Checking license…</span>
+          <button id="activate" type="button">Activate</button>
+          <button id="settings" type="button">Provider settings</button>
+        </div>
+      </header>
+
+      <section class="hero">
+        <span>Standalone Windows workspace</span>
+        <h2>Your articles stay local. Your AI key stays encrypted.</h2>
+        <p>
+          This desktop edition stores projects, checkpoints, settings, and exports on this computer.
+          Hosted AppToolkitLab quotas do not apply.
+        </p>
+        <form id="generate-form" class="generate-form">
+          <label for="topic">What should the article cover?</label>
+          <div class="generate-row">
+            <input
+              id="topic"
+              name="topic"
+              maxlength="300"
+              required
+              placeholder="Example: A practical guide to zero-trust security"
+            />
+            <button type="submit">Generate article</button>
+          </div>
+          <p id="generation-status" class="status" aria-live="polite">
+            Configure your provider key, then create your first article.
+          </p>
+        </form>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <div>
+            <small>LOCAL-FIRST LIBRARY</small>
+            <h2>Your articles</h2>
+          </div>
+          <p>Generated content and resumable checkpoints remain on this device.</p>
+        </div>
+        <div id="blogs" class="grid"></div>
+      </section>
+      <section id="editor" class="editor" hidden>
+        <div class="editor-toolbar">
+          <button id="close-editor" type="button">Back to library</button>
+          <div>
+            <button id="export-markdown" type="button">Export Markdown</button>
+            <button id="export-html" type="button">Export HTML</button>
+            <button id="save-blog" type="button">Save changes</button>
+          </div>
+        </div>
+        <input id="editor-title" class="editor-title" maxlength="200" aria-label="Article title" />
+        <article id="editor-content" class="editor-content" contenteditable="true"></article>
+        <p id="editor-status" class="status" aria-live="polite"></p>
+      </section>
+    </main>
+
+    <dialog id="settings-dialog">
+      <form method="dialog">
+        <h2>AI provider key</h2>
+        <p>
+          The key is encrypted by Windows DPAPI through Electron safeStorage and is never exposed
+          back to this renderer.
+        </p>
+        <input
+          id="provider-key"
+          type="password"
+          autocomplete="off"
+          maxlength="4096"
+          placeholder="Paste provider key"
+        />
+        <div>
+          <button value="cancel">Cancel</button>
+          <button id="save-key" value="default">Save securely</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="activation-dialog">
+      <form method="dialog">
+        <h2>Activate Blog Studio Desktop</h2>
+        <p>
+          Enter the license key from your AppToolkitLab software library. This device uses one of
+          the two included activation seats.
+        </p>
+        <input
+          id="license-key"
+          type="password"
+          autocomplete="off"
+          maxlength="200"
+          placeholder="TOOL-XXXX-XXXX-XXXX-XXXX"
+        />
+        <p id="activation-status" class="status" aria-live="polite"></p>
+        <div>
+          <button value="cancel">Cancel</button>
+          <button id="activate-license" value="default">Activate this device</button>
+        </div>
+      </form>
+    </dialog>
+    <script src="app.js"></script>
+  </body>
+</html>

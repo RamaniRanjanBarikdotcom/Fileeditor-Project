@@ -1,14 +1,20 @@
 import axios from 'axios';
 import { Readable } from 'stream';
-import { UrlSecurityService } from '@docconv/url-security';
+import {
+  UrlSecurityService,
+  createSafeHttpAgent,
+  createSafeHttpsAgent,
+} from '@docconv/url-security';
 import { PandocAdapter } from './pandoc';
 
 export class WebContentAdapter {
   private readonly security = new UrlSecurityService();
   private readonly pandoc = new PandocAdapter();
+  private readonly httpAgent = createSafeHttpAgent();
+  private readonly httpsAgent = createSafeHttpsAgent();
 
-  async convert(url: string, targetFormat: string): Promise<Readable> {
-    const html = await this.fetchHtml(url);
+  async convert(url: string, targetFormat: string, signal?: AbortSignal): Promise<Readable> {
+    const html = await this.fetchHtml(url, signal);
     const sanitized = this.sanitizeForDocument(html);
     if (targetFormat === 'html') return Readable.from(Buffer.from(sanitized, 'utf8'));
     if (targetFormat === 'txt') {
@@ -27,10 +33,11 @@ export class WebContentAdapter {
       Readable.from(Buffer.from(sanitized, 'utf8')),
       'html',
       targetFormat === 'markdown' ? 'gfm' : targetFormat,
+      signal,
     );
   }
 
-  private async fetchHtml(initialUrl: string): Promise<string> {
+  private async fetchHtml(initialUrl: string, signal?: AbortSignal): Promise<string> {
     let current = initialUrl;
     const maxRedirects = Math.max(0, Number(process.env.URL_MAX_REDIRECTS || 5));
     for (let redirects = 0; redirects <= maxRedirects; redirects += 1) {
@@ -41,6 +48,10 @@ export class WebContentAdapter {
         maxContentLength: Number(process.env.URL_MAX_DOWNLOAD_BYTES || 10 * 1024 * 1024),
         responseType: 'text',
         validateStatus: () => true,
+        proxy: false,
+        httpAgent: this.httpAgent,
+        httpsAgent: this.httpsAgent,
+        signal,
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; AppToolkitLab/1.0; +https://apptoolkitlab.com)',
           Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1',

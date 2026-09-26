@@ -13,7 +13,8 @@ import { listStaticToolDtos } from '../../lib/tool-dtos';
 type DirectoryTool = Pick<ToolDto, 'slug'|'name'|'category'|'anonymousEnabled'|'acceptedFormats'|'outputFormats'|'seoMetadata'>;
 
 const CATEGORY_BY_SLUG: Record<string, string> = {
-  'pdf-to-docx': 'Document', 'pdf-ocr': 'Document',
+  'pdf-to-docx': 'Document', 'pdf-to-markdown': 'Document', 'pdf-ocr': 'Document',
+  'pdf-to-images': 'Image',
   'url-to-pdf': 'Web', 'url-to-docx': 'Web',
   'html-to-pdf': 'Developer', 'markdown-to-pdf': 'Developer',
   'image-to-pdf': 'Image', 'document-editor': 'Studio',
@@ -21,6 +22,8 @@ const CATEGORY_BY_SLUG: Record<string, string> = {
 
 const FORMAT_BY_SLUG: Record<string, { input: string[]; output: string[] }> = {
   'pdf-to-docx': { input: ['PDF'], output: ['DOCX'] },
+  'pdf-to-markdown': { input: ['PDF'], output: ['MARKDOWN'] },
+  'pdf-to-images': { input: ['PDF'], output: ['PNG', 'JPG'] },
   'pdf-ocr': { input: ['PDF'], output: ['TXT'] },
   'url-to-pdf': { input: ['URL'], output: ['PDF'] },
   'url-to-docx': { input: ['URL'], output: ['DOCX'] },

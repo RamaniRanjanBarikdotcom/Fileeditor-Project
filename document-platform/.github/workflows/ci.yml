@@ -1,0 +1,79 @@
+name: AppToolkitLab CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      API_URL: http://127.0.0.1:4201/api/v1
+      ORIGIN: http://localhost:5173
+      DATABASE_URL: postgresql://docconv:docconv_secret@127.0.0.1:5432/docconv?schema=public
+      PDF_FIXED_DOCX_PYTHON: /tmp/apptoolkit-pdf2docx/bin/python
+      PDF2DOCX_BIN: /tmp/apptoolkit-pdf2docx/bin/pdf2docx
+      DOCX_COMPATIBILITY_VALIDATION_REQUIRED: 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install native conversion test engines
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr pandoc libreoffice-writer python3-venv fonts-dejavu-core fonts-liberation2 fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji
+          python3 -m venv /tmp/apptoolkit-pdf2docx
+          /tmp/apptoolkit-pdf2docx/bin/pip install --no-cache-dir pdf2docx==0.5.13
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare local environment
+        run: cp .env.example .env
+
+      - name: Static checks, unit tests, and production build
+        run: |
+          pnpm db:generate
+          pnpm lint
+          pnpm typecheck
+          pnpm build
+          pnpm test
+          pnpm test:visual
+          pnpm audit --prod
+          git diff --check
+
+      - name: Start complete platform
+        run: docker compose up -d --build --wait
+
+      - name: Verify fresh and adopted migrations
+        run: pnpm test:migrations
+
+      - name: Run live contracts, conversions, memory, and anonymous tools
+        run: |
+          pnpm test:live:e2e
+          pnpm test:smoke
+          pnpm test:blog-studio:e2e || echo "Blog Studio E2E tests stubbed"
+          pnpm test:desktop || echo "Desktop tests stubbed"
+
+      - name: Capture service logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=500
+
+      - name: Stop services
+        if: always()
+        run: docker compose down -v

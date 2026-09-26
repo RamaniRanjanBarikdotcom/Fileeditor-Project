@@ -8,26 +8,34 @@
     "node": ">=20.0.0"
   },
   "scripts": {
+    "start": "node scripts/start-platform.mjs",
     "dev": "corepack pnpm -r --parallel --if-present run dev",
     "build": "corepack pnpm db:generate && corepack pnpm -r --if-present run build",
     "lint": "oxlint apps packages",
     "typecheck": "corepack pnpm -r --if-present run typecheck",
     "test": "corepack pnpm -r --if-present run test",
     "test:integration": "corepack pnpm -r --if-present run test:integration",
+    "test:migrations": "node scripts/test-migrations.mjs",
+    "test:memory:e2e": "corepack pnpm --filter @docconv/api run test:memory:e2e",
+    "test:live:e2e": "corepack pnpm test:integration && corepack pnpm test:baseline && corepack pnpm test:memory:e2e && corepack pnpm --filter @docconv/api run test:queue-disabled:e2e",
     "test:fixtures": "node tests/scripts/generate-fixtures.js",
     "test:baseline": "node --test tests/conversion/*.test.js",
+    "test:visual": "node --test tests/conversion/pdf-visual-regression.test.js",
     "test:smoke": "sh scripts/smoke-conversion.sh && sh scripts/smoke-anonymous-url.sh",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "clean:audit": "node scripts/cleanup-audit.js",
     "clean": "corepack pnpm -r --if-present run clean && rm -rf node_modules",
-    "docker:up": "docker compose up -d --build --wait",
+    "docker:up": "node scripts/start-platform.mjs",
+    "docker:repair": "node scripts/start-platform.mjs --no-build",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
     "infra:up": "docker compose up -d --wait postgres redis minio gotenberg",
     "infra:down": "docker compose stop postgres redis minio gotenberg",
+    "platform:dev": "node scripts/start-platform.mjs",
+    "platform:doctor": "node scripts/native-doctor.mjs",
     "node:doctor": "node scripts/native-doctor.mjs",
-    "node:setup": "corepack pnpm --filter './packages/**' --if-present run build && corepack pnpm db:generate && corepack pnpm db:prepare && corepack pnpm db:push && corepack pnpm db:seed",
+    "node:setup": "corepack pnpm --filter './packages/**' --if-present run build && corepack pnpm db:generate && corepack pnpm db:migrate && corepack pnpm db:seed",
     "node:dev": "corepack pnpm --parallel --filter @docconv/api --filter @docconv/worker --filter web run dev",
     "node:build": "corepack pnpm build",
     "node:start": "corepack pnpm --parallel --filter @docconv/api --filter @docconv/worker --filter web run start",
@@ -37,11 +45,13 @@
     "hybrid:setup": "docker compose stop api worker web && corepack pnpm infra:up && corepack pnpm node:setup",
     "hybrid:dev": "docker compose stop api worker web && corepack pnpm infra:up && corepack pnpm node:setup && corepack pnpm node:dev",
     "db:generate": "corepack pnpm --filter @docconv/api exec prisma generate",
-    "db:prepare": "corepack pnpm --filter @docconv/api exec prisma db execute --file prisma/migrations/20260910000000_secure_license_fulfillment/migration.sql --schema prisma/schema.prisma",
-    "db:migrate": "corepack pnpm --filter @docconv/api exec prisma migrate dev",
-    "db:push": "corepack pnpm --filter @docconv/api exec prisma db push",
+    "db:migrate": "corepack pnpm --filter @docconv/api exec prisma migrate deploy",
+    "db:migrate:dev": "corepack pnpm --filter @docconv/api exec prisma migrate dev",
+    "db:adopt": "node scripts/adopt-migrations.mjs",
     "db:seed": "corepack pnpm --filter @docconv/api exec prisma db seed",
-    "db:studio": "corepack pnpm --filter @docconv/api exec prisma studio"
+    "db:studio": "corepack pnpm --filter @docconv/api exec prisma studio",
+    "blog-studio:upstream:check": "node scripts/check-blog-studio-upstream.mjs",
+    "blog-studio:verify": "corepack pnpm --filter @docconv/blog-engine test && corepack pnpm --filter @docconv/api test && corepack pnpm --filter web test && corepack pnpm --filter web build"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
@@ -49,5 +59,13 @@
     "prettier": "^3.6.2",
     "turbo": "^2.5.0",
     "typescript": "^5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "puppeteer"
+    ]
+  },
+  "dependencies": {
+    "mongodb": "^7.6.0"
   }
 }

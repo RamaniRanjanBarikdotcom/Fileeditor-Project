@@ -80,13 +80,12 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Refresh access token using rotating HttpOnly cookie or body token' })
+  @ApiOperation({ summary: 'Refresh access token using the rotating HttpOnly cookie' })
   async refresh(
-    @Body('refreshToken') bodyToken: string | undefined,
     @Req() req: ExpressRequest,
     @Res({ passthrough: true }) res: ExpressResponse,
   ) {
-    const token = req.cookies?.[REFRESH_COOKIE_NAME] || bodyToken;
+    const token = req.cookies?.[REFRESH_COOKIE_NAME];
     const meta = {
       ipAddress: req.ip || (req.headers['x-forwarded-for'] as string),
       userAgent: req.headers['user-agent'],
@@ -108,11 +107,10 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout and revoke refresh session' })
   async logout(
-    @Body('refreshToken') bodyToken: string | undefined,
     @Req() req: ExpressRequest,
     @Res({ passthrough: true }) res: ExpressResponse,
   ) {
-    const token = req.cookies?.[REFRESH_COOKIE_NAME] || bodyToken;
+    const token = req.cookies?.[REFRESH_COOKIE_NAME];
     await this.authService.logout(token);
     this.clearRefreshTokenCookie(res);
 
@@ -161,10 +159,10 @@ export class AuthController {
   // ─── Private Cookie Helpers ─────────────────────────────────
 
   private setRefreshTokenCookie(res: ExpressResponse, refreshToken: string) {
-    const isProduction = process.env.NODE_ENV === 'production';
+    const useSecureCookie = this.useSecureCookies();
     res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
       httpOnly: true,
-      secure: isProduction,
+      secure: useSecureCookie,
       sameSite: 'lax',
       path: '/api/v1/auth',
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
@@ -172,12 +170,19 @@ export class AuthController {
   }
 
   private clearRefreshTokenCookie(res: ExpressResponse) {
-    const isProduction = process.env.NODE_ENV === 'production';
+    const useSecureCookie = this.useSecureCookies();
     res.clearCookie(REFRESH_COOKIE_NAME, {
       httpOnly: true,
-      secure: isProduction,
+      secure: useSecureCookie,
       sameSite: 'lax',
       path: '/api/v1/auth',
     });
+  }
+
+  private useSecureCookies() {
+    if (process.env.COOKIE_SECURE !== undefined) {
+      return process.env.COOKIE_SECURE === 'true';
+    }
+    return (process.env.PUBLIC_WEB_URL || process.env.APP_URL || '').startsWith('https://');
   }
 }

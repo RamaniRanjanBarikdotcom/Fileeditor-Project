@@ -1,9 +1,11 @@
 import { Controller, Get, Post, Param, UseGuards, Req, Ip, Headers } from '@nestjs/common';
 import { DownloadsService } from './downloads.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RequireFeatures } from '../feature-flags/require-features.decorator';
 
 @Controller('downloads')
 @UseGuards(JwtAuthGuard)
+@RequireFeatures('storeCheckout')
 export class DownloadsController {
   constructor(private readonly downloadsService: DownloadsService) {}
 

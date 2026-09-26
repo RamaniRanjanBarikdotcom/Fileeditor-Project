@@ -1,5 +1,5 @@
 import { Worker, Job } from 'bullmq';
-import { PrismaClient, JobStatus, FileStatus } from '@prisma/client';
+import { PrismaClient, JobStatus, FileStatus, ReservationStatus } from '@prisma/client';
 import { StorageClient, createStorageConfig } from '@docconv/storage';
 import { workerLogger as logger } from '@docconv/logging';
 import { GotenbergAdapter } from './adapters/gotenberg';
@@ -23,6 +23,9 @@ import { Readable } from 'stream';
 import { text } from 'stream/consumers';
 import { config as loadEnv } from 'dotenv';
 import { resolve } from 'path';
+import * as os from 'os';
+import { spawnSync } from 'child_process';
+import { UrlSecurityService } from '@docconv/url-security';
 
 // Turborepo runs this package with apps/worker as cwd. Resolve from __dirname
 // so both src (ts-node) and dist builds find the repository-level .env.
@@ -39,6 +42,7 @@ const sheetjs = new SheetJSAdapter();
 const imagePdf = new ImagePdfAdapter();
 const pdfExtractor = new PdfExtractorAdapter();
 const webContent = new WebContentAdapter();
+const urlSecurity = new UrlSecurityService();
 const redis = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null,
 });
@@ -49,6 +53,7 @@ import { QUEUE_NAMES } from '@docconv/shared-types';
 
 const processJob = async (job: Job) => {
   const { conversionId: jobId } = job.data;
+  const processingStartedAt = Date.now();
   logger.info({ jobId }, 'Processing job');
 
   // 1. Fetch Job from DB
@@ -61,23 +66,40 @@ const processJob = async (job: Job) => {
     throw new Error(`Job ${jobId} or associated file not found in DB`);
   }
 
-  if (conversionJob.status === JobStatus.CANCELLED) {
-    logger.info({ jobId }, 'Skipping cancelled job');
-    return { success: false, cancelled: true };
+  if (conversionJob.status === JobStatus.CANCELLED || conversionJob.status === JobStatus.COMPLETED) {
+    logger.info({ jobId, status: conversionJob.status }, 'Skipping terminal conversion job');
+    return { success: conversionJob.status === JobStatus.COMPLETED, cancelled: conversionJob.status === JobStatus.CANCELLED };
   }
 
-  // 2. Update status to PROCESSING
-  await prisma.conversionJob.update({
-    where: { id: jobId },
-    data: {
-      status: JobStatus.PROCESSING,
-      startedAt: new Date(),
-      progress: 10,
-      attemptCount: { increment: 1 },
-    },
-  });
+  const cancellationKey = `conversion:cancel:${jobId}`;
+  const cancellationController = new AbortController();
+  let checkingCancellation = false;
+  const checkCancellation = async () => {
+    if (checkingCancellation || cancellationController.signal.aborted) return;
+    checkingCancellation = true;
+    try {
+      if ((await redis.exists(cancellationKey)) > 0) cancellationController.abort();
+    } finally {
+      checkingCancellation = false;
+    }
+  };
+  await checkCancellation();
+  if (cancellationController.signal.aborted) return { success: false, cancelled: true };
+  const cancellationInterval = setInterval(() => void checkCancellation(), 500);
+  cancellationInterval.unref();
 
   try {
+    // 2. Update status to PROCESSING
+    await prisma.conversionJob.update({
+      where: { id: jobId },
+      data: {
+        status: JobStatus.PROCESSING,
+        startedAt: new Date(),
+        progress: 10,
+        attemptCount: { increment: 1 },
+      },
+    });
+
     // 3. Download the original file stream
     const fileStream = await storage.download('inputs', conversionJob.sourceFile.storageKey);
 
@@ -114,22 +136,33 @@ const processJob = async (job: Job) => {
         if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
           throw new Error(`Invalid URL for Chromium conversion: ${rawUrl}`);
         }
+        await urlSecurity.validateUrl(rawUrl);
         logger.info({ jobId, url: rawUrl }, 'Rendering URL with Chromium');
         if (tFmt === 'pdf') {
-          outputStream = await gotenberg.convertUrlToPdf(rawUrl, options);
+          outputStream = await gotenberg.convertUrlToPdf(
+            rawUrl,
+            options,
+            cancellationController.signal,
+          );
         } else {
           // Preserve semantic HTML structure for editable webpage exports.
-          outputStream = await webContent.convert(rawUrl, tFmt);
+          outputStream = await webContent.convert(rawUrl, tFmt, cancellationController.signal);
         }
       } else if (sFmt === 'markdown' || sFmt === 'txt') {
         // Pandoc: Markdown/Text -> HTML -> Chromium (much better PDF quality)
         const pandocFmt = sFmt === 'markdown' ? 'markdown' : 'plain';
-        const htmlStream = await pandoc.convert(fileStream, pandocFmt, 'html');
+        const htmlStream = await pandoc.convert(
+          fileStream,
+          pandocFmt,
+          'html',
+          cancellationController.signal,
+        );
         const html = await text(htmlStream);
         outputStream = await gotenberg.convertHtmlToPdf(
           Readable.from(Buffer.from(styleMarkdownHtml(html), 'utf8')),
           'index.html',
           options,
+          cancellationController.signal,
         );
       } else {
         // HTML, HTM -> Chromium PDF
@@ -137,12 +170,14 @@ const processJob = async (job: Job) => {
           fileStream,
           conversionJob.sourceFile.originalFilename,
           options,
+          cancellationController.signal,
         );
       }
     } else if (engine === ConversionEngine.LIBREOFFICE) {
       outputStream = await gotenberg.convertOfficeToPdf(
         fileStream,
         conversionJob.sourceFile.originalFilename,
+        cancellationController.signal,
       );
     } else if (
       engine === ConversionEngine.PANDOC ||
@@ -170,13 +205,23 @@ const processJob = async (job: Job) => {
               : tFmt === 'docx'
                 ? 'docx'
                 : tFmt;
-      outputStream = await pandoc.convert(fileStream, pandocSrcFmt, pandocTgtFmt);
+      outputStream = await pandoc.convert(
+        fileStream,
+        pandocSrcFmt,
+        pandocTgtFmt,
+        cancellationController.signal,
+      );
     } else if (engine === ConversionEngine.SHEETJS) {
       outputStream = await sheetjs.convert(fileStream, sFmt, tFmt);
     } else if (engine === ConversionEngine.PDF_LIB && tFmt === 'pdf') {
       outputStream = await imagePdf.convert(fileStream, sFmt, options);
     } else if (engine === ConversionEngine.PDF_EXTRACTOR) {
-      outputStream = await pdfExtractor.convert(fileStream, tFmt);
+      outputStream = await pdfExtractor.convert(
+        fileStream,
+        tFmt,
+        options,
+        cancellationController.signal,
+      );
     } else {
       throw new Error(`Unsupported engine: ${engine} for ${sFmt} -> ${tFmt}`);
     }
@@ -195,6 +240,8 @@ const processJob = async (job: Job) => {
     // Buffer with a hard limit so the output can be validated before it is
     // persisted or marked successful.
     const outputBuffer = await streamToValidatedBuffer(outputStream, targetFmt);
+    await checkCancellation();
+    if (cancellationController.signal.aborted) throw new Error('Conversion cancelled');
 
     // 5. Upload the validated output before creating its database record.
     const outputExtension = targetFmt === 'markdown' ? 'md' : targetFmt;
@@ -209,6 +256,11 @@ const processJob = async (job: Job) => {
     );
 
     await storage.upload('outputs', outputKey, outputBuffer, mimeType);
+    await checkCancellation();
+    if (cancellationController.signal.aborted) {
+      await storage.delete('outputs', outputKey).catch(() => undefined);
+      throw new Error('Conversion cancelled');
+    }
 
     let outputFile;
     try {
@@ -232,16 +284,59 @@ const processJob = async (job: Job) => {
       throw error;
     }
 
-    // 7. Update DB with completion
-    await prisma.conversionJob.update({
-      where: { id: jobId },
-      data: {
-        status: JobStatus.COMPLETED,
-        completedAt: new Date(),
-        outputFileId: outputFile.id,
-        progress: 100,
-      },
+    await checkCancellation();
+    if (cancellationController.signal.aborted) {
+      await prisma.storedFile.delete({ where: { id: outputFile.id } }).catch(() => undefined);
+      await storage.delete('outputs', outputKey).catch(() => undefined);
+      throw new Error('Conversion cancelled');
+    }
+
+    const reservation = await prisma.quotaReservation.findFirst({
+      where: { conversionJobId: jobId },
+      select: { unitsReserved: true },
     });
+
+    // 7. Update DB with completion, settle quota, and persist billable usage.
+    await prisma.$transaction([
+      prisma.conversionJob.update({
+        where: { id: jobId },
+        data: {
+          status: JobStatus.COMPLETED,
+          completedAt: new Date(),
+          outputFileId: outputFile.id,
+          progress: 100,
+        },
+      }),
+      prisma.quotaReservation.updateMany({
+        where: { conversionJobId: jobId, status: ReservationStatus.RESERVED },
+        data: { status: ReservationStatus.SETTLED, settledAt: new Date() },
+      }),
+      prisma.conversionEvent.create({
+        data: {
+          conversionJobId: jobId,
+          eventType: 'CONVERSION_COMPLETED',
+          message: 'Conversion completed successfully and quota settled.',
+        },
+      }),
+      prisma.usageRecord.upsert({
+        where: { conversionJobId: jobId },
+        update: {
+          outputBytes: outputBuffer.length,
+          processingMs: Date.now() - processingStartedAt,
+          units: reservation?.unitsReserved || 1,
+        },
+        create: {
+          organizationId: conversionJob.organizationId,
+          userId: conversionJob.userId,
+          conversionJobId: jobId,
+          operation: `${conversionJob.sourceFormat}.to.${conversionJob.targetFormat}`,
+          inputBytes: conversionJob.sourceFile.sizeBytes,
+          outputBytes: outputBuffer.length,
+          processingMs: Date.now() - processingStartedAt,
+          units: reservation?.unitsReserved || 1,
+        },
+      }),
+    ]);
 
     logger.info({ jobId }, 'Job completed successfully');
     return { success: true, outputKey };
@@ -251,17 +346,34 @@ const processJob = async (job: Job) => {
     const current = await prisma.conversionJob.findUnique({ where: { id: jobId }, select: { status: true } });
     if (current?.status === JobStatus.CANCELLED) return { success: false, cancelled: true };
     const errorCode = classifyError(error);
-    await prisma.conversionJob.update({
-      where: { id: jobId },
-      data: {
-        status: JobStatus.FAILED,
-        completedAt: new Date(),
-        errorCode,
-        errorMessage: safeErrorMessage(errorCode, error),
-      },
-    });
+    await prisma.$transaction([
+      prisma.conversionJob.update({
+        where: { id: jobId },
+        data: {
+          status: JobStatus.FAILED,
+          completedAt: new Date(),
+          errorCode,
+          errorMessage: safeErrorMessage(errorCode, error),
+        },
+      }),
+      prisma.quotaReservation.updateMany({
+        where: { conversionJobId: jobId, status: ReservationStatus.RESERVED },
+        data: { status: ReservationStatus.RELEASED, settledAt: new Date() },
+      }),
+      prisma.conversionEvent.create({
+        data: {
+          conversionJobId: jobId,
+          eventType: 'CONVERSION_FAILED',
+          message: safeErrorMessage(errorCode, error),
+          metadataJson: { errorCode },
+        },
+      }),
+    ]);
 
     throw error;
+  } finally {
+    clearInterval(cancellationInterval);
+    await redis.del(cancellationKey).catch(() => undefined);
   }
 };
 
@@ -296,9 +408,59 @@ const workers = Object.values(QUEUE_NAMES).map((queueName) => {
   return worker;
 });
 
-process.on('SIGINT', async () => {
+
+const HEARTBEAT_KEY = `worker:heartbeat:${os.hostname()}:${process.pid}`;
+
+const requiredEngineCommands: Record<string, { command: string; args: string[] }> = {
+  pdftoppm: { command: 'pdftoppm', args: ['-v'] },
+  pdftotext: { command: 'pdftotext', args: ['-v'] },
+  tesseract: { command: 'tesseract', args: ['--version'] },
+  pandoc: { command: 'pandoc', args: ['--version'] },
+  libreoffice: { command: 'libreoffice', args: ['--version'] },
+  pdf2docx: { command: process.env.PDF2DOCX_BIN || 'pdf2docx', args: ['--help'] },
+  fontconfig: { command: 'fc-match', args: ['--version'] },
+};
+
+const engineCapabilities = Object.fromEntries(
+  Object.entries(requiredEngineCommands).map(([name, spec]) => {
+    const result = spawnSync(spec.command, spec.args, { stdio: 'ignore', timeout: 5000 });
+    return [name, result.status === 0];
+  }),
+);
+
+const unavailableEngines = Object.entries(engineCapabilities)
+  .filter(([, available]) => !available)
+  .map(([name]) => name);
+
+if (unavailableEngines.length > 0) {
+  logger.error({ unavailableEngines }, 'Worker is missing required conversion engines');
+}
+
+const sendHeartbeat = async () => {
+  try {
+    await redis.set(
+      HEARTBEAT_KEY,
+      JSON.stringify({ timestamp: Date.now(), engines: engineCapabilities }),
+      'EX',
+      30,
+    );
+  } catch (err: any) {
+    logger.warn({ err: err?.message }, 'Failed to record worker heartbeat in Redis');
+  }
+};
+sendHeartbeat();
+const heartbeatInterval = setInterval(sendHeartbeat, 10_000);
+heartbeatInterval.unref();
+
+const shutdown = async () => {
   logger.info('Shutting down workers...');
+  clearInterval(heartbeatInterval);
   await Promise.all(workers.map((w) => w.close()));
+  await redis.del(HEARTBEAT_KEY).catch(() => undefined);
+  await redis.quit().catch(() => undefined);
   await prisma.$disconnect();
   process.exit(0);
-});
+};
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

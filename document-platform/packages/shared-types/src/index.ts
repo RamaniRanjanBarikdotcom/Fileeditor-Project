@@ -12,6 +12,7 @@ export enum InputFormat {
   DOCX = 'docx',
   XLSX = 'xlsx',
   CSV = 'csv',
+  ZIP = 'zip',
   JSON = 'json',
   PNG = 'png',
   JPG = 'jpg',
@@ -26,6 +27,7 @@ export enum OutputFormat {
   TXT = 'txt',
   XLSX = 'xlsx',
   CSV = 'csv',
+  ZIP = 'zip',
 }
 
 // ─── Conversion Engine ───────────────────────────────────────
@@ -127,11 +129,7 @@ export interface ToolCapability {
 }
 
 export type ToolAvailability =
-  | 'AVAILABLE_LOCAL'
-  | 'AVAILABLE_SERVER'
-  | 'AVAILABLE_BOTH'
-  | 'BETA'
-  | 'COMING_SOON';
+  'AVAILABLE_LOCAL' | 'AVAILABLE_SERVER' | 'AVAILABLE_BOTH' | 'BETA' | 'COMING_SOON';
 
 export interface CanonicalToolDefinition {
   id: string;
@@ -231,6 +229,17 @@ export interface ConversionOptions {
   headerHtml?: string;
   footerHtml?: string;
   templateId?: string;
+  /**
+   * editable: reconstruct PDF objects as editable Word content (best effort)
+   * fixed: fixed layout docx
+   * visual: place an exact rendered copy of each PDF page into Word
+   * ocr: optical character recognition extraction
+   */
+  pdfFidelityMode?: 'editable' | 'fixed' | 'visual' | 'ocr';
+  /** Image format stored inside a PDF page-image archive. */
+  imageFormat?: 'png' | 'jpg';
+  /** Raster resolution for PDF page-image export. */
+  imageDpi?: 96 | 150 | 300;
 }
 
 const PAGE_SIZES = new Set<string>(Object.values(PageSize));
@@ -254,13 +263,35 @@ export function normalizeConversionOptions(value: unknown): ConversionOptions {
     const raw = input.margins as Record<string, unknown>;
     const margin = (key: string) => {
       const number = Number(raw[key]);
-      return Number.isFinite(number) ? Math.min(100, Math.max(0, number)) : DEFAULT_MARGINS[key as keyof PageMargins];
+      return Number.isFinite(number)
+        ? Math.min(100, Math.max(0, number))
+        : DEFAULT_MARGINS[key as keyof PageMargins];
     };
-    options.margins = { top: margin('top'), right: margin('right'), bottom: margin('bottom'), left: margin('left') };
+    options.margins = {
+      top: margin('top'),
+      right: margin('right'),
+      bottom: margin('bottom'),
+      left: margin('left'),
+    };
   }
   if (typeof input.headerHtml === 'string') options.headerHtml = input.headerHtml.slice(0, 100_000);
   if (typeof input.footerHtml === 'string') options.footerHtml = input.footerHtml.slice(0, 100_000);
   if (typeof input.templateId === 'string') options.templateId = input.templateId.slice(0, 100);
+  if (
+    input.pdfFidelityMode === 'editable' ||
+    input.pdfFidelityMode === 'fixed' ||
+    input.pdfFidelityMode === 'visual' ||
+    input.pdfFidelityMode === 'ocr'
+  ) {
+    options.pdfFidelityMode = input.pdfFidelityMode;
+  }
+  if (input.imageFormat === 'png' || input.imageFormat === 'jpg') {
+    options.imageFormat = input.imageFormat;
+  }
+  const imageDpi = Number(input.imageDpi);
+  if (imageDpi === 96 || imageDpi === 150 || imageDpi === 300) {
+    options.imageDpi = imageDpi;
+  }
   return options;
 }
 
@@ -414,6 +445,7 @@ export const MIME_TYPES: Record<string, string> = {
   png: 'image/png',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
+  zip: 'application/zip',
   url: 'text/uri-list',
 };
 
@@ -580,6 +612,16 @@ export enum PaymentProvider {
   RAZORPAY = 'RAZORPAY',
 }
 
+export enum BillingType {
+  ONE_TIME = 'ONE_TIME',
+  RECURRING = 'RECURRING',
+}
+
+export enum BillingInterval {
+  MONTH = 'MONTH',
+  YEAR = 'YEAR',
+}
+
 export interface PriceDto {
   id: string;
   productId: string;
@@ -587,7 +629,59 @@ export interface PriceDto {
   amountMinorUnits: number; // e.g. cents (USD) or paise (INR)
   provider: PaymentProvider;
   providerPriceId?: string;
+  billingType: BillingType;
+  billingInterval?: BillingInterval;
   isActive: boolean;
+}
+
+export type BlogGenerationStatus = 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+
+export interface BlogGenerationDto {
+  id: string;
+  organizationId: string;
+  blogId?: string;
+  status: BlogGenerationStatus;
+  progress: number;
+  currentStage?: string;
+  model?: string;
+  errorMessage?: string;
+  cancelRequestedAt?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface BlogDocumentDto {
+  id: string;
+  organizationId: string;
+  title: string;
+  slug: string;
+  topic: string;
+  html: string;
+  editorJson: Record<string, unknown>;
+  metadataJson: Record<string, unknown>;
+  keywords: string[];
+  seoScore: number;
+  language: string;
+  wordCount: number;
+  version: number;
+  status: 'DRAFT' | 'READY' | 'ARCHIVED' | 'DELETED';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BlogStudioUsageDto {
+  accessLevel: 'ADMIN' | 'SUBSCRIPTION';
+  unlimited: boolean;
+  blogsConsumed: number;
+  creditsConsumed: number;
+  blogLimit: number;
+  creditLimit: number;
+  reservedBlogs: number;
+  reservedCredits: number;
+  blogsRemaining: number;
+  creditsRemaining: number;
+  windowStart: string;
+  windowEnd: string;
 }
 
 export interface ProductReleaseDto {

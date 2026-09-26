@@ -4,8 +4,33 @@ const path = require('node:path');
 const { ConversionClient } = require('./client');
 
 const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures');
+const API_URL = process.env.API_URL || 'http://localhost:4201/api/v1';
+
+async function isApiAvailable() {
+  try {
+    const res = await fetch(`${API_URL}/health/liveness`, { signal: AbortSignal.timeout(1500) });
+    return res.ok;
+  } catch {
+    try {
+      const res = await fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(1500) });
+      return res.ok || res.status === 503;
+    } catch {
+      return false;
+    }
+  }
+}
 
 test('Baseline Conversion Test Runner', async (t) => {
+  const available = await isApiAvailable();
+  if (!available) {
+    const message = `API server not running at ${API_URL}. Start platform via 'corepack pnpm dev' or 'corepack pnpm platform:dev' to run conversion runner tests.`;
+    if (process.env.CI) {
+      assert.fail(`[CI] ${message}`);
+    }
+    t.skip(message);
+    return;
+  }
+
   const client = new ConversionClient();
 
   await t.test('Authentication', async () => {

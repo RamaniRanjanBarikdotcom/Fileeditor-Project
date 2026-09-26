@@ -1,0 +1,47 @@
+{
+  "name": "@docconv/blog-studio-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AppToolkitLab Blog Studio Desktop for Windows",
+  "main": "src/main.cjs",
+  "dependencies": {
+    "@docconv/blog-engine": "workspace:*",
+    "electron-updater": "^6.8.9"
+  },
+  "scripts": {
+    "dev": "electron .",
+    "start": "electron .",
+    "build": "node scripts/verify-security.mjs",
+    "typecheck": "node scripts/verify-security.mjs",
+    "test": "node --test test/*.test.cjs",
+    "package:win": "node scripts/verify-security.mjs && electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "44.4.3",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.apptoolkitlab.blogstudio",
+    "productName": "Blog Studio Desktop",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": null
+  }
+}

@@ -5,7 +5,38 @@ const crypto = require('node:crypto');
 const API_URL = process.env.API_URL || 'http://localhost:4201/api/v1';
 const ORIGIN = process.env.ORIGIN || 'http://localhost:5173';
 
+function refreshCookie(response) {
+  const value = response.headers.get('set-cookie') || '';
+  const match = value.match(/toolsuite_refresh=[^;]+/);
+  assert.ok(match, 'Expected HttpOnly refresh cookie');
+  return match[0];
+}
+
+async function isApiAvailable() {
+  try {
+    const res = await fetch(`${API_URL}/health/liveness`, { signal: AbortSignal.timeout(1500) });
+    return res.ok;
+  } catch {
+    try {
+      const res = await fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(1500) });
+      return res.ok || res.status === 503;
+    } catch {
+      return false;
+    }
+  }
+}
+
 test('API Contracts Suite', async (t) => {
+  const available = await isApiAvailable();
+  if (!available) {
+    const message = `API server not running at ${API_URL}. Start platform via 'corepack pnpm dev' or 'corepack pnpm platform:dev' to run integration tests.`;
+    if (process.env.CI) {
+      assert.fail(`[CI] ${message}`);
+    }
+    t.skip(message);
+    return;
+  }
+
   let userToken = '';
   let testFileId = '';
   const testEmail = `contract-test-${Date.now()}@example.com`;
@@ -85,6 +116,64 @@ test('API Contracts Suite', async (t) => {
       assert.strictEqual(data.data.email, testEmail);
       assert.ok(data.data.id, 'Expected user ID');
     });
+
+    await auth.test(
+      'refresh families isolate replay, concurrency, logout, and devices',
+      async () => {
+        const loginDevice = async (agent) => {
+          const response = await fetch(`${API_URL}/auth/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Origin: ORIGIN,
+              'User-Agent': agent,
+            },
+            body: JSON.stringify({ email: testEmail, password: testPassword }),
+          });
+          assert.equal(response.status, 200);
+          return refreshCookie(response);
+        };
+        const refresh = (cookie, body) =>
+          fetch(`${API_URL}/auth/refresh`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Origin: ORIGIN,
+              ...(cookie ? { Cookie: cookie } : {}),
+            },
+            body: body ? JSON.stringify(body) : undefined,
+          });
+
+        const deviceA = await loginDevice('contract-device-a');
+        const deviceB = await loginDevice('contract-device-b');
+
+        const bodyOnly = await refresh('', { refreshToken: deviceA.split('=')[1] });
+        assert.equal(bodyOnly.status, 401, 'Refresh tokens in JSON bodies must be ignored');
+
+        const concurrent = await Promise.all([refresh(deviceA), refresh(deviceA)]);
+        assert.deepEqual(
+          concurrent.map((response) => response.status).sort(),
+          [200, 401],
+          'Exactly one concurrent refresh must claim the token',
+        );
+        const successful = concurrent.find((response) => response.status === 200);
+        const rotatedA = refreshCookie(successful);
+
+        const replayedFamily = await refresh(rotatedA);
+        assert.equal(replayedFamily.status, 401, 'Replay must revoke the affected token family');
+
+        const deviceBRefresh = await refresh(deviceB);
+        assert.equal(deviceBRefresh.status, 200, 'Replay on device A must not revoke device B');
+        const rotatedB = refreshCookie(deviceBRefresh);
+
+        const logout = await fetch(`${API_URL}/auth/logout`, {
+          method: 'POST',
+          headers: { Origin: ORIGIN, Cookie: rotatedB },
+        });
+        assert.equal(logout.status, 200);
+        assert.equal((await refresh(rotatedB)).status, 401, 'Logout must revoke its current token');
+      },
+    );
   });
 
   // --- File Contracts ---
@@ -169,5 +258,23 @@ test('API Contracts Suite', async (t) => {
 
     // We do not test the actual conversion success here, as that is covered by FOUND-002 (baseline conversions).
     // This file strictly protects the API input validation and contract formats.
+  });
+
+  await t.test('Disabled commercial features are not reachable', async () => {
+    const flagsResponse = await fetch(`${API_URL}/feature-flags`);
+    assert.equal(flagsResponse.status, 200);
+    const flags = (await flagsResponse.json()).data;
+    assert.equal(flags.storeCheckout, false, 'Test deployment must keep checkout disabled');
+    assert.equal(flags.subscriptionsEnabled, false);
+    assert.equal(flags.teamsEnabled, false);
+    assert.equal(flags.apiKeysEnabled, false);
+    assert.equal(flags.adminPortalEnabled, false);
+
+    for (const route of ['/cart', '/downloads/library', '/licenses/my-licenses']) {
+      const response = await fetch(`${API_URL}${route}`, {
+        headers: { Authorization: `Bearer ${userToken}` },
+      });
+      assert.equal(response.status, 404, `${route} must be hidden while checkout is disabled`);
+    }
   });
 });

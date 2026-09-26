@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformRolesGuard } from '../common/guards/platform-roles.guard';
 import { PlatformRoles } from '../common/decorators/platform-roles.decorator';
 import { PlatformRole } from '@prisma/client';
+import { RequireFeatures } from '../feature-flags/require-features.decorator';
 
 @Controller('products')
 export class ProductsController {
@@ -25,6 +26,7 @@ export class ProductsController {
   @Post()
   @UseGuards(JwtAuthGuard, PlatformRolesGuard)
   @PlatformRoles(PlatformRole.ADMIN)
+  @RequireFeatures('adminPortalEnabled')
   async createProduct(@Body() dto: CreateProductDto) {
     const data = await this.productsService.createProduct(dto);
     return { success: true, data };

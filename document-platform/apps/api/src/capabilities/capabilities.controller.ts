@@ -1,11 +1,14 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CapabilityRegistry, createProcessingContext } from '@docconv/processing-core';
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 
 @ApiTags('capabilities')
 @Controller('capabilities')
 export class CapabilitiesController {
   private readonly registry = new CapabilityRegistry();
+
+  constructor(private readonly featureFlags: FeatureFlagsService) {}
 
   @Get()
   @ApiOperation({ summary: 'Describe processing capabilities enabled in this deployment' })
@@ -33,6 +36,7 @@ export class CapabilitiesController {
         engineHealth: {
           chromiumAndOfficeWorker: chromiumWorkerHealthy ? 'healthy' : 'unavailable',
         },
+        features: this.featureFlags.getFlags(),
         tools: Object.fromEntries(
           this.registry.list(context).map((tool) => [tool.operation, {
             slug: tool.slug,

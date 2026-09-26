@@ -6,6 +6,7 @@ generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -63,6 +64,16 @@ enum PaymentProvider {
   RAZORPAY
 }
 
+enum BillingType {
+  ONE_TIME
+  RECURRING
+}
+
+enum BillingInterval {
+  MONTH
+  YEAR
+}
+
 enum OrderStatus {
   PENDING
   PAID
@@ -88,6 +99,86 @@ enum ReservationStatus {
   SETTLED
   RELEASED
   EXPIRED
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+}
+
+enum BlogDocumentStatus {
+  DRAFT
+  READY
+  ARCHIVED
+  DELETED
+}
+
+enum BlogGenerationStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum BlogExportStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum BlogDestinationType {
+  WORDPRESS
+  SHOPIFY
+  CUSTOM
+  JTL
+}
+
+enum BlogPublicationStatus {
+  DRAFT
+  PUBLISHED
+  FAILED
+  RETRYING
+}
+
+enum BlogScheduleStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  PAUSED
+  CANCELLED
+}
+
+enum BlogNotificationType {
+  GENERATION_COMPLETE
+  GENERATION_FAILED
+  PUBLISH_SUCCESS
+  PUBLISH_FAILED
+  SCHEDULE_FAILED
+  PROVIDER_FAILURE
+  SUBSCRIPTION_LIMIT
+  UPSTREAM_RELEASE
+}
+
+enum BlogProviderType {
+  OPENAI
+  GOOGLE
+  ANTHROPIC
+  OPENROUTER
+  GROQ
+  XAI
+  HUGGINGFACE
+  MISTRAL
+  TOGETHER
+  FIREWORKS
+  PERPLEXITY
+  SARVAM
+  TAVILY
+  CUSTOM
 }
 
 enum FileStatus {
@@ -132,6 +223,72 @@ enum TemplateType {
   HEADER_FOOTER
 }
 
+enum AiProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum AiConversationStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum AiMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+enum MemoryType {
+  FACT
+  ARCHITECTURE
+  DECISION
+  REQUIREMENT
+  PREFERENCE
+  CONSTRAINT
+  TASK
+  BUG
+  STATUS
+  INTEGRATION
+  CODE_KNOWLEDGE
+  SESSION_SUMMARY
+  PROJECT_SUMMARY
+}
+
+enum MemoryStatus {
+  ACTIVE
+  SUPERSEDED
+  ARCHIVED
+  DELETED
+}
+
+enum MemorySourceType {
+  AUTO_EXTRACTED
+  USER_CREATED
+  IMPORTED
+  SYSTEM_GENERATED
+}
+
+enum MemoryDomain {
+  PROJECT_MEMORY
+  CODE_KNOWLEDGE
+  DOCUMENT_KNOWLEDGE
+}
+
+enum MemoryVisibility {
+  PROJECT
+  USER
+}
+
+enum MemoryTrustLevel {
+  EXPLICIT
+  INTERNAL
+  ASSISTANT
+  IMPORTED
+  EXTERNAL
+}
+
 // ─── Users ───────────────────────────────────────────────────
 
 model User {
@@ -164,6 +321,15 @@ model User {
   licenses                LicenseKey[]
   quotaReservations       QuotaReservation[]
   downloadLogs            DownloadLog[]
+  aiProjects              AiProject[]
+  aiConversations         AiConversation[]
+  aiMessages              AiMessage[]
+  aiMemories              AiMemory[]
+  aiSessionSummaries      AiSessionSummary[]
+  blogDocuments           BlogDocument[]
+  blogGenerationJobs      BlogGenerationJob[]
+  blogImages              BlogImage[]
+  blogExports             BlogExport[]
 
   @@map("users")
 }
@@ -173,6 +339,7 @@ model User {
 model RefreshSession {
   id        String    @id @default(uuid())
   userId    String    @map("user_id")
+  familyId  String    @default(uuid()) @map("family_id")
   tokenHash String    @unique @map("token_hash")
   userAgent String?   @map("user_agent")
   ipAddress String?   @map("ip_address")
@@ -183,6 +350,7 @@ model RefreshSession {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([familyId])
   @@map("refresh_sessions")
 }
 
@@ -244,17 +412,37 @@ model Organization {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
-  owner             User                 @relation("OrgOwner", fields: [ownerUserId], references: [id])
-  plan              SubscriptionPlan?    @relation(fields: [planId], references: [id])
-  members           OrganizationMember[]
-  subscriptions     Subscription[]
-  storedFiles       StoredFile[]
-  conversionJobs    ConversionJob[]
-  templates         Template[]
-  conversionPresets ConversionPreset[]
-  apiKeys           ApiKey[]
-  usageRecords      UsageRecord[]
-  auditLogs         AuditLog[]
+  owner                   User                     @relation("OrgOwner", fields: [ownerUserId], references: [id])
+  plan                    SubscriptionPlan?        @relation(fields: [planId], references: [id])
+  members                 OrganizationMember[]
+  subscriptions           Subscription[]
+  storedFiles             StoredFile[]
+  conversionJobs          ConversionJob[]
+  templates               Template[]
+  conversionPresets       ConversionPreset[]
+  apiKeys                 ApiKey[]
+  usageRecords            UsageRecord[]
+  auditLogs               AuditLog[]
+  quotaReservations       QuotaReservation[]
+  aiProjects              AiProject[]
+  aiConversations         AiConversation[]
+  aiMessages              AiMessage[]
+  aiMemories              AiMemory[]
+  aiSessionSummaries      AiSessionSummary[]
+  blogDocuments           BlogDocument[]
+  blogGenerationJobs      BlogGenerationJob[]
+  blogSources             BlogSource[]
+  blogImages              BlogImage[]
+  blogExports             BlogExport[]
+  blogProviderCredentials BlogProviderCredential[]
+  blogPromptTemplates     BlogPromptTemplate[]
+  blogStudioSetting       BlogStudioSetting?
+  blogDestinations        BlogDestination[]
+  blogProductCollections  BlogProductCollection[]
+  saasSubscriptions       SaasSubscription[]
+  saasUsageWindows        SaasUsageWindow[]
+  saasReservations        SaasUsageReservation[]
+  saasUsageRecords        SaasUsageRecord[]
 
   @@map("organizations")
 }
@@ -296,11 +484,11 @@ model Subscription {
 }
 
 model SubscriptionEvent {
-  id             String       @id @default(uuid())
-  subscriptionId String       @map("subscription_id")
-  eventType      String       @map("event_type")
-  payloadJson    Json         @map("payload_json")
-  createdAt      DateTime     @default(now()) @map("created_at")
+  id             String   @id @default(uuid())
+  subscriptionId String   @map("subscription_id")
+  eventType      String   @map("event_type")
+  payloadJson    Json     @map("payload_json")
+  createdAt      DateTime @default(now()) @map("created_at")
 
   subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
@@ -342,6 +530,7 @@ model QuotaReservation {
   id              String            @id @default(uuid())
   idempotencyKey  String            @unique @map("idempotency_key")
   userId          String?           @map("user_id")
+  organizationId  String?           @map("organization_id")
   anonymousId     String?           @map("anonymous_id")
   toolId          String            @map("tool_id")
   conversionJobId String?           @map("conversion_job_id")
@@ -352,10 +541,12 @@ model QuotaReservation {
   settledAt       DateTime?         @map("settled_at")
 
   user          User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization  Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tool          Tool           @relation(fields: [toolId], references: [id])
   conversionJob ConversionJob? @relation(fields: [conversionJobId], references: [id])
 
   @@index([userId, status])
+  @@index([organizationId, status])
   @@index([anonymousId, status])
   @@index([expiresAt, status])
   @@map("quota_reservations")
@@ -377,26 +568,30 @@ model Product {
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
 
-  prices       Price[]
-  releases     ProductRelease[]
-  cartItems    CartItem[]
-  orderItems   OrderItem[]
-  entitlements Entitlement[]
-  licenses     LicenseKey[]
+  prices            Price[]
+  releases          ProductRelease[]
+  cartItems         CartItem[]
+  orderItems        OrderItem[]
+  entitlements      Entitlement[]
+  licenses          LicenseKey[]
+  saasSubscriptions SaasSubscription[]
+  saasUsageWindows  SaasUsageWindow[]
 
   @@index([isPublished, type])
   @@map("products")
 }
 
 model Price {
-  id               String          @id @default(uuid())
-  productId        String          @map("product_id")
+  id               String           @id @default(uuid())
+  productId        String           @map("product_id")
   currency         CurrencyCode
-  amountMinorUnits Int             @map("amount_minor_units") // cents or paise
+  amountMinorUnits Int              @map("amount_minor_units") // cents or paise
   provider         PaymentProvider
-  providerPriceId  String?         @map("provider_price_id")
-  isActive         Boolean         @default(true) @map("is_active")
-  createdAt        DateTime        @default(now()) @map("created_at")
+  providerPriceId  String?          @map("provider_price_id")
+  billingType      BillingType      @default(ONE_TIME) @map("billing_type")
+  billingInterval  BillingInterval? @map("billing_interval")
+  isActive         Boolean          @default(true) @map("is_active")
+  createdAt        DateTime         @default(now()) @map("created_at")
 
   product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   cartItems  CartItem[]
@@ -404,6 +599,562 @@ model Price {
 
   @@unique([productId, currency])
   @@map("prices")
+}
+
+// ─── Blog Studio SaaS ────────────────────────────────────────
+
+model BlogDocument {
+  id              String             @id @default(uuid())
+  organizationId  String             @map("organization_id")
+  createdByUserId String             @map("created_by_user_id")
+  title           String
+  slug            String
+  topic           String
+  html            String             @db.Text
+  editorJson      Json               @map("editor_json")
+  metadataJson    Json               @map("metadata_json")
+  keywords        String[]           @default([])
+  seoScore        Int                @default(0) @map("seo_score")
+  language        String
+  wordCount       Int                @default(0) @map("word_count")
+  status          BlogDocumentStatus @default(DRAFT)
+  version         Int                @default(1)
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  deletedAt       DateTime?          @map("deleted_at")
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User                @relation(fields: [createdByUserId], references: [id])
+  jobs         BlogGenerationJob[]
+  sources      BlogSource[]
+  images       BlogImage[]
+  exports      BlogExport[]
+  revisions    BlogRevision[]
+  publications BlogPublication[]
+  remotePosts  BlogRemotePost[]
+  schedules    BlogSchedule[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, status, updatedAt])
+  @@map("blog_documents")
+}
+
+model BlogGenerationJob {
+  id                     String               @id @default(uuid())
+  organizationId         String               @map("organization_id")
+  userId                 String               @map("user_id")
+  blogId                 String?              @map("blog_id")
+  inputJson              Json                 @map("input_json")
+  checkpointJson         Json?                @map("checkpoint_json")
+  parametersSnapshotJson Json?                @map("parameters_snapshot_json")
+  promptTemplateVersion  Int?                 @map("prompt_template_version")
+  progress               Int                  @default(0)
+  currentStage           String?              @map("current_stage")
+  model                  String?
+  status                 BlogGenerationStatus @default(QUEUED)
+  errorCode              String?              @map("error_code")
+  errorMessage           String?              @map("error_message")
+  cancelRequestedAt      DateTime?            @map("cancel_requested_at")
+  startedAt              DateTime?            @map("started_at")
+  completedAt            DateTime?            @map("completed_at")
+  createdAt              DateTime             @default(now()) @map("created_at")
+  updatedAt              DateTime             @updatedAt @map("updated_at")
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User                  @relation(fields: [userId], references: [id])
+  blog         BlogDocument?         @relation(fields: [blogId], references: [id], onDelete: SetNull)
+  reservation  SaasUsageReservation?
+  usageRecords SaasUsageRecord[]
+
+  @@index([organizationId, status, createdAt])
+  @@index([userId, createdAt])
+  @@map("blog_generation_jobs")
+}
+
+model BlogSource {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  blogId         String   @map("blog_id")
+  url            String   @db.Text
+  title          String
+  citationJson   Json?    @map("citation_json")
+  retrievedAt    DateTime @map("retrieved_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  blog         BlogDocument @relation(fields: [blogId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, blogId])
+  @@map("blog_sources")
+}
+
+model BlogImage {
+  id              String   @id @default(uuid())
+  organizationId  String   @map("organization_id")
+  blogId          String   @map("blog_id")
+  createdByUserId String   @map("created_by_user_id")
+  storageKey      String   @map("storage_key")
+  mimeType        String   @map("mime_type")
+  width           Int
+  height          Int
+  prompt          String   @db.Text
+  altText         String?  @map("alt_text")
+  isFeatured      Boolean  @default(false) @map("is_featured")
+  credits         Int      @default(0)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  blog         BlogDocument @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdByUserId], references: [id])
+
+  @@index([organizationId, blogId])
+  @@map("blog_images")
+}
+
+model BlogExport {
+  id              String           @id @default(uuid())
+  organizationId  String           @map("organization_id")
+  blogId          String           @map("blog_id")
+  createdByUserId String           @map("created_by_user_id")
+  format          String
+  storageKey      String?          @map("storage_key")
+  mimeType        String?          @map("mime_type")
+  status          BlogExportStatus @default(QUEUED)
+  errorMessage    String?          @map("error_message")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  completedAt     DateTime?        @map("completed_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  blog         BlogDocument @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdByUserId], references: [id])
+
+  @@index([organizationId, blogId, createdAt])
+  @@map("blog_exports")
+}
+
+// ─── Blog Studio Revisions ───────────────────────────────────
+
+model BlogRevision {
+  id              String   @id @default(uuid())
+  organizationId  String   @map("organization_id")
+  blogId          String   @map("blog_id")
+  createdByUserId String   @map("created_by_user_id")
+  version         Int
+  title           String
+  html            String   @db.Text
+  editorJson      Json     @map("editor_json")
+  metadataJson    Json?    @map("metadata_json")
+  source          String   @default("edit") // edit | generation | regeneration
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  blog BlogDocument @relation(fields: [blogId], references: [id], onDelete: Cascade)
+
+  @@index([blogId, version])
+  @@map("blog_revisions")
+}
+
+// ─── Blog Studio Provider Credentials ────────────────────────
+
+model BlogProviderCredential {
+  id                   String           @id @default(uuid())
+  organizationId       String           @map("organization_id")
+  providerType         BlogProviderType @map("provider_type")
+  label                String
+  maskedIdentifier     String           @map("masked_identifier")
+  encryptedCredential  String           @map("encrypted_credential") @db.Text
+  encryptionKeyVersion Int              @default(1) @map("encryption_key_version")
+  customEndpoint       String?          @map("custom_endpoint")
+  isActive             Boolean          @default(true) @map("is_active")
+  lastTestedAt         DateTime?        @map("last_tested_at")
+  lastTestSuccess      Boolean?         @map("last_test_success")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, providerType, label])
+  @@index([organizationId, isActive])
+  @@map("blog_provider_credentials")
+}
+
+// ─── Blog Studio Prompt Templates ────────────────────────────
+
+model BlogPromptTemplate {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  stage          String // pipeline stage name
+  name           String
+  systemPrompt   String   @map("system_prompt") @db.Text
+  userPrompt     String   @map("user_prompt") @db.Text
+  version        Int      @default(1)
+  isDefault      Boolean  @default(false) @map("is_default")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, stage, version])
+  @@index([organizationId, stage, isDefault])
+  @@map("blog_prompt_templates")
+}
+
+// ─── Blog Studio Organization Settings ───────────────────────
+
+model BlogStudioSetting {
+  id                    String   @id @default(uuid())
+  organizationId        String   @unique @map("organization_id")
+  defaultTextModel      String?  @map("default_text_model")
+  defaultImageModel     String?  @map("default_image_model")
+  defaultSearchProvider String?  @map("default_search_provider")
+  deepResearchProvider  String?  @map("deep_research_provider")
+  enableModelDiscovery  Boolean  @default(false) @map("enable_model_discovery")
+  settingsJson          Json?    @map("settings_json")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("blog_studio_settings")
+}
+
+// ─── Blog Studio Publishing Destinations ─────────────────────
+
+model BlogDestination {
+  id                   String              @id @default(uuid())
+  organizationId       String              @map("organization_id")
+  type                 BlogDestinationType
+  label                String
+  endpointUrl          String              @map("endpoint_url")
+  encryptedCredential  String?             @map("encrypted_credential") @db.Text
+  encryptionKeyVersion Int                 @default(1) @map("encryption_key_version")
+  configJson           Json?               @map("config_json")
+  isActive             Boolean             @default(true) @map("is_active")
+  lastTestedAt         DateTime?           @map("last_tested_at")
+  lastTestSuccess      Boolean?            @map("last_test_success")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  publications BlogPublication[]
+  categoryMaps BlogCategoryMapping[]
+  schedules    BlogSchedule[]
+
+  @@unique([organizationId, type, label])
+  @@index([organizationId, isActive])
+  @@map("blog_destinations")
+}
+
+model BlogCategoryMapping {
+  id            String   @id @default(uuid())
+  destinationId String   @map("destination_id")
+  localCategory String   @map("local_category")
+  remoteId      String   @map("remote_id")
+  remoteName    String   @map("remote_name")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  destination BlogDestination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@unique([destinationId, localCategory])
+  @@map("blog_category_mappings")
+}
+
+// ─── Blog Studio Publications & Remote Posts ─────────────────
+
+model BlogPublication {
+  id              String                @id @default(uuid())
+  organizationId  String                @map("organization_id")
+  blogId          String                @map("blog_id")
+  destinationId   String                @map("destination_id")
+  createdByUserId String                @map("created_by_user_id")
+  status          BlogPublicationStatus @default(DRAFT)
+  remotePostId    String?               @map("remote_post_id")
+  remoteUrl       String?               @map("remote_url")
+  publishedAs     String                @default("draft") @map("published_as") // draft | live
+  idempotencyKey  String                @unique @map("idempotency_key")
+  attempt         Int                   @default(1)
+  errorMessage    String?               @map("error_message")
+  metadataJson    Json?                 @map("metadata_json")
+  publishedAt     DateTime?             @map("published_at")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  blog        BlogDocument    @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  destination BlogDestination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, blogId, status])
+  @@index([destinationId, status])
+  @@map("blog_publications")
+}
+
+model BlogRemotePost {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  destinationId  String   @map("destination_id")
+  blogId         String?  @map("blog_id")
+  remoteId       String   @map("remote_id")
+  remoteTitle    String   @map("remote_title")
+  remoteUrl      String?  @map("remote_url")
+  remoteStatus   String   @map("remote_status") // draft | published | pending | trashed
+  lastSyncedAt   DateTime @map("last_synced_at")
+  metadataJson   Json?    @map("metadata_json")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  blog BlogDocument? @relation(fields: [blogId], references: [id], onDelete: SetNull)
+
+  @@unique([destinationId, remoteId])
+  @@index([organizationId, destinationId])
+  @@map("blog_remote_posts")
+}
+
+// ─── Blog Studio Scheduler ───────────────────────────────────
+
+model BlogSchedule {
+  id              String             @id @default(uuid())
+  organizationId  String             @map("organization_id")
+  createdByUserId String             @map("created_by_user_id")
+  blogId          String?            @map("blog_id")
+  destinationId   String?            @map("destination_id")
+  jobType         String             @map("job_type") // generate | publish | generate_and_publish
+  scheduledAt     DateTime           @map("scheduled_at")
+  timezone        String             @default("UTC")
+  inputJson       Json?              @map("input_json") // generation parameters when jobType includes generate
+  categoryId      String?            @map("category_id")
+  generateImages  Boolean            @default(false) @map("generate_images")
+  autoPublish     Boolean            @default(false) @map("auto_publish")
+  status          BlogScheduleStatus @default(PENDING)
+  queueJobId      String?            @map("queue_job_id")
+  csvImportId     String?            @map("csv_import_id")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  blog        BlogDocument?     @relation(fields: [blogId], references: [id], onDelete: SetNull)
+  destination BlogDestination?  @relation(fields: [destinationId], references: [id], onDelete: SetNull)
+  csvImport   BlogCsvImport?    @relation(fields: [csvImportId], references: [id], onDelete: SetNull)
+  runs        BlogScheduleRun[]
+
+  @@index([organizationId, status, scheduledAt])
+  @@index([queueJobId])
+  @@map("blog_schedules")
+}
+
+model BlogScheduleRun {
+  id           String    @id @default(uuid())
+  scheduleId   String    @map("schedule_id")
+  startedAt    DateTime  @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+  succeeded    Boolean?
+  resultJson   Json?     @map("result_json")
+  errorMessage String?   @map("error_message")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  schedule BlogSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId, createdAt])
+  @@map("blog_schedule_runs")
+}
+
+model BlogCsvImport {
+  id              String   @id @default(uuid())
+  organizationId  String   @map("organization_id")
+  createdByUserId String   @map("created_by_user_id")
+  filename        String
+  rowCount        Int      @default(0) @map("row_count")
+  validCount      Int      @default(0) @map("valid_count")
+  duplicateCount  Int      @default(0) @map("duplicate_count")
+  errorCount      Int      @default(0) @map("error_count")
+  previewJson     Json?    @map("preview_json")
+  validationJson  Json?    @map("validation_json")
+  status          String   @default("pending") // pending | validated | importing | completed | failed
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  schedules BlogSchedule[]
+
+  @@index([organizationId, createdAt])
+  @@map("blog_csv_imports")
+}
+
+// ─── Blog Studio Product Context ─────────────────────────────
+
+model BlogProductCollection {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  name           String
+  sourceUrl      String?  @map("source_url")
+  sourceType     String?  @map("source_type") // shopify | woocommerce | jtl | generic
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  products     BlogProduct[]
+
+  @@index([organizationId])
+  @@map("blog_product_collections")
+}
+
+model BlogProduct {
+  id            String    @id @default(uuid())
+  collectionId  String    @map("collection_id")
+  externalId    String?   @map("external_id")
+  title         String
+  description   String?   @db.Text
+  price         String?
+  currency      String?
+  imageUrl      String?   @map("image_url")
+  productUrl    String?   @map("product_url")
+  category      String?
+  brand         String?
+  fieldsJson    Json?     @map("fields_json")
+  lastScrapedAt DateTime? @map("last_scraped_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  collection BlogProductCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, externalId])
+  @@index([collectionId])
+  @@map("blog_products")
+}
+
+// ─── Blog Studio Notifications ───────────────────────────────
+
+model BlogNotification {
+  id             String               @id @default(uuid())
+  organizationId String               @map("organization_id")
+  userId         String?              @map("user_id")
+  type           BlogNotificationType
+  title          String
+  message        String
+  resourceType   String?              @map("resource_type")
+  resourceId     String?              @map("resource_id")
+  readAt         DateTime?            @map("read_at")
+  createdAt      DateTime             @default(now()) @map("created_at")
+
+  @@index([organizationId, userId, readAt])
+  @@index([organizationId, createdAt])
+  @@map("blog_notifications")
+}
+
+// ─── Blog Studio Permissions ─────────────────────────────────
+
+model BlogStudioPermission {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  roleOrUserId   String   @map("role_or_user_id") // org role name or user id
+  action         String // generate | edit | delete | export | publish | schedule | integrations | provider_keys | prompts | analytics | logs
+  allowed        Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, roleOrUserId, action])
+  @@index([organizationId])
+  @@map("blog_studio_permissions")
+}
+
+model SaasSubscription {
+  id                 String             @id @default(uuid())
+  organizationId     String             @map("organization_id")
+  productId          String             @map("product_id")
+  provider           PaymentProvider
+  providerSubId      String             @unique @map("provider_sub_id")
+  status             SubscriptionStatus @default(INCOMPLETE)
+  currency           CurrencyCode
+  currentPeriodStart DateTime           @map("current_period_start")
+  currentPeriodEnd   DateTime           @map("current_period_end")
+  cancelAtPeriodEnd  Boolean            @default(false) @map("cancel_at_period_end")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id])
+
+  @@unique([organizationId, productId])
+  @@index([organizationId, status])
+  @@map("saas_subscriptions")
+}
+
+model SaasUsageWindow {
+  id              String   @id @default(uuid())
+  organizationId  String   @map("organization_id")
+  productId       String   @map("product_id")
+  windowStart     DateTime @map("window_start")
+  windowEnd       DateTime @map("window_end")
+  blogLimit       Int      @map("blog_limit")
+  creditLimit     Int      @map("credit_limit")
+  blogsConsumed   Int      @default(0) @map("blogs_consumed")
+  creditsConsumed Int      @default(0) @map("credits_consumed")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      Product                @relation(fields: [productId], references: [id])
+  reservations SaasUsageReservation[]
+  records      SaasUsageRecord[]
+
+  @@unique([organizationId, productId, windowStart])
+  @@index([organizationId, windowEnd])
+  @@map("saas_usage_windows")
+}
+
+model SaasUsageReservation {
+  id               String            @id @default(uuid())
+  organizationId   String            @map("organization_id")
+  usageWindowId    String            @map("usage_window_id")
+  generationJobId  String            @unique @map("generation_job_id")
+  estimatedCredits Int               @map("estimated_credits")
+  reservesBlog     Boolean           @default(true) @map("reserves_blog")
+  status           ReservationStatus @default(RESERVED)
+  expiresAt        DateTime          @map("expires_at")
+  settledAt        DateTime?         @map("settled_at")
+  createdAt        DateTime          @default(now()) @map("created_at")
+
+  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  usageWindow   SaasUsageWindow   @relation(fields: [usageWindowId], references: [id], onDelete: Cascade)
+  generationJob BlogGenerationJob @relation(fields: [generationJobId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, expiresAt])
+  @@map("saas_usage_reservations")
+}
+
+model SaasUsageRecord {
+  id              String   @id @default(uuid())
+  organizationId  String   @map("organization_id")
+  usageWindowId   String   @map("usage_window_id")
+  generationJobId String?  @map("generation_job_id")
+  usageType       String   @map("usage_type")
+  inputTokens     Int      @default(0) @map("input_tokens")
+  outputTokens    Int      @default(0) @map("output_tokens")
+  imageCount      Int      @default(0) @map("image_count")
+  credits         Int      @default(0)
+  completedBlogs  Int      @default(0) @map("completed_blogs")
+  model           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organization  Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  usageWindow   SaasUsageWindow    @relation(fields: [usageWindowId], references: [id], onDelete: Cascade)
+  generationJob BlogGenerationJob? @relation(fields: [generationJobId], references: [id], onDelete: SetNull)
+
+  @@unique([generationJobId, usageType])
+  @@index([organizationId, createdAt])
+  @@map("saas_usage_records")
+}
+
+model AiModelPrice {
+  id                  String    @id @default(uuid())
+  provider            String
+  model               String
+  version             Int
+  inputPerMillionUsd  Decimal   @map("input_per_million_usd") @db.Decimal(12, 6)
+  outputPerMillionUsd Decimal   @map("output_per_million_usd") @db.Decimal(12, 6)
+  imageUsd            Decimal   @map("image_usd") @db.Decimal(12, 6)
+  effectiveFrom       DateTime  @map("effective_from")
+  effectiveTo         DateTime? @map("effective_to")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  @@unique([provider, model, version])
+  @@index([provider, model, effectiveFrom])
+  @@map("ai_model_prices")
 }
 
 model ProductRelease {
@@ -530,8 +1281,8 @@ model LicenseKey {
   order       Order?              @relation(fields: [orderId], references: [id])
   activations LicenseActivation[]
 
-  @@index([userId, productId])
   @@unique([orderId, productId])
+  @@index([userId, productId])
   @@map("license_keys")
 }
 
@@ -664,6 +1415,25 @@ model ConversionEvent {
   @@map("conversion_events")
 }
 
+model OutboxEvent {
+  id            String       @id @default(uuid())
+  aggregateType String       @map("aggregate_type")
+  aggregateId   String       @map("aggregate_id")
+  eventType     String       @map("event_type")
+  payloadJson   Json         @map("payload_json")
+  status        OutboxStatus @default(PENDING)
+  attemptCount  Int          @default(0) @map("attempt_count")
+  nextAttemptAt DateTime     @default(now()) @map("next_attempt_at")
+  publishedAt   DateTime?    @map("published_at")
+  lastError     String?      @map("last_error")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  @@unique([aggregateType, aggregateId, eventType])
+  @@index([status, nextAttemptAt])
+  @@map("outbox_events")
+}
+
 model Template {
   id             String       @id @default(uuid())
   organizationId String       @map("organization_id")
@@ -722,6 +1492,7 @@ model UsageRecord {
   userId          String   @map("user_id")
   conversionJobId String?  @map("conversion_job_id")
   operation       String
+  units           Int      @default(1)
   inputBytes      BigInt?  @map("input_bytes")
   outputBytes     BigInt?  @map("output_bytes")
   processingMs    Int?     @map("processing_ms")
@@ -731,6 +1502,7 @@ model UsageRecord {
   user          User           @relation(fields: [userId], references: [id])
   conversionJob ConversionJob? @relation(fields: [conversionJobId], references: [id])
 
+  @@unique([conversionJobId])
   @@index([organizationId])
   @@index([userId])
   @@index([createdAt])
@@ -757,4 +1529,146 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ─── Persistent AI Memory ────────────────────────────────────
+
+model AiProject {
+  id                    String          @id @default(uuid())
+  organizationId        String          @map("organization_id")
+  createdByUserId       String          @map("created_by_user_id")
+  name                  String
+  description           String?         @db.Text
+  status                AiProjectStatus @default(ACTIVE)
+  memoryEnabled         Boolean         @default(true) @map("memory_enabled")
+  autoExtractionEnabled Boolean         @default(true) @map("auto_extraction_enabled")
+  summary               String?         @db.Text
+  summaryVersion        Int             @default(0) @map("summary_version")
+  summaryUpdatedAt      DateTime?       @map("summary_updated_at")
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  organization  Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy     User               @relation(fields: [createdByUserId], references: [id])
+  conversations AiConversation[]
+  memories      AiMemory[]
+  summaries     AiSessionSummary[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, updatedAt])
+  @@map("ai_projects")
+}
+
+model AiConversation {
+  id                String               @id @default(uuid())
+  organizationId    String               @map("organization_id")
+  projectId         String               @map("project_id")
+  userId            String               @map("user_id")
+  title             String
+  status            AiConversationStatus @default(ACTIVE)
+  autoMemoryEnabled Boolean              @default(true) @map("auto_memory_enabled")
+  lastSummarizedAt  DateTime?            @map("last_summarized_at")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        AiProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages       AiMessage[]
+  sourceMemories AiMemory[]
+  summaries      AiSessionSummary[]
+
+  @@index([organizationId, projectId, status])
+  @@index([userId, updatedAt])
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id             String        @id @default(uuid())
+  organizationId String        @map("organization_id")
+  conversationId String        @map("conversation_id")
+  userId         String?       @map("user_id")
+  role           AiMessageRole
+  content        String        @db.Text
+  tokenEstimate  Int           @default(0) @map("token_estimate")
+  metadataJson   Json?         @map("metadata_json")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sourceMemories AiMemory[]
+
+  @@index([organizationId, conversationId, createdAt])
+  @@index([conversationId, createdAt])
+  @@map("ai_messages")
+}
+
+model AiMemory {
+  id                   String           @id @default(uuid())
+  organizationId       String           @map("organization_id")
+  projectId            String           @map("project_id")
+  createdByUserId      String           @map("created_by_user_id")
+  visibility           MemoryVisibility @default(PROJECT)
+  domain               MemoryDomain     @default(PROJECT_MEMORY)
+  type                 MemoryType
+  title                String
+  content              String           @db.Text
+  conceptKey           String?          @map("concept_key")
+  importance           Float            @default(0.5)
+  confidence           Float            @default(0.5)
+  status               MemoryStatus     @default(ACTIVE)
+  sourceType           MemorySourceType @map("source_type")
+  sourceTrust          MemoryTrustLevel @default(INTERNAL) @map("source_trust")
+  sourceConversationId String?          @map("source_conversation_id")
+  sourceMessageId      String?          @map("source_message_id")
+  pinned               Boolean          @default(false)
+  embedding            Float[]          @default([])
+  embeddingProvider    String?          @map("embedding_provider")
+  embeddingModel       String?          @map("embedding_model")
+  embeddingVersion     String?          @map("embedding_version")
+  metadataJson         Json?            @map("metadata_json")
+  lastAccessedAt       DateTime?        @map("last_accessed_at")
+  accessCount          Int              @default(0) @map("access_count")
+  supersededByMemoryId String?          @map("superseded_by_memory_id")
+  deletedAt            DateTime?        @map("deleted_at")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project            AiProject       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy          User            @relation(fields: [createdByUserId], references: [id])
+  sourceConversation AiConversation? @relation(fields: [sourceConversationId], references: [id], onDelete: SetNull)
+  sourceMessage      AiMessage?      @relation(fields: [sourceMessageId], references: [id], onDelete: SetNull)
+  supersededBy       AiMemory?       @relation("MemorySupersession", fields: [supersededByMemoryId], references: [id], onDelete: SetNull)
+  supersedes         AiMemory[]      @relation("MemorySupersession")
+
+  @@index([organizationId, projectId, status])
+  @@index([organizationId, projectId, type, status])
+  @@index([organizationId, projectId, conceptKey, status])
+  @@index([createdByUserId, visibility, status])
+  @@index([updatedAt])
+  @@map("ai_memories")
+}
+
+model AiSessionSummary {
+  id               String   @id @default(uuid())
+  organizationId   String   @map("organization_id")
+  projectId        String   @map("project_id")
+  conversationId   String   @map("conversation_id")
+  userId           String   @map("user_id")
+  summary          String   @db.Text
+  throughMessageId String?  @map("through_message_id")
+  messageCount     Int      @default(0) @map("message_count")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      AiProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, projectId, createdAt])
+  @@index([conversationId, updatedAt])
+  @@map("ai_session_summaries")
 }

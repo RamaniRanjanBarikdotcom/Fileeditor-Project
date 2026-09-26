@@ -8,6 +8,6 @@ import { TempFileCleanupService } from './temp-file-cleanup.service';
 @Module({
   controllers: [FilesController],
   providers: [FilesService, UrlInspectorService, UrlSecurityService, TempFileCleanupService],
-  exports: [FilesService],
+  exports: [FilesService, UrlSecurityService],
 })
 export class FilesModule {}

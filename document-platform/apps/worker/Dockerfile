@@ -2,7 +2,11 @@ FROM node:22-bookworm-slim
 
 WORKDIR /app
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends openssl pandoc poppler-utils tesseract-ocr python3 python3-venv \
+    && apt-get install -y --no-install-recommends \
+      openssl pandoc poppler-utils tesseract-ocr python3 python3-venv \
+      libreoffice-core libreoffice-writer libreoffice-calc \
+      fontconfig fonts-dejavu-core fonts-liberation2 fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji \
+    && fc-cache -f \
     && python3 -m venv /opt/pdf2docx \
     && /opt/pdf2docx/bin/pip install --no-cache-dir pdf2docx==0.5.13 \
     && ln -s /opt/pdf2docx/bin/pdf2docx /usr/local/bin/pdf2docx \

@@ -3,9 +3,9 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: docconv-postgres
-    restart: unless-stopped
+    restart: always
     ports:
-      - "5432:5432"
+      - '127.0.0.1:5432:5432'
     environment:
       POSTGRES_USER: docconv
       POSTGRES_PASSWORD: docconv_secret
@@ -13,7 +13,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U docconv"]
+      test: ['CMD-SHELL', 'pg_isready -U docconv']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -22,14 +22,14 @@ services:
   redis:
     image: redis:7-alpine
     container_name: docconv-redis
-    restart: unless-stopped
+    restart: always
     ports:
-      - "6379:6379"
+      - '127.0.0.1:6379:6379'
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -38,10 +38,10 @@ services:
   minio:
     image: minio/minio:latest
     container_name: docconv-minio
-    restart: unless-stopped
+    restart: always
     ports:
-      - "9000:9000"   # API
-      - "9001:9001"   # Console
+      - '127.0.0.1:9000:9000' # API
+      - '127.0.0.1:9001:9001' # Console
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -49,7 +49,7 @@ services:
     volumes:
       - minio-data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ['CMD', 'mc', 'ready', 'local']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -75,25 +75,65 @@ services:
 
   # ─── Gotenberg (Chromium + LibreOffice document conversion) ──
   gotenberg:
-    image: gotenberg/gotenberg:8
+    image: gotenberg/gotenberg:8.37.0
     container_name: docconv-gotenberg
-    restart: unless-stopped
+    restart: always
     ports:
-      - "3100:3000"
+      - '3100:3000'
     command:
-      - "gotenberg"
-      - "--chromium-disable-javascript=false"
-      - "--chromium-clear-cookies"
-      - "--chromium-clear-storage"
-      - "--chromium-deny-private-ips"
-      - "--chromium-allow-list=^file:///tmp/.*$|^https?://.*$"
-      - "--api-timeout=240s"
-      - "--log-level=info"
+      - 'gotenberg'
+      - '--chromium-disable-javascript=false'
+      - '--chromium-clear-cookies'
+      - '--chromium-clear-storage'
+      - '--chromium-deny-private-ips'
+      - '--libreoffice-deny-private-ips'
+      - '--api-download-from-deny-private-ips'
+      - '--webhook-deny-private-ips'
+      - '--api-timeout=240s'
+      - '--log-level=info'
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # ─── ClamAV malware scanner ─────────────────────────────────
+  clamav:
+    # The Debian image is the official multi-architecture build (amd64/arm64).
+    image: clamav/clamav-debian:stable
+    container_name: docconv-clamav
+    restart: always
+    ports:
+      - '127.0.0.1:3310:3310'
+    volumes:
+      - clamav-data:/var/lib/clamav
+    healthcheck:
+      test: ['CMD-SHELL', 'clamdscan --ping 1']
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+
+  # ─── Database migration and required reference-data seed ───
+  db-init:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: docconv-db-init
+    restart: 'no'
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://docconv:docconv_secret@postgres:5432/docconv?schema=public
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      ALLOW_ADMIN_SEED_IN_PRODUCTION: ${ALLOW_ADMIN_SEED_IN_PRODUCTION:-false}
+    command:
+      - /bin/sh
+      - -c
+      - corepack pnpm --filter @docconv/api exec prisma migrate deploy && corepack pnpm --filter @docconv/api exec prisma db seed
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   # ─── NestJS API ─────────────────────────────────────────────
   api:
@@ -101,19 +141,20 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     container_name: docconv-api
-    restart: unless-stopped
+    restart: always
     ports:
-      - "4201:4201"
+      - '127.0.0.1:4201:4201'
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       DEPLOYMENT_MODE: DOCKER_NATIVE
-      PROCESSING_BROWSER_ENABLED: "true"
-      PROCESSING_NODE_ENABLED: "true"
-      PROCESSING_NATIVE_ENABLED: "true"
+      PROCESSING_BROWSER_ENABLED: 'true'
+      PROCESSING_NODE_ENABLED: 'true'
+      PROCESSING_NATIVE_ENABLED: 'true'
       JOB_BACKEND: BULLMQ
       PORT: 4201
       APP_URL: http://localhost:5173
       PUBLIC_WEB_URL: http://localhost:5173
+      COOKIE_SECURE: 'false'
       DATABASE_URL: postgresql://docconv:docconv_secret@postgres:5432/docconv?schema=public
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -122,16 +163,26 @@ services:
       JWT_REFRESH_SECRET: local-development-refresh-secret-change-before-production
       LICENSE_ENCRYPTION_KEY: local-development-license-secret-change-before-production
       CHECKOUT_RETURN_ORIGINS: http://localhost:5173
-      SWAGGER_ENABLED: "false"
-      FEATURE_SUBSCRIPTIONS: "false"
-      FEATURE_ADMIN: "false"
+      SWAGGER_ENABLED: 'false'
+      FEATURE_PUBLIC_TOOLS: 'true'
+      FEATURE_ANONYMOUS_USAGE: 'true'
+      FEATURE_STORE_CHECKOUT: 'false'
+      FEATURE_STRIPE: 'false'
+      FEATURE_RAZORPAY: 'false'
+      FEATURE_SUBSCRIPTIONS: 'false'
+      FEATURE_TEAMS: 'false'
+      FEATURE_API_KEYS: 'false'
+      FEATURE_ADMIN_PORTAL: 'false'
       STORAGE_ENDPOINT: http://minio:9000
       STORAGE_PUBLIC_ENDPOINT: http://localhost:9000
       STORAGE_ACCESS_KEY: minioadmin
       STORAGE_SECRET_KEY: minioadmin
       STORAGE_REGION: us-east-1
-      STORAGE_FORCE_PATH_STYLE: "true"
+      STORAGE_FORCE_PATH_STYLE: 'true'
       GOTENBERG_URL: http://gotenberg:3000
+      CLAMAV_ENABLED: 'true'
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
       TEMP_FILE_MAX_TTL_SECONDS: 600
       TEMP_FILE_CLEANUP_INTERVAL_MS: 60000
       MAX_TRANSPORT_UPLOAD_SIZE_BYTES: 262144000
@@ -145,19 +196,60 @@ services:
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
       RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
-    command:
-      - /bin/sh
-      - -c
-      - corepack pnpm --filter @docconv/api exec prisma db execute --file prisma/migrations/20260910000000_secure_license_fulfillment/migration.sql --schema prisma/schema.prisma && corepack pnpm --filter @docconv/api exec prisma db push --skip-generate && corepack pnpm --filter @docconv/api exec prisma db seed && node apps/api/dist/main.js
+      MEMORY_ENABLED: ${MEMORY_ENABLED:-true}
+      MEMORY_AUTO_EXTRACTION_ENABLED: ${MEMORY_AUTO_EXTRACTION_ENABLED:-true}
+      MEMORY_SESSION_SUMMARIES_ENABLED: ${MEMORY_SESSION_SUMMARIES_ENABLED:-true}
+      MEMORY_PROJECT_SUMMARIES_ENABLED: ${MEMORY_PROJECT_SUMMARIES_ENABLED:-true}
+      MEMORY_RECENT_MESSAGE_LIMIT: ${MEMORY_RECENT_MESSAGE_LIMIT:-24}
+      MEMORY_CANDIDATE_LIMIT: ${MEMORY_CANDIDATE_LIMIT:-200}
+      MEMORY_RETRIEVED_LIMIT: ${MEMORY_RETRIEVED_LIMIT:-12}
+      MEMORY_MINIMUM_IMPORTANCE: ${MEMORY_MINIMUM_IMPORTANCE:-0.55}
+      MEMORY_DUPLICATE_THRESHOLD: ${MEMORY_DUPLICATE_THRESHOLD:-0.88}
+      MEMORY_CONFLICT_THRESHOLD: ${MEMORY_CONFLICT_THRESHOLD:-0.72}
+      MEMORY_SUMMARY_MESSAGE_THRESHOLD: ${MEMORY_SUMMARY_MESSAGE_THRESHOLD:-24}
+      MEMORY_SESSION_SUMMARY_MESSAGE_INCREMENT: ${MEMORY_SESSION_SUMMARY_MESSAGE_INCREMENT:-12}
+      MEMORY_PROJECT_SUMMARY_REFRESH_MINUTES: ${MEMORY_PROJECT_SUMMARY_REFRESH_MINUTES:-60}
+      MEMORY_RAW_MESSAGE_RETENTION_DAYS: ${MEMORY_RAW_MESSAGE_RETENTION_DAYS:-90}
+      MEMORY_SESSION_SUMMARY_RETENTION_DAYS: ${MEMORY_SESSION_SUMMARY_RETENTION_DAYS:-365}
+      MEMORY_DELETED_RETENTION_DAYS: ${MEMORY_DELETED_RETENTION_DAYS:-30}
+      MEMORY_BUDGET_PROJECT_SUMMARY: ${MEMORY_BUDGET_PROJECT_SUMMARY:-800}
+      MEMORY_BUDGET_LONG_TERM: ${MEMORY_BUDGET_LONG_TERM:-2000}
+      MEMORY_BUDGET_SESSION_SUMMARY: ${MEMORY_BUDGET_SESSION_SUMMARY:-700}
+      MEMORY_BUDGET_RECENT_MESSAGES: ${MEMORY_BUDGET_RECENT_MESSAGES:-3000}
+      MEMORY_BUDGET_CODE_CONTEXT: ${MEMORY_BUDGET_CODE_CONTEXT:-1500}
+      MEMORY_BUDGET_TOTAL: ${MEMORY_BUDGET_TOTAL:-8000}
+      MEMORY_WEIGHT_SEMANTIC: ${MEMORY_WEIGHT_SEMANTIC:-0.45}
+      MEMORY_WEIGHT_IMPORTANCE: ${MEMORY_WEIGHT_IMPORTANCE:-0.20}
+      MEMORY_WEIGHT_TASK: ${MEMORY_WEIGHT_TASK:-0.15}
+      MEMORY_WEIGHT_RECENCY: ${MEMORY_WEIGHT_RECENCY:-0.10}
+      MEMORY_WEIGHT_USEFULNESS: ${MEMORY_WEIGHT_USEFULNESS:-0.05}
+      MEMORY_WEIGHT_PINNED: ${MEMORY_WEIGHT_PINNED:-0.05}
+      AI_PROVIDER: ${AI_PROVIDER:-openai-compatible}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_CHAT_MODEL: ${AI_CHAT_MODEL:-gpt-5-mini}
+      AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-text-embedding-3-small}
+      AI_REQUEST_TIMEOUT_MS: ${AI_REQUEST_TIMEOUT_MS:-60000}
+    command: ['node', 'apps/api/dist/main.js']
     depends_on:
       postgres:
         condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+      clamav:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:4201/api/v1/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:4201/api/v1/health/liveness').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -168,13 +260,13 @@ services:
       context: .
       dockerfile: apps/worker/Dockerfile
     container_name: docconv-worker
-    restart: unless-stopped
+    restart: always
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       DEPLOYMENT_MODE: DOCKER_NATIVE
-      PROCESSING_BROWSER_ENABLED: "true"
-      PROCESSING_NODE_ENABLED: "true"
-      PROCESSING_NATIVE_ENABLED: "true"
+      PROCESSING_BROWSER_ENABLED: 'true'
+      PROCESSING_NODE_ENABLED: 'true'
+      PROCESSING_NATIVE_ENABLED: 'true'
       TEMP_FILE_MAX_TTL_SECONDS: 600
       DATABASE_URL: postgresql://docconv:docconv_secret@postgres:5432/docconv?schema=public
       REDIS_URL: redis://redis:6379
@@ -182,7 +274,7 @@ services:
       STORAGE_ACCESS_KEY: minioadmin
       STORAGE_SECRET_KEY: minioadmin
       STORAGE_REGION: us-east-1
-      STORAGE_FORCE_PATH_STYLE: "true"
+      STORAGE_FORCE_PATH_STYLE: 'true'
       GOTENBERG_URL: http://gotenberg:3000
       CONVERSION_TIMEOUT_MS: 180000
       URL_CONVERSION_TIMEOUT_MS: 240000
@@ -192,6 +284,7 @@ services:
       OCR_LANGUAGES: eng
       PDF_TO_DOCX_ENGINE: pdf2docx
       PDF2DOCX_BIN: /usr/local/bin/pdf2docx
+      DOCX_COMPATIBILITY_VALIDATION_REQUIRED: 'true'
     depends_on:
       api:
         condition: service_healthy
@@ -206,17 +299,31 @@ services:
       args:
         INTERNAL_API_URL: http://api:4201
     container_name: docconv-web
-    restart: unless-stopped
+    restart: always
     ports:
-      - "5173:5173"
+      - '127.0.0.1:5173:5173'
     environment:
       INTERNAL_API_URL: http://api:4201
       NEXT_PUBLIC_SITE_URL: http://localhost:5173
     depends_on:
       api:
         condition: service_healthy
+        restart: true
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "Promise.all([fetch('http://localhost:5173/'),fetch('http://api:4201/api/v1/health')]).then(rs=>{if(rs.some(r=>!r.ok))process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
 
 volumes:
   postgres-data:
   redis-data:
   minio-data:
+  clamav-data:

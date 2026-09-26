@@ -70,6 +70,29 @@ export class RazorpayService {
     };
   }
 
+  async createSubscription(params: {
+    organizationId: string;
+    productId: string;
+    providerPlanId: string;
+  }): Promise<{ subscriptionId: string; keyId: string; checkoutUrl?: string }> {
+    if (!this.razorpay) throw new BadRequestException('Razorpay checkout is not configured.');
+    const subscription = await (this.razorpay as any).subscriptions.create({
+      plan_id: params.providerPlanId,
+      total_count: 100,
+      customer_notify: 1,
+      notes: {
+        organizationId: params.organizationId,
+        productId: params.productId,
+        productSlug: 'blog-studio-addon',
+      },
+    });
+    return {
+      subscriptionId: subscription.id,
+      keyId: this.keyId,
+      checkoutUrl: subscription.short_url || undefined,
+    };
+  }
+
   /**
    * Verifies client-side Razorpay payment signature.
    */

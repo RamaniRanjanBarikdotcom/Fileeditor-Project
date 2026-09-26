@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import {
   Upload,
   Globe,
@@ -12,14 +13,24 @@ import {
   Zap,
   ArrowRight,
   RefreshCw,
+  ArrowUp,
+  ArrowDown,
+  X,
+  FileText,
 } from 'lucide-react';
 import { ToolDto } from '@docconv/shared-types';
-import { fetchApi } from '../lib/api';
+import { fetchApi, restoreAccessToken } from '../lib/api';
 import {
   cancelBrowserProcessing,
   processInBrowserWorker,
 } from '../lib/browser-processing-controller';
+import { SERVER_POPPLER_REQUIRED } from '../lib/browser-processing-engine';
 import Link from 'next/link';
+
+const PdfPageWorkspace = dynamic(
+  () => import('./PdfPageWorkspace').then((module) => module.PdfPageWorkspace),
+  { ssr: false },
+);
 
 interface Props {
   tool: ToolDto;
@@ -36,11 +47,31 @@ export function InteractiveToolConverter({ tool }: Props) {
   const [downloadItems, setDownloadItems] = useState<Array<{ url: string; name: string }>>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [quotaRemaining, setQuotaRemaining] = useState<number | null>(null);
+  const [quotaLimit, setQuotaLimit] = useState<number | null>(null);
+  const [quotaAccessLevel, setQuotaAccessLevel] = useState<'ANONYMOUS' | 'SUBSCRIPTION' | 'ADMIN'>(
+    'ANONYMOUS',
+  );
+  const [quotaUnlimited, setQuotaUnlimited] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState<string>(tool.outputFormats[0] || 'pdf');
+  const [pdfFidelityMode, setPdfFidelityMode] = useState<'editable' | 'fixed' | 'visual' | 'ocr'>(
+    'fixed',
+  );
+  const [imageDpi, setImageDpi] = useState('150');
+  const [pdfImageEngine, setPdfImageEngine] = useState<'server' | 'browser'>(
+    tool.operation === 'pdf.toImages' && tool.capability?.native.supported ? 'server' : 'browser',
+  );
   const [pageSize, setPageSize] = useState<'A4' | 'Letter'>('A4');
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [pageSelection, setPageSelection] = useState('1');
+  const [pageOrder, setPageOrder] = useState('1');
   const [rotation, setRotation] = useState('90');
+  const [cropMargins, setCropMargins] = useState({ top: '0', right: '0', bottom: '0', left: '0' });
+  const [marginPoints, setMarginPoints] = useState('18');
+  const [pagesPerSheet, setPagesPerSheet] = useState('2');
+  const [gutterPoints, setGutterPoints] = useState('12');
+  const [headerText, setHeaderText] = useState('');
+  const [footerText, setFooterText] = useState('Page {page} of {pages}');
+  const [bates, setBates] = useState({ prefix: 'APP-', suffix: '', start: '1', padding: '6' });
   const [watermarkText, setWatermarkText] = useState('CONFIDENTIAL');
   const [metadata, setMetadata] = useState({ title: '', author: '', subject: '', keywords: '' });
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
@@ -53,7 +84,13 @@ export function InteractiveToolConverter({ tool }: Props) {
   const hasServerEngine = Boolean(
     tool.capability?.node.supported || tool.capability?.native.supported,
   );
-  const acceptsMultipleFiles = tool.operation === 'pdf.merge' || tool.operation === 'image.toPdf';
+  const useBrowserProcessing = Boolean(
+    isBrowserTool &&
+    (tool.operation !== 'pdf.toImages' || pdfImageEngine === 'browser' || !hasServerEngine),
+  );
+  const acceptsMultipleFiles = ['pdf.merge', 'pdf.alternateMix', 'image.toPdf'].includes(
+    tool.operation || '',
+  );
   const file = files[0] || null;
 
   const clearActiveJob = useCallback(() => {
@@ -96,9 +133,12 @@ export function InteractiveToolConverter({ tool }: Props) {
                 return;
               }
 
-              setDownloadItems([
-                { url: downloadRes.data.url, name: `converted.${outputFormat}` },
-              ]);
+              const outputName =
+                statusRes.data.outputFilename ||
+                (tool.operation === 'pdf.toImages'
+                  ? `converted-${outputFormat}-pages.zip`
+                  : `converted.${outputFormat}`);
+              setDownloadItems([{ url: downloadRes.data.url, name: outputName }]);
               setJobStatus('completed');
               setIsUploading(false);
               setQuotaRemaining((prev) => (prev !== null ? Math.max(0, prev - 1) : null));
@@ -127,13 +167,24 @@ export function InteractiveToolConverter({ tool }: Props) {
         }
       }, 1500);
     },
-    [clearActiveJob, isUrlTool],
+    [clearActiveJob, isUrlTool, tool.operation],
   );
 
   useEffect(() => {
     async function loadQuota() {
-      const res = await fetchApi<{ remaining: number; limit: number }>('/tools/quota/anonymous');
-      if (res.success && res.data) setQuotaRemaining(res.data.remaining);
+      await restoreAccessToken();
+      const res = await fetchApi<{
+        remaining: number | null;
+        limit: number | null;
+        accessLevel?: 'ADMIN' | 'SUBSCRIPTION';
+        unlimited?: boolean;
+      }>('/tools/quota/anonymous');
+      if (res.success && res.data) {
+        setQuotaRemaining(res.data.remaining);
+        setQuotaLimit(res.data.limit);
+        setQuotaAccessLevel(res.data.accessLevel || 'ANONYMOUS');
+        setQuotaUnlimited(Boolean(res.data.unlimited));
+      }
     }
     void loadQuota();
 
@@ -157,7 +208,7 @@ export function InteractiveToolConverter({ tool }: Props) {
   }, [selectedFormat, startPolling, tool.slug]);
 
   const handleCancel = async () => {
-    if (isBrowserTool && cancelBrowserProcessing()) {
+    if (useBrowserProcessing && cancelBrowserProcessing()) {
       setIsUploading(false);
       setProgress(0);
       setJobStatus('failed');
@@ -189,6 +240,21 @@ export function InteractiveToolConverter({ tool }: Props) {
     }
   };
 
+  const removeFile = (index: number) => {
+    setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+    setErrorMessage(null);
+  };
+
+  const moveFile = (index: number, direction: -1 | 1) => {
+    setFiles((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
   const handleStartConversion = async () => {
     setErrorMessage(null);
     setIsUploading(true);
@@ -215,29 +281,57 @@ export function InteractiveToolConverter({ tool }: Props) {
         }
 
         formData.append('file', file);
-        if (isBrowserTool && tool.operation) {
+        if (useBrowserProcessing && tool.operation) {
           const result = await processInBrowserWorker(tool.operation, files, {
             pageSize,
             orientation,
             pages: pageSelection,
+            pageOrder,
             rotation,
             watermarkText,
+            cropTop: cropMargins.top,
+            cropRight: cropMargins.right,
+            cropBottom: cropMargins.bottom,
+            cropLeft: cropMargins.left,
+            marginPoints,
+            pagesPerSheet,
+            gutterPoints,
+            headerText,
+            footerText,
+            batesPrefix: bates.prefix,
+            batesSuffix: bates.suffix,
+            batesStart: bates.start,
+            batesPadding: bates.padding,
             ...metadata,
+            outputFormat: selectedFormat,
+            imageDpi,
           });
-          if (!result.success || !result.blobs?.[0]) {
+          const shouldRetryWithPoppler = Boolean(
+            !result.success &&
+            hasServerEngine &&
+            tool.operation === 'pdf.toImages' &&
+            result.error?.message.includes(SERVER_POPPLER_REQUIRED),
+          );
+          if (!result.success && !shouldRetryWithPoppler) {
             throw new Error(result.error?.message || 'Browser processing failed.');
           }
-          localDownloadRefs.current.forEach((url) => URL.revokeObjectURL(url));
-          const items = result.blobs.map((output) => ({
-            url: URL.createObjectURL(output.blob),
-            name: output.name,
-          }));
-          localDownloadRefs.current = items.map((item) => item.url);
-          setDownloadItems(items);
-          setProgress(100);
-          setJobStatus('completed');
-          setIsUploading(false);
-          return;
+          if (shouldRetryWithPoppler) {
+            setPdfImageEngine('server');
+            setProgress(25);
+          } else {
+            if (!result.blobs?.[0]) throw new Error('Browser processing produced no output.');
+            localDownloadRefs.current.forEach((url) => URL.revokeObjectURL(url));
+            const items = result.blobs.map((output) => ({
+              url: URL.createObjectURL(output.blob),
+              name: output.name,
+            }));
+            localDownloadRefs.current = items.map((item) => item.url);
+            setDownloadItems(items);
+            setProgress(100);
+            setJobStatus('completed');
+            setIsUploading(false);
+            return;
+          }
         }
       }
 
@@ -246,17 +340,26 @@ export function InteractiveToolConverter({ tool }: Props) {
       }
 
       formData.append('targetFormat', selectedFormat);
-      formData.append('settings', JSON.stringify({ pageSize, orientation }));
-      const convRes = await fetch(`/api/v1/tools/${tool.slug}/execute`, {
+      formData.append(
+        'settings',
+        JSON.stringify({
+          pageSize,
+          orientation,
+          pdfFidelityMode,
+          imageDpi: Number(imageDpi),
+          imageFormat: selectedFormat,
+        }),
+      );
+      const convData = await fetchApi<any>(`/tools/${tool.slug}/execute`, {
         method: 'POST',
-        headers: { 'X-Requested-With': 'AppToolkitLabApp' },
         body: formData,
-        credentials: 'include',
       });
 
-      const convData = await convRes.json().catch(() => null);
-      if (!convData?.success) {
-        throw new Error(convData.error?.message || 'Failed to initialize conversion job');
+      if (!convData.success || !convData.data?.id) {
+        throw new Error(
+          convData.error?.message ||
+            'The conversion service returned an invalid response. Please try again.',
+        );
       }
 
       const jobId = convData.data.id;
@@ -295,6 +398,25 @@ export function InteractiveToolConverter({ tool }: Props) {
     setErrorMessage(null);
   };
 
+  const actionLabel =
+    tool.operation === 'pdf.organize'
+      ? 'Organize PDF'
+      : tool.operation === 'pdf.alternateMix'
+        ? 'Mix PDF Pages'
+        : tool.operation === 'pdf.crop'
+          ? 'Crop PDF'
+          : tool.operation === 'pdf.resize'
+            ? 'Resize PDF'
+            : tool.operation === 'pdf.nUp'
+              ? 'Create N-up PDF'
+              : tool.operation === 'pdf.headerFooter'
+                ? 'Add Header & Footer'
+                : tool.operation === 'pdf.batesNumbering'
+                  ? 'Apply Bates Numbers'
+                  : tool.operation === 'pdf.flattenForms'
+                    ? 'Flatten PDF Forms'
+                    : `Convert to ${selectedFormat.toUpperCase()} Now`;
+
   return (
     <div
       className="interactive-converter"
@@ -304,7 +426,7 @@ export function InteractiveToolConverter({ tool }: Props) {
         boxShadow: 'var(--shadow-xl)',
       }}
     >
-      {/* Top Banner: Anonymous Quota Meter */}
+      {/* Top Banner: server-authoritative access and quota meter */}
       <div
         className="converter-quota-bar"
         style={{
@@ -321,30 +443,40 @@ export function InteractiveToolConverter({ tool }: Props) {
             }}
           >
             <Zap className="w-3.5 h-3.5" style={{ color: '#f59e0b' }} />
-            Free Quota:
+            {quotaAccessLevel === 'ADMIN'
+              ? 'Admin Access:'
+              : quotaAccessLevel === 'SUBSCRIPTION'
+                ? 'Plan Access:'
+                : 'Free Quota:'}
           </span>
           <span style={{ color: 'var(--text-secondary)' }}>
-            {isBrowserTool
+            {useBrowserProcessing
               ? 'Private processing — no upload or server quota'
-              : quotaRemaining !== null
-                ? `${quotaRemaining} / 3 daily operations left`
-                : 'Server quota unavailable'}
+              : quotaUnlimited
+                ? 'Unlimited tool usage — no subscription required'
+                : quotaAccessLevel === 'SUBSCRIPTION' && quotaRemaining !== null
+                  ? `${quotaRemaining} / ${quotaLimit ?? 0} monthly units left`
+                  : quotaRemaining !== null
+                    ? `${quotaRemaining} / ${quotaLimit ?? 0} daily operations left`
+                    : 'Server quota unavailable'}
           </span>
         </div>
-        <Link
-          href="/pricing"
-          className="converter-pricing-link"
-          style={{ color: 'var(--brand-500)', textDecoration: 'none' }}
-        >
-          <span>Compare higher monthly limits</span>
-          <ArrowRight className="w-3 h-3" />
-        </Link>
+        {!quotaUnlimited && (
+          <Link
+            href="/pricing"
+            className="converter-pricing-link"
+            style={{ color: 'var(--brand-500)', textDecoration: 'none' }}
+          >
+            <span>Compare higher monthly limits</span>
+            <ArrowRight className="w-3 h-3" />
+          </Link>
+        )}
       </div>
 
       <div className="converter-body">
         {/* Converter Main Area */}
         {jobStatus === 'completed' ? (
-          <div className="text-center py-10 space-y-5">
+          <div className="converter-result">
             <div
               className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-lg"
               style={{
@@ -357,29 +489,41 @@ export function InteractiveToolConverter({ tool }: Props) {
             </div>
             <div>
               <h3 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                Conversion Complete!
+                Your document is ready
               </h3>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                Your file has been processed into{' '}
+                Processing finished successfully. Your{' '}
                 <span className="font-bold uppercase" style={{ color: 'var(--brand-500)' }}>
                   {selectedFormat}
-                </span>
-                .
+                </span>{' '}
+                file is ready to download.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <div className="converter-result-files">
               {downloadItems.map((item, index) => (
                 <a
                   key={item.url}
                   href={item.url}
                   download={item.name}
-                  className="btn btn-primary btn-md"
+                  className="converter-result-file"
                 >
-                  <Download className="w-4 h-4" />
-                  <span>{downloadItems.length > 1 ? `Page ${index + 1}` : 'Download Result'}</span>
+                  <span className="converter-result-file-icon">
+                    <FileText className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <strong>{item.name}</strong>
+                    <small>
+                      {downloadItems.length > 1 ? `Output ${index + 1}` : 'Processed output'}
+                    </small>
+                  </span>
+                  <span className="btn btn-primary btn-sm">
+                    <Download className="h-4 w-4" /> Download
+                  </span>
                 </a>
               ))}
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
               <button onClick={handleReset} className="btn btn-secondary btn-md">
                 <RefreshCw className="w-4 h-4" />
                 <span>Convert Another</span>
@@ -425,22 +569,28 @@ export function InteractiveToolConverter({ tool }: Props) {
             <div
               className="converter-privacy-note"
               style={{
-                background: isBrowserTool ? 'rgba(16,185,129,0.08)' : 'rgba(99,102,241,0.08)',
-                border: `1px solid ${isBrowserTool ? 'rgba(16,185,129,0.22)' : 'rgba(99,102,241,0.22)'}`,
+                background: useBrowserProcessing
+                  ? 'rgba(16,185,129,0.08)'
+                  : 'rgba(99,102,241,0.08)',
+                border: `1px solid ${useBrowserProcessing ? 'rgba(16,185,129,0.22)' : 'rgba(99,102,241,0.22)'}`,
                 color: 'var(--text-secondary)',
               }}
             >
               <FileCheck
                 className="mt-0.5 h-4 w-4 shrink-0"
-                style={{ color: isBrowserTool ? '#10b981' : 'var(--brand-500)' }}
+                style={{ color: useBrowserProcessing ? '#10b981' : 'var(--brand-500)' }}
               />
               <p>
                 <strong style={{ color: 'var(--text-primary)' }}>
-                  {isBrowserTool ? 'Private browser processing.' : 'Temporary server processing.'}
+                  {useBrowserProcessing
+                    ? 'Private browser processing.'
+                    : 'Universal server rendering.'}
                 </strong>{' '}
-                {isBrowserTool
+                {useBrowserProcessing
                   ? 'Your selected files stay on this device and do not count against server quota.'
-                  : 'The input and generated file expire as soon as the workflow permits and no later than 10 minutes.'}
+                  : tool.operation === 'pdf.toImages'
+                    ? 'Poppler renders embedded and subset PDF fonts directly; files expire as soon as the workflow permits and no later than 10 minutes.'
+                    : 'The input and generated file expire as soon as the workflow permits and no later than 10 minutes.'}
               </p>
             </div>
 
@@ -496,55 +646,116 @@ export function InteractiveToolConverter({ tool }: Props) {
                     e.currentTarget.style.backgroundColor = 'var(--bg-muted)';
                   }}
                 >
-                  <div
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform shadow-md"
-                    style={{
-                      backgroundColor: 'rgba(99,102,241,0.15)',
-                      color: 'var(--brand-500)',
-                      border: '1px solid rgba(99,102,241,0.25)',
-                    }}
-                  >
-                    <Upload className="w-6 h-6" />
-                  </div>
+                  <div className="converter-dropzone-content">
+                    <div
+                      className="converter-dropzone-icon group-hover:scale-110"
+                      style={{
+                        backgroundColor: 'rgba(99,102,241,0.15)',
+                        color: 'var(--brand-500)',
+                        border: '1px solid rgba(99,102,241,0.25)',
+                      }}
+                    >
+                      <Upload className="w-6 h-6" />
+                    </div>
 
-                  {file ? (
-                    <div>
-                      <span
-                        className="font-bold text-base block mb-1"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        {files.length > 1 ? `${files.length} files selected` : file.name}
-                      </span>
-                      <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                        {(
-                          files.reduce((total, item) => total + item.size, 0) /
-                          (1024 * 1024)
-                        ).toFixed(2)}{' '}
-                        MB total • Click to change
-                      </p>
-                    </div>
-                  ) : (
-                    <div>
-                      <p
-                        className="font-bold text-base mb-1.5"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        Choose {acceptsMultipleFiles ? 'files' : 'a file'} or drag &amp; drop here
-                      </p>
-                      <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                        Supported formats:{' '}
+                    {file ? (
+                      <div>
                         <span
-                          className="font-semibold uppercase"
-                          style={{ color: 'var(--brand-500)' }}
+                          className="font-bold text-base block mb-1"
+                          style={{ color: 'var(--text-primary)' }}
                         >
-                          {tool.acceptedFormats.join(', ')}
-                        </span>{' '}
-                        (Up to {Math.round(tool.maxFileSizeBytes / (1024 * 1024))}MB)
-                      </p>
-                    </div>
-                  )}
+                          {files.length > 1 ? `${files.length} files selected` : file.name}
+                        </span>
+                        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                          {(
+                            files.reduce((total, item) => total + item.size, 0) /
+                            (1024 * 1024)
+                          ).toFixed(2)}{' '}
+                          MB total • Click to change
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p
+                          className="font-bold text-base mb-1.5"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          Choose {acceptsMultipleFiles ? 'files' : 'a file'} or drag &amp; drop here
+                        </p>
+                        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                          Supported formats:{' '}
+                          <span
+                            className="font-semibold uppercase"
+                            style={{ color: 'var(--brand-500)' }}
+                          >
+                            {tool.acceptedFormats.join(', ')}
+                          </span>{' '}
+                          (Up to {Math.round(tool.maxFileSizeBytes / (1024 * 1024))}MB)
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
+
+                {acceptsMultipleFiles && files.length > 0 && (
+                  <div className="converter-file-list" aria-label="Selected files">
+                    <div className="converter-file-list-heading">
+                      <strong>Selected files</strong>
+                      <span>Processing follows this order</span>
+                    </div>
+                    {files.map((selectedFile, index) => (
+                      <div
+                        className="converter-file-row"
+                        key={`${selectedFile.name}-${selectedFile.lastModified}-${index}`}
+                      >
+                        <span className="converter-file-index">{index + 1}</span>
+                        <FileText className="h-4 w-4 shrink-0" />
+                        <span className="converter-file-copy">
+                          <strong>{selectedFile.name}</strong>
+                          <small>{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</small>
+                        </span>
+                        <span className="converter-file-actions">
+                          <button
+                            type="button"
+                            onClick={() => moveFile(index, -1)}
+                            disabled={index === 0}
+                            aria-label={`Move ${selectedFile.name} up`}
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveFile(index, 1)}
+                            disabled={index === files.length - 1}
+                            aria-label={`Move ${selectedFile.name} down`}
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(index)}
+                            aria-label={`Remove ${selectedFile.name}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+            )}
+
+            {file && file.type === 'application/pdf' && files.length === 1 && (
+              <PdfPageWorkspace
+                key={`${file.name}-${file.size}-${file.lastModified}`}
+                file={file}
+                operation={tool.operation || ''}
+                pageOrder={pageOrder}
+                pageSelection={pageSelection}
+                onPageOrderChange={setPageOrder}
+                onPageSelectionChange={setPageSelection}
+              />
             )}
 
             {/* Conversion Options */}
@@ -567,13 +778,96 @@ export function InteractiveToolConverter({ tool }: Props) {
                 >
                   {tool.outputFormats.map((fmt) => (
                     <option key={fmt} value={fmt}>
-                      {fmt.toUpperCase()} Document
+                      {['png', 'jpg', 'jpeg'].includes(fmt)
+                        ? `${fmt.toUpperCase()} Images`
+                        : `${fmt.toUpperCase()} Document`}
                     </option>
                   ))}
                 </select>
               </div>
 
+              {tool.operation === 'pdf.toDocx' && (
+                <div className="sm:col-span-1 lg:col-span-2">
+                  <label
+                    className="block text-xs font-semibold mb-1.5"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    Word fidelity mode
+                  </label>
+                  <select
+                    value={pdfFidelityMode}
+                    onChange={(event) =>
+                      setPdfFidelityMode(
+                        event.target.value as 'editable' | 'fixed' | 'visual' | 'ocr',
+                      )
+                    }
+                    className="input"
+                  >
+                    <option value="editable">Editable layout — text, images and tables</option>
+                    <option value="fixed">Fixed editable — precise positioned text</option>
+                    <option value="visual">Exact visual — pixel-matched pages</option>
+                    <option value="ocr">OCR mode — scanned or image-based PDFs</option>
+                  </select>
+                  <p className="mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Fixed editable mode keeps detected text in individually editable positioned
+                    boxes over preserved page artwork. Exact visual mode remains the pixel-perfect
+                    fallback, and OCR mode forces optical text recognition for scanned pages.
+                  </p>
+                </div>
+              )}
+
+              {tool.operation === 'pdf.toImages' && (
+                <>
+                  <div>
+                    <label
+                      className="block text-xs font-semibold mb-1.5"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Image resolution
+                    </label>
+                    <select
+                      value={imageDpi}
+                      onChange={(event) => setImageDpi(event.target.value)}
+                      className="input"
+                    >
+                      <option value="96">Screen — 96 DPI</option>
+                      <option value="150">High quality — 150 DPI</option>
+                      <option value="300">Print — 300 DPI</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-1 lg:col-span-2">
+                    <label
+                      className="block text-xs font-semibold mb-1.5"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Rendering engine
+                    </label>
+                    <select
+                      value={pdfImageEngine}
+                      onChange={(event) =>
+                        setPdfImageEngine(event.target.value as 'server' | 'browser')
+                      }
+                      className="input"
+                    >
+                      {hasServerEngine && (
+                        <option value="server">
+                          Universal compatibility — Poppler (recommended)
+                        </option>
+                      )}
+                      <option value="browser">Private browser — local glyph renderer</option>
+                    </select>
+                    <p className="mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      Universal mode provides the broadest embedded, subset, Type 1, CFF, TrueType
+                      and OpenType font support. Private mode keeps the file on this device and
+                      draws PDF glyph paths when browser fonts cannot be installed.
+                    </p>
+                  </div>
+                </>
+              )}
+
               {(tool.operation === 'image.toPdf' ||
+                tool.operation === 'pdf.resize' ||
+                tool.operation === 'pdf.nUp' ||
                 isUrlTool ||
                 ['html.toPdf', 'markdown.toPdf'].includes(tool.operation || '')) && (
                 <>
@@ -591,7 +885,10 @@ export function InteractiveToolConverter({ tool }: Props) {
                       style={{ padding: '0.6rem 0.875rem', fontSize: '0.8125rem', fontWeight: 600 }}
                     >
                       <option value="A4">A4 (Standard)</option>
+                      <option value="A3">A3</option>
+                      <option value="A5">A5</option>
                       <option value="Letter">US Letter</option>
+                      <option value="Legal">US Legal</option>
                     </select>
                   </div>
 
@@ -629,6 +926,173 @@ export function InteractiveToolConverter({ tool }: Props) {
                     onChange={(event) => setPageSelection(event.target.value)}
                     placeholder="1-3,5"
                   />
+                </div>
+              )}
+
+              {tool.operation === 'pdf.organize' && (
+                <div className="sm:col-span-1 lg:col-span-2">
+                  <label
+                    className="block text-xs font-semibold mb-1.5"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    New page order
+                  </label>
+                  <input
+                    className="input"
+                    value={pageOrder}
+                    onChange={(event) => setPageOrder(event.target.value)}
+                    placeholder="3,1,2,2"
+                  />
+                  <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Reorder with comma-separated page numbers. Repeat a number to duplicate that
+                    page.
+                  </p>
+                </div>
+              )}
+
+              {tool.operation === 'pdf.crop' && (
+                <div className="grid gap-3 sm:col-span-2 lg:col-span-3 sm:grid-cols-4">
+                  {(['top', 'right', 'bottom', 'left'] as const).map((side) => (
+                    <label
+                      key={side}
+                      className="block text-xs font-semibold"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      <span className="mb-1.5 block capitalize">{side} margin (pt)</span>
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        max="720"
+                        step="1"
+                        value={cropMargins[side]}
+                        onChange={(event) =>
+                          setCropMargins((current) => ({ ...current, [side]: event.target.value }))
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {tool.operation === 'pdf.resize' && (
+                <div>
+                  <label
+                    className="block text-xs font-semibold mb-1.5"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    Page margin (pt)
+                  </label>
+                  <input
+                    className="input"
+                    type="number"
+                    min="0"
+                    max="144"
+                    value={marginPoints}
+                    onChange={(event) => setMarginPoints(event.target.value)}
+                  />
+                </div>
+              )}
+
+              {tool.operation === 'pdf.nUp' && (
+                <>
+                  <div>
+                    <label
+                      className="block text-xs font-semibold mb-1.5"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Pages per sheet
+                    </label>
+                    <select
+                      className="input"
+                      value={pagesPerSheet}
+                      onChange={(event) => setPagesPerSheet(event.target.value)}
+                    >
+                      <option value="2">2 pages</option>
+                      <option value="4">4 pages</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      className="block text-xs font-semibold mb-1.5"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Gutter (pt)
+                    </label>
+                    <input
+                      className="input"
+                      type="number"
+                      min="0"
+                      max="72"
+                      value={gutterPoints}
+                      onChange={(event) => setGutterPoints(event.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+
+              {tool.operation === 'pdf.headerFooter' && (
+                <div className="grid gap-3 sm:col-span-2 lg:col-span-3 sm:grid-cols-2">
+                  <label
+                    className="block text-xs font-semibold"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    <span className="mb-1.5 block">Header text</span>
+                    <input
+                      className="input"
+                      maxLength={120}
+                      value={headerText}
+                      onChange={(event) => setHeaderText(event.target.value)}
+                      placeholder="Confidential report"
+                    />
+                  </label>
+                  <label
+                    className="block text-xs font-semibold"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    <span className="mb-1.5 block">Footer text</span>
+                    <input
+                      className="input"
+                      maxLength={120}
+                      value={footerText}
+                      onChange={(event) => setFooterText(event.target.value)}
+                      placeholder="Page {page} of {pages}"
+                    />
+                  </label>
+                  <p className="text-xs sm:col-span-2" style={{ color: 'var(--text-muted)' }}>
+                    Use {'{page}'} for the current page and {'{pages}'} for the total.
+                  </p>
+                </div>
+              )}
+
+              {tool.operation === 'pdf.batesNumbering' && (
+                <div className="grid gap-3 sm:col-span-2 lg:col-span-3 sm:grid-cols-4">
+                  {(
+                    [
+                      ['prefix', 'Prefix'],
+                      ['suffix', 'Suffix'],
+                      ['start', 'Starting number'],
+                      ['padding', 'Number width'],
+                    ] as const
+                  ).map(([field, label]) => (
+                    <label
+                      key={field}
+                      className="block text-xs font-semibold"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      <span className="mb-1.5 block">{label}</span>
+                      <input
+                        className="input"
+                        type={field === 'start' || field === 'padding' ? 'number' : 'text'}
+                        min={field === 'padding' ? 1 : 0}
+                        max={field === 'padding' ? 12 : undefined}
+                        value={bates[field]}
+                        onChange={(event) =>
+                          setBates((current) => ({ ...current, [field]: event.target.value }))
+                        }
+                      />
+                    </label>
+                  ))}
                 </div>
               )}
 
@@ -731,7 +1195,7 @@ export function InteractiveToolConverter({ tool }: Props) {
               ) : (
                 <>
                   <Sparkles className="w-5 h-5" />
-                  <span>Convert to {selectedFormat.toUpperCase()} Now</span>
+                  <span>{actionLabel}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

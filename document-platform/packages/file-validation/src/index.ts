@@ -246,6 +246,125 @@ export function validateFileSignature(buffer: Buffer, declaredExtension: string)
   };
 }
 
+// ─── Zip Bomb and Archive Safety ─────────────────────────────
+
+export function validateZipSafety(
+  buffer: Buffer,
+  maxUncompressedBytes: number = 300 * 1024 * 1024,
+  maxEntries: number = 5000,
+): ValidationResult {
+  const errors: ValidationError[] = [];
+  if (
+    buffer.length < 4 ||
+    buffer[0] !== 0x50 ||
+    buffer[1] !== 0x4b ||
+    buffer[2] !== 0x03 ||
+    buffer[3] !== 0x04
+  ) {
+    return { valid: true, errors: [] }; // Not a ZIP file
+  }
+
+  let totalUncompressed = 0;
+  let entryCount = 0;
+  let offset = 0;
+
+  while (offset + 30 <= buffer.length) {
+    // Check for local file header signature PK\x03\x04
+    if (
+      buffer[offset] === 0x50 &&
+      buffer[offset + 1] === 0x4b &&
+      buffer[offset + 2] === 0x03 &&
+      buffer[offset + 3] === 0x04
+    ) {
+      entryCount++;
+      if (entryCount > maxEntries) {
+        errors.push({
+          code: ErrorCode.VALIDATION_ERROR,
+          message: `Archive exceeds maximum allowed entries limit (${maxEntries}). Potential zip bomb.`,
+          field: 'archive',
+        });
+        return { valid: false, errors };
+      }
+
+      const compressedSize = buffer.readUInt32LE(offset + 18);
+      const uncompressedSize = buffer.readUInt32LE(offset + 22);
+      const filenameLen = buffer.readUInt16LE(offset + 26);
+      const extraLen = buffer.readUInt16LE(offset + 28);
+
+      totalUncompressed += uncompressedSize;
+      if (totalUncompressed > maxUncompressedBytes) {
+        errors.push({
+          code: ErrorCode.FILE_TOO_LARGE,
+          message: `Archive uncompressed size (${Math.round(totalUncompressed / (1024 * 1024))}MB) exceeds maximum safe limit. Potential zip bomb.`,
+          field: 'archive',
+        });
+        return { valid: false, errors };
+      }
+
+      // Check compression ratio per file
+      if (compressedSize > 0 && uncompressedSize / compressedSize > 100) {
+        errors.push({
+          code: ErrorCode.VALIDATION_ERROR,
+          message: 'Abnormal compression ratio detected in archive entry. Potential zip bomb.',
+          field: 'archive',
+        });
+        return { valid: false, errors };
+      }
+
+      // Check filename for path traversal
+      if (offset + 30 + filenameLen <= buffer.length) {
+        const filename = buffer.toString('utf8', offset + 30, offset + 30 + filenameLen);
+        if (filename.includes('../') || filename.includes('..\\')) {
+          errors.push({
+            code: ErrorCode.VALIDATION_ERROR,
+            message: 'Directory traversal detected in archive entry filename.',
+            field: 'archive',
+          });
+          return { valid: false, errors };
+        }
+      }
+
+      const nextOffset = offset + 30 + filenameLen + extraLen + compressedSize;
+      const flags = buffer.readUInt16LE(offset + 6);
+      if ((flags & 0x08) !== 0 && compressedSize === 0) {
+        let found = false;
+        for (let i = offset + 30 + filenameLen + extraLen; i + 4 <= buffer.length; i++) {
+          if (
+            buffer[i] === 0x50 &&
+            buffer[i + 1] === 0x4b &&
+            (buffer[i + 2] === 0x03 || buffer[i + 2] === 0x01 || buffer[i + 2] === 0x05)
+          ) {
+            offset = i;
+            found = true;
+            break;
+          }
+        }
+        if (!found) break;
+      } else {
+        offset = nextOffset;
+      }
+    } else {
+      break;
+    }
+  }
+
+  // Check overall ratio against buffer length
+  if (
+    buffer.length > 0 &&
+    totalUncompressed / buffer.length > 50 &&
+    totalUncompressed > 20 * 1024 * 1024
+  ) {
+    errors.push({
+      code: ErrorCode.VALIDATION_ERROR,
+      message: 'Abnormal aggregate compression ratio detected. Potential zip bomb.',
+      field: 'archive',
+    });
+    return { valid: false, errors };
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
 // ─── Full Validation ─────────────────────────────────────────
 
 export function validateFile(
@@ -269,6 +388,10 @@ export function validateFile(
     const ext = getExtension(filename) ?? '';
     const sigResult = validateFileSignature(buffer, ext);
     allErrors.push(...sigResult.errors);
+
+    // Zip bomb and structural check for zip-based formats
+    const zipResult = validateZipSafety(buffer);
+    allErrors.push(...zipResult.errors);
   }
 
   return {

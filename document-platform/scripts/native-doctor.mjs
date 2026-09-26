@@ -18,8 +18,10 @@ const nativeCommands = hostingerMode
       ['pandoc', ['--version']],
       ['pdftotext', ['-v']],
       ['pdftoppm', ['-v']],
+      ['fc-match', ['sans-serif']],
       ['tesseract', ['--version']],
       ['pdf2docx', ['--help']],
+      ['libreoffice', ['--version']],
     ];
 
 for (const [command, args] of nativeCommands) {
@@ -29,8 +31,12 @@ for (const [command, args] of nativeCommands) {
     ok: !result.error && result.status !== null,
     hint:
       command === 'pdf2docx'
-        ? 'Install the layout-aware Word engine: python3 -m pip install pdf2docx==0.5.13.'
-        : `Install ${command} (macOS: brew install pandoc poppler tesseract).`,
+          ? 'Install the layout-aware Word engine: python3 -m pip install pdf2docx==0.5.13.'
+        : command === 'libreoffice'
+          ? 'Install LibreOffice for DOCX compatibility validation.'
+        : command === 'fc-match'
+          ? 'Install fontconfig and broad fallback fonts (Debian/Ubuntu: fontconfig fonts-noto-core fonts-noto-cjk fonts-liberation2).'
+          : `Install ${command} (macOS: brew install pandoc poppler tesseract fontconfig).`,
   });
 }
 
@@ -52,6 +58,9 @@ const services = hostingerMode
       ['Redis', '127.0.0.1', 6379],
       ['MinIO', '127.0.0.1', 9000],
       ['Gotenberg', '127.0.0.1', 3100],
+      ...(process.env.CLAMAV_ENABLED === 'true'
+        ? [['ClamAV', '127.0.0.1', Number(process.env.CLAMAV_PORT || 3310)]]
+        : []),
     ];
 
 const canConnect = (host, port) =>

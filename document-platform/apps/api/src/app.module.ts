@@ -24,6 +24,9 @@ import { DownloadsModule } from './downloads/downloads.module';
 import { PlatformRolesGuard } from './common/guards/platform-roles.guard';
 import { CsrfOriginGuard } from './common/guards/csrf-origin.guard';
 import { CapabilitiesModule } from './capabilities/capabilities.module';
+import { AiMemoryModule } from './ai-memory/ai-memory.module';
+import { FeatureFlagsGuard } from './feature-flags/feature-flags.guard';
+import { BlogStudioModule } from './blog-studio/blog-studio.module';
 
 const redisQueuesEnabled = process.env.REDIS_ENABLED !== 'false';
 
@@ -55,10 +58,13 @@ const redisQueuesEnabled = process.env.REDIS_ENABLED !== 'false';
     ...(redisQueuesEnabled
       ? [
           BullModule.forRoot({
-            connection: {
-              host: process.env.REDIS_HOST || 'localhost',
-              port: parseInt(process.env.REDIS_PORT || '6379', 10),
-            },
+            connection: process.env.REDIS_URL
+              ? { url: process.env.REDIS_URL }
+              : {
+                  host: process.env.REDIS_HOST || 'localhost',
+                  port: parseInt(process.env.REDIS_PORT || '6379', 10),
+                  password: process.env.REDIS_PASSWORD || undefined,
+                },
           }),
         ]
       : []),
@@ -84,11 +90,17 @@ const redisQueuesEnabled = process.env.REDIS_ENABLED !== 'false';
     PresetsModule,
     HealthModule,
     EventsModule,
+    AiMemoryModule,
+    BlogStudioModule,
   ],
   providers: [
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: FeatureFlagsGuard,
     },
     {
       provide: APP_GUARD,

@@ -44,6 +44,13 @@ export const CONVERSION_MATRIX: ConversionMatrixEntry[] = [
     quality: ConversionQuality.B,
     description: 'PDF text/OCR extraction to plain text',
   },
+  {
+    input: InputFormat.PDF,
+    output: OutputFormat.ZIP,
+    engine: ConversionEngine.PDF_EXTRACTOR,
+    quality: ConversionQuality.A,
+    description: 'Poppler page rendering to a validated PNG or JPG archive',
+  },
   // Phase 1 — High reliability
   {
     input: InputFormat.URL,

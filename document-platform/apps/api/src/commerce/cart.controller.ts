@@ -3,6 +3,7 @@ import { CartService } from './cart.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrencyCode } from '@prisma/client';
 import { IsNotEmpty, IsString, IsEnum, IsOptional } from 'class-validator';
+import { RequireFeatures } from '../feature-flags/require-features.decorator';
 
 export class AddCartItemDto {
   @IsString()
@@ -16,6 +17,7 @@ export class AddCartItemDto {
 
 @Controller('cart')
 @UseGuards(JwtAuthGuard)
+@RequireFeatures('storeCheckout')
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 

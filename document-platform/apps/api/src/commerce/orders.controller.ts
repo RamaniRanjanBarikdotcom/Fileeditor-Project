@@ -3,6 +3,7 @@ import { OrdersService } from './orders.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrencyCode } from '@prisma/client';
 import { IsNotEmpty, IsString, IsEnum, IsOptional, IsUrl } from 'class-validator';
+import { RequireFeatures } from '../feature-flags/require-features.decorator';
 
 export class CreateCheckoutSessionDto {
   @IsString()
@@ -42,6 +43,7 @@ export class ClientVerifyRazorpayDto {
 
 @Controller('orders')
 @UseGuards(JwtAuthGuard)
+@RequireFeatures('storeCheckout')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 

@@ -20,6 +20,7 @@ import {
   WalletCards,
   Zap,
 } from 'lucide-react';
+import { useFeatureFlags } from '../../lib/use-feature-flags';
 
 type Currency = 'USD' | 'INR';
 
@@ -81,7 +82,12 @@ const PLANS = [
 const COMPARISON = [
   { label: 'Monthly operations', free: '300', pro: '500', business: '5,000' },
   { label: 'Maximum file size', free: '25 MB', pro: '100 MB', business: '250 MB' },
-  { label: 'Temporary file lifetime', free: 'Up to 10 min', pro: 'Up to 10 min', business: 'Up to 10 min' },
+  {
+    label: 'Temporary file lifetime',
+    free: 'Up to 10 min',
+    pro: 'Up to 10 min',
+    business: 'Up to 10 min',
+  },
   { label: 'Workspace seats', free: '1', pro: '1', business: 'Up to 10' },
   { label: 'API access', free: false, pro: false, business: true },
   { label: 'Core conversion tools', free: true, pro: true, business: true },
@@ -162,6 +168,7 @@ const FAQS = [
 
 export default function PricingPage() {
   const [currency, setCurrency] = useState<Currency>('USD');
+  const featureFlags = useFeatureFlags();
 
   return (
     <div className="min-h-screen">
@@ -257,13 +264,21 @@ export default function PricingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link
-                  href={plan.href}
-                  className={plan.featured ? 'btn btn-primary btn-md' : 'btn btn-secondary btn-md'}
-                >
-                  {plan.cta}
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
+                {plan.name === 'Free Starter' || featureFlags.subscriptionsEnabled ? (
+                  <Link
+                    href={plan.href}
+                    className={
+                      plan.featured ? 'btn btn-primary btn-md' : 'btn btn-secondary btn-md'
+                    }
+                  >
+                    {plan.cta}
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                ) : (
+                  <span className="btn btn-secondary btn-md cursor-not-allowed opacity-60">
+                    Paid plan coming soon
+                  </span>
+                )}
               </article>
             ))}
           </div>
@@ -272,6 +287,62 @@ export default function PricingPage() {
             Paid checkout becomes available only when the selected currency provider and
             subscription flow are configured.
           </p>
+        </div>
+      </section>
+
+      <section className="border-b border-[var(--border)] bg-[var(--bg-muted)] py-16">
+        <div className="container-custom">
+          <div className="grid gap-7 rounded-3xl border border-indigo-500/20 bg-[var(--bg-card)] p-7 shadow-lg shadow-indigo-500/5 lg:grid-cols-[1fr_auto] lg:items-center lg:p-10">
+            <div>
+              <span className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[.16em] text-indigo-500">
+                <Sparkles className="h-4 w-4" />
+                Blog Studio add-on
+              </span>
+              <h2 className="mt-3 text-3xl font-black text-[var(--text-primary)]">
+                40 blogs and 800 AI credits per month
+              </h2>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--text-secondary)]">
+                The add-on raises the effective allowance to 40 completed blogs and 800 credits.
+                Failed and cancelled generations release their reservations.
+              </p>
+              <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[var(--text-secondary)]">
+                {[
+                  'Research-to-draft pipeline',
+                  'Rich editor and SEO panel',
+                  'Markdown, HTML, DOCX and PDF exports',
+                ].map((item) => (
+                  <li key={item} className="inline-flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="min-w-60 rounded-2xl border border-[var(--border)] bg-[var(--bg-muted)] p-6 text-center">
+              <strong className="block text-4xl text-[var(--text-primary)]">
+                {currency === 'INR' ? '₹1,599' : '$19'}
+              </strong>
+              <span className="mt-1 block text-sm text-[var(--text-secondary)]">per month</span>
+              {featureFlags.blogStudioCheckout ? (
+                <Link
+                  href={`/app/billing?addon=blog-studio&currency=${currency}`}
+                  className="btn btn-primary btn-md mt-5 w-full justify-center"
+                >
+                  Add Blog Studio
+                </Link>
+              ) : (
+                <span className="mt-5 block rounded-xl border border-[var(--border)] px-4 py-2.5 text-xs font-bold text-[var(--text-muted)]">
+                  Checkout opening after sandbox verification
+                </span>
+              )}
+              <Link
+                href="/saas/blog-studio"
+                className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-indigo-500"
+              >
+                View product details <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 

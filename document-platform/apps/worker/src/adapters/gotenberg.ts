@@ -16,15 +16,20 @@ async function postWithRetry(
   url: string,
   createForm: () => FormData,
   timeout: number,
+  signal?: AbortSignal,
 ): Promise<AxiosResponse> {
   let lastError: any;
   for (let attempt = 1; attempt <= GOTENBERG_MAX_RETRIES; attempt++) {
     try {
+      if (signal?.aborted) throw new Error('Conversion cancelled');
       const form = createForm();
       const response = await axios.post(url, form, {
         headers: { ...form.getHeaders() },
         responseType: 'arraybuffer',
         timeout,
+        maxRedirects: 0,
+        proxy: false,
+        signal,
       });
       return response;
     } catch (err: any) {
@@ -60,7 +65,11 @@ export class GotenbergAdapter {
   /**
    * Convert Office documents (DOCX, XLSX) to PDF using LibreOffice engine
    */
-  async convertOfficeToPdf(fileStream: Readable, filename: string): Promise<Readable> {
+  async convertOfficeToPdf(
+    fileStream: Readable,
+    filename: string,
+    signal?: AbortSignal,
+  ): Promise<Readable> {
     const input = await this.toBuffer(fileStream);
 
     const response = await postWithRetry(
@@ -71,6 +80,7 @@ export class GotenbergAdapter {
         return form;
       },
       this.timeout,
+      signal,
     );
     this.assertValidPdf(response.data, 'LibreOffice');
     return Readable.from(Buffer.from(response.data));
@@ -83,6 +93,7 @@ export class GotenbergAdapter {
     fileStream: Readable,
     _filename: string = 'index.html',
     options: ConversionOptions = {},
+    signal?: AbortSignal,
   ): Promise<Readable> {
     const input = await this.toBuffer(fileStream);
 
@@ -105,6 +116,7 @@ export class GotenbergAdapter {
         return form;
       },
       this.timeout,
+      signal,
     );
     this.assertValidPdf(response.data, 'Chromium HTML');
     return Readable.from(Buffer.from(response.data));
@@ -114,7 +126,11 @@ export class GotenbergAdapter {
    * Convert any public URL to PDF using Chromium engine.
    * Full JS execution, network idle wait, and retry on 409.
    */
-  async convertUrlToPdf(url: string, options: ConversionOptions = {}): Promise<Readable> {
+  async convertUrlToPdf(
+    url: string,
+    options: ConversionOptions = {},
+    signal?: AbortSignal,
+  ): Promise<Readable> {
     const response = await postWithRetry(
       `${this.apiUrl}/forms/chromium/convert/url`,
       () => {
@@ -126,6 +142,7 @@ export class GotenbergAdapter {
         return form;
       },
       this.urlTimeout,
+      signal,
     );
     this.assertValidPdf(response.data, `Chromium URL (${url})`);
     return Readable.from(Buffer.from(response.data));

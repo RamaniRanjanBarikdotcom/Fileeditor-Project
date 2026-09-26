@@ -280,6 +280,31 @@ export default function SaasPlatformPage() {
         </div>
       </section>
 
+      <section className="border-b border-[var(--border)] bg-[var(--bg-muted)] py-16">
+        <div className="container-custom">
+          <Link
+            href="/app/blog-studio"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group grid gap-6 rounded-3xl border border-indigo-500/20 bg-[var(--bg-card)] p-7 shadow-lg shadow-indigo-500/5 transition hover:-translate-y-1 hover:border-indigo-500/40 md:grid-cols-[auto_1fr_auto] md:items-center"
+          >
+            <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-indigo-600 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/20">
+              <Sparkles className="h-6 w-6" />
+            </span>
+            <span>
+              <span className="text-xs font-black uppercase tracking-[.16em] text-indigo-500">New native SaaS</span>
+              <strong className="mt-1 block text-2xl text-[var(--text-primary)]">Blog Studio</strong>
+              <span className="mt-2 block max-w-3xl text-sm leading-6 text-[var(--text-secondary)]">
+                Research, generate, edit, optimize, and export long-form articles with checkpointed progress and separate blog and AI-credit limits.
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-2 text-sm font-bold text-indigo-500">
+              Open Blog Studio <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+            </span>
+          </Link>
+        </div>
+      </section>
+
       <section className="saas-pillars-section">
         <div className="container-custom">
           <div className="saas-section-heading">

@@ -11,10 +11,26 @@ import { LicenseStatus, Prisma } from '@prisma/client';
 
 @Injectable()
 export class LicensesService {
+  private readonly signingPrivateKey: crypto.KeyObject;
+  private readonly signingPublicKey: crypto.KeyObject;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
-  ) {}
+  ) {
+    const configured = process.env.LICENSE_SIGNING_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    if (configured) {
+      this.signingPrivateKey = crypto.createPrivateKey(configured);
+      this.signingPublicKey = crypto.createPublicKey(this.signingPrivateKey);
+    } else {
+      if (process.env.NODE_ENV === 'production' && process.env.FEATURE_BLOG_DESKTOP_SALES === 'true') {
+        throw new Error('LICENSE_SIGNING_PRIVATE_KEY is required when desktop sales are enabled.');
+      }
+      const generated = crypto.generateKeyPairSync('ed25519');
+      this.signingPrivateKey = generated.privateKey;
+      this.signingPublicKey = generated.publicKey;
+    }
+  }
 
   /**
    * Generates a cryptographic license key formatted as TOOL-XXXX-XXXX-XXXX-XXXX.
@@ -213,10 +229,25 @@ export class LicensesService {
       { expiresIn: '30d' },
     );
 
+    const updatesValidUntil = new Date(license.createdAt);
+    updatesValidUntil.setUTCFullYear(updatesValidUntil.getUTCFullYear() + 1);
+    const offlineCertificate = this.signOfflineCertificate({
+      version: 1,
+      licenseId: license.id,
+      activationId: activation.id,
+      productId: license.productId,
+      productSlug: license.product.slug,
+      machineHash: params.machineHash,
+      perpetualUse: true,
+      issuedAt: new Date().toISOString(),
+      updatesValidUntil: updatesValidUntil.toISOString(),
+    });
+
     return {
       success: true,
       activated: true,
       activationToken: token,
+      offlineCertificate,
       license: {
         id: license.id,
         keyMasked: license.keyMasked,
@@ -225,6 +256,40 @@ export class LicensesService {
         maxActivations: license.maxActivations,
       },
     };
+  }
+
+  getSigningPublicKey(): string {
+    return this.signingPublicKey.export({ type: 'spki', format: 'pem' }).toString();
+  }
+
+  async deactivateLicense(userId: string, activationId: string) {
+    const activation = await this.prisma.licenseActivation.findFirst({
+      where: { id: activationId, licenseKey: { userId } },
+      include: { licenseKey: true },
+    });
+    if (!activation) throw new NotFoundException('License activation was not found.');
+    await this.prisma.$transaction([
+      this.prisma.licenseActivation.delete({ where: { id: activation.id } }),
+      this.prisma.licenseKey.update({
+        where: { id: activation.licenseKeyId },
+        data: { activationsCount: { decrement: 1 } },
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          userId,
+          action: 'LICENSE_MACHINE_DEACTIVATED',
+          resourceType: 'LicenseActivation',
+          resourceId: activation.id,
+        },
+      }),
+    ]);
+    return { activationId, deactivated: true };
+  }
+
+  private signOfflineCertificate(payload: Record<string, unknown>): string {
+    const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const signature = crypto.sign(null, Buffer.from(encoded), this.signingPrivateKey);
+    return `${encoded}.${signature.toString('base64url')}`;
   }
 
   /**

@@ -36,6 +36,7 @@ export function Navbar() {
   }, [pathname]);
 
   const active = (href: string) => pathname === href || pathname?.startsWith(`${href}/`);
+  const isAnonymousToolRoute = pathname === '/tools' || pathname?.startsWith('/tools/');
 
   return (
     <header
@@ -132,7 +133,7 @@ export function Navbar() {
             }}>
               Workspace <ArrowRight style={{ width: '0.8rem', height: '0.8rem' }} />
             </Link>
-          ) : (
+          ) : isAnonymousToolRoute ? null : (
             <>
               <Link href="/login" style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textDecoration: 'none', padding: '0.45rem 0.5rem' }}>
                 Sign in
@@ -207,7 +208,7 @@ export function Navbar() {
                 <Link href="/app" onClick={() => setOpen(false)} className="btn btn-primary" style={{ gridColumn: '1/-1', justifyContent: 'center' }}>
                   Go to workspace <ArrowRight style={{ width: '0.9rem', height: '0.9rem' }} />
                 </Link>
-              ) : (
+              ) : isAnonymousToolRoute ? null : (
                 <>
                   <Link href="/login" onClick={() => setOpen(false)} className="btn btn-secondary" style={{ justifyContent: 'center' }}>Sign in</Link>
                   <Link href="/register" onClick={() => setOpen(false)} className="btn btn-primary" style={{ justifyContent: 'center' }}>

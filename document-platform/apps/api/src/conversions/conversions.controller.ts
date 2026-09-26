@@ -54,14 +54,14 @@ export class ConversionsController {
   @Get(':id')
   @ApiOperation({ summary: 'Get status of a conversion job' })
   async getStatus(@Request() req: any, @Param('id') id: string) {
-    const job = await this.conversionsService.getJobStatus(id, req.user.orgId);
+    const job = await this.conversionsService.getJobStatus(id, req.user.orgId, req.user.userId);
     return { success: true, data: job };
   }
 
   @Post(':id/download-url')
   @ApiOperation({ summary: 'Get a signed download URL for the converted output' })
   async getDownloadUrl(@Request() req: any, @Param('id') id: string) {
-    const url = await this.conversionsService.getDownloadUrl(id, req.user.orgId);
+    const url = await this.conversionsService.getDownloadUrl(id, req.user.orgId, req.user.userId);
     return { success: true, data: { url } };
   }
 

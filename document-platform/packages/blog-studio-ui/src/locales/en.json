@@ -1,0 +1,10 @@
+{
+  "blogStudio": {
+    "title": "Blog Studio",
+    "generate": "Generate Article",
+    "history": "Article History",
+    "settings": "Settings",
+    "providers": "AI Providers",
+    "prompts": "Prompts"
+  }
+}

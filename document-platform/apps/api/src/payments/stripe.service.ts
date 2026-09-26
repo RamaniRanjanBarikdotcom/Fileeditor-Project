@@ -76,6 +76,37 @@ export class StripeService {
     };
   }
 
+  async createSubscriptionCheckout(params: {
+    organizationId: string;
+    productId: string;
+    userEmail: string;
+    providerPriceId: string;
+    successUrl: string;
+    cancelUrl: string;
+  }): Promise<{ sessionId: string; checkoutUrl: string }> {
+    if (!this.stripe) throw new BadRequestException('Stripe checkout is not configured.');
+    const metadata = {
+      organizationId: params.organizationId,
+      productId: params.productId,
+      productSlug: 'blog-studio-addon',
+    };
+    const session = await this.stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer_email: params.userEmail,
+      metadata,
+      subscription_data: { metadata },
+      line_items: [{ price: params.providerPriceId, quantity: 1 }],
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+    });
+    return { sessionId: session.id, checkoutUrl: session.url || params.successUrl };
+  }
+
+  async retrieveSubscription(id: string) {
+    if (!this.stripe) throw new BadRequestException('Stripe checkout is not configured.');
+    return this.stripe.subscriptions.retrieve(id);
+  }
+
   /**
    * Constructs and verifies Stripe webhook events from raw payload buffer.
    */

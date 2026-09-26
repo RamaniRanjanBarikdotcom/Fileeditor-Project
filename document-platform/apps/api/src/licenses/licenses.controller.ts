@@ -1,7 +1,8 @@
-import { Controller, Post, Get, Body, UseGuards, Req, Ip } from '@nestjs/common';
+import { Controller, Post, Get, Body, UseGuards, Req, Ip, Param, Delete } from '@nestjs/common';
 import { LicensesService } from './licenses.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { RequireFeatures } from '../feature-flags/require-features.decorator';
 
 export class ActivateLicenseDto {
   @IsString()
@@ -18,6 +19,7 @@ export class ActivateLicenseDto {
 }
 
 @Controller('licenses')
+@RequireFeatures('storeCheckout')
 export class LicensesController {
   constructor(private readonly licensesService: LicensesService) {}
 
@@ -43,5 +45,23 @@ export class LicensesController {
   async getMyLicenses(@Req() req: any) {
     const data = await this.licensesService.getUserLicenses(req.user.userId);
     return { success: true, data };
+  }
+
+  @Get('certificate-public-key')
+  @RequireFeatures('blogDesktopSales')
+  getCertificatePublicKey() {
+    return {
+      success: true,
+      data: { algorithm: 'Ed25519', publicKey: this.licensesService.getSigningPublicKey() },
+    };
+  }
+
+  @Delete('activations/:activationId')
+  @UseGuards(JwtAuthGuard)
+  async deactivate(@Req() req: any, @Param('activationId') activationId: string) {
+    return {
+      success: true,
+      data: await this.licensesService.deactivateLicense(req.user.userId, activationId),
+    };
   }
 }

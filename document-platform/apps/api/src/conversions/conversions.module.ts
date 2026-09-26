@@ -4,6 +4,7 @@ import { ServiceUnavailableException } from '@nestjs/common';
 import { QUEUE_NAMES } from '@docconv/shared-types';
 import { ConversionsController } from './conversions.controller';
 import { ConversionsService } from './conversions.service';
+import { ConversionOutboxService } from './conversion-outbox.service';
 
 const queueNames = Object.values(QUEUE_NAMES);
 const redisQueuesEnabled = process.env.REDIS_ENABLED !== 'false';
@@ -23,6 +24,7 @@ const disabledQueue = {
   controllers: [ConversionsController],
   providers: [
     ConversionsService,
+    ConversionOutboxService,
     ...(!redisQueuesEnabled
       ? queueNames.map((name) => ({ provide: getQueueToken(name), useValue: disabledQueue }))
       : []),

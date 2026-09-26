@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import axios from 'axios';
+import { createSafeHttpAgent, createSafeHttpsAgent } from '@docconv/url-security';
 
 export interface UrlInspectionResult {
   url: string;
@@ -10,6 +11,9 @@ export interface UrlInspectionResult {
 
 @Injectable()
 export class UrlInspectorService {
+  private readonly httpAgent = createSafeHttpAgent();
+  private readonly httpsAgent = createSafeHttpsAgent();
+
   /**
    * Performs a safe HEAD request to inspect the URL.
    * Returns information about the content type and size.
@@ -31,6 +35,8 @@ export class UrlInspectorService {
             timeout: 10_000,
             maxRedirects: 0,
             validateStatus: () => true,
+            httpAgent: this.httpAgent,
+            httpsAgent: this.httpsAgent,
             headers: {
               'User-Agent':
                 'Mozilla/5.0 (compatible; AppToolkitLab/1.0; +https://apptoolkitlab.com)',

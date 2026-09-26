@@ -13,23 +13,33 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     this.enabled = this.config.get<string>('REDIS_ENABLED', 'true') !== 'false';
     if (!this.enabled) {
-      console.warn('ℹ️ [RedisService] Using process-local quota storage; counters reset on restart.');
+      console.warn(
+        'ℹ️ [RedisService] Using process-local quota storage; counters reset on restart.',
+      );
       return;
     }
-    const host = this.config.get<string>('REDIS_HOST', 'localhost');
-    const port = parseInt(this.config.get<string>('REDIS_PORT', '6379'), 10);
-    const password = this.config.get<string>('REDIS_PASSWORD') || undefined;
-
-    this.client = new Redis({
-      host,
-      port,
-      password,
+    const redisUrl = this.config.get<string>('REDIS_URL');
+    const options = {
       lazyConnect: true,
       maxRetriesPerRequest: 3,
-      retryStrategy(times) {
+      retryStrategy(times: number) {
         return Math.min(times * 100, 3000);
       },
-    });
+    };
+
+    if (redisUrl) {
+      this.client = new Redis(redisUrl, options);
+    } else {
+      const host = this.config.get<string>('REDIS_HOST', 'localhost');
+      const port = parseInt(this.config.get<string>('REDIS_PORT', '6379'), 10);
+      const password = this.config.get<string>('REDIS_PASSWORD') || undefined;
+      this.client = new Redis({
+        host,
+        port,
+        password,
+        ...options,
+      });
+    }
 
     this.client.connect().catch((err) => {
       console.warn('⚠️ [RedisService] Redis connection error:', err.message);
@@ -39,6 +49,21 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy() {
     if (this.client) {
       await this.client.quit().catch(() => undefined);
+    }
+  }
+
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  async ping(): Promise<boolean> {
+    if (!this.enabled) return true;
+    if (!this.client) return false;
+    try {
+      const pong = await this.client.ping();
+      return pong === 'PONG';
+    } catch {
+      return false;
     }
   }
 
@@ -95,10 +120,67 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       multi.expire(key, ttlSeconds);
       const results = await multi.exec();
       const count = results?.[0]?.[1] as number;
-      return typeof count === 'number' ? count : 1;
+      if (typeof count !== 'number') {
+        throw new Error('Redis returned an invalid quota counter result.');
+      }
+      return count;
     } catch (err) {
-      console.warn('⚠️ [RedisService] incrWithTtl fallback:', err);
-      return 1;
+      console.warn('⚠️ [RedisService] incrWithTtl failed:', err);
+      throw new Error('Redis quota storage is unavailable.');
+    }
+  }
+
+  async reserveQuotaPair(
+    deviceKey: string,
+    ipKey: string,
+    deviceLimit: number,
+    ipLimit: number,
+    ttlSeconds: number,
+  ): Promise<{ allowed: boolean; deviceUsed: number; ipUsed: number }> {
+    if (!this.enabled || !this.client) {
+      const deviceUsed = Number((await this.get(deviceKey)) || 0);
+      const ipUsed = Number((await this.get(ipKey)) || 0);
+      if (deviceUsed >= deviceLimit || ipUsed >= ipLimit) {
+        return { allowed: false, deviceUsed, ipUsed };
+      }
+      const nextDevice = deviceUsed + 1;
+      const nextIp = ipUsed + 1;
+      await this.set(deviceKey, String(nextDevice), ttlSeconds);
+      await this.set(ipKey, String(nextIp), ttlSeconds);
+      return { allowed: true, deviceUsed: nextDevice, ipUsed: nextIp };
+    }
+
+    const script = `
+      local device = tonumber(redis.call('GET', KEYS[1]) or '0')
+      local ip = tonumber(redis.call('GET', KEYS[2]) or '0')
+      if device >= tonumber(ARGV[1]) or ip >= tonumber(ARGV[2]) then
+        return {0, device, ip}
+      end
+      device = redis.call('INCR', KEYS[1])
+      ip = redis.call('INCR', KEYS[2])
+      if redis.call('TTL', KEYS[1]) < 0 then redis.call('EXPIRE', KEYS[1], ARGV[3]) end
+      if redis.call('TTL', KEYS[2]) < 0 then redis.call('EXPIRE', KEYS[2], ARGV[3]) end
+      return {1, device, ip}
+    `;
+
+    try {
+      const result = (await this.client.eval(
+        script,
+        2,
+        deviceKey,
+        ipKey,
+        deviceLimit,
+        ipLimit,
+        ttlSeconds,
+      )) as number[];
+      return {
+        allowed: Number(result[0]) === 1,
+        deviceUsed: Number(result[1]),
+        ipUsed: Number(result[2]),
+      };
+    } catch (error) {
+      console.warn('⚠️ [RedisService] atomic quota reservation failed:', error);
+      throw new Error('Redis quota storage is unavailable.');
     }
   }
 
@@ -110,6 +192,18 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.client.del(key);
     } catch {}
+  }
+
+  async keys(pattern: string): Promise<string[]> {
+    if (!this.enabled || !this.client) {
+      const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+      return Array.from(this.memory.keys()).filter((k) => regex.test(k));
+    }
+    try {
+      return await this.client.keys(pattern);
+    } catch {
+      return [];
+    }
   }
 
   async decrementFloorZero(key: string): Promise<number> {

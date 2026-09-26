@@ -5,6 +5,10 @@ import {
   CurrencyCode,
   PaymentProvider,
   UserStatus,
+  BillingType,
+  BillingInterval,
+  PlatformRole,
+  OrgRole,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -102,6 +106,71 @@ async function main() {
     },
   });
 
+  // An administrator is created only when both explicit seed credentials are
+  // supplied. No default production credential is embedded in the source.
+  const seedAdminEmail = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
+  const seedAdminPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (Boolean(seedAdminEmail) !== Boolean(seedAdminPassword)) {
+    throw new Error('SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD must be configured together.');
+  }
+  if (seedAdminEmail && seedAdminPassword) {
+    if (seedAdminPassword.length < 12) {
+      throw new Error('SEED_ADMIN_PASSWORD must contain at least 12 characters.');
+    }
+    if (
+      process.env.NODE_ENV === 'production' &&
+      process.env.ALLOW_ADMIN_SEED_IN_PRODUCTION !== 'true'
+    ) {
+      throw new Error(
+        'Refusing to seed an administrator in production without ALLOW_ADMIN_SEED_IN_PRODUCTION=true.',
+      );
+    }
+    const adminPasswordHash = await bcrypt.hash(seedAdminPassword, 12);
+    const admin = await prisma.user.upsert({
+      where: { email: seedAdminEmail },
+      update: {
+        passwordHash: adminPasswordHash,
+        platformRole: PlatformRole.ADMIN,
+        status: UserStatus.ACTIVE,
+        emailVerifiedAt: new Date(),
+      },
+      create: {
+        email: seedAdminEmail,
+        passwordHash: adminPasswordHash,
+        firstName: 'Platform',
+        lastName: 'Administrator',
+        platformRole: PlatformRole.ADMIN,
+        status: UserStatus.ACTIVE,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const adminOrganization = await prisma.organization.upsert({
+      where: { slug: 'internal-platform-admin' },
+      update: { ownerUserId: admin.id, planId: businessPlan.id },
+      create: {
+        name: 'AppToolkitLab Administration',
+        slug: 'internal-platform-admin',
+        ownerUserId: admin.id,
+        planId: businessPlan.id,
+      },
+    });
+    await prisma.organizationMember.upsert({
+      where: {
+        organizationId_userId: {
+          organizationId: adminOrganization.id,
+          userId: admin.id,
+        },
+      },
+      update: { role: OrgRole.OWNER },
+      create: {
+        organizationId: adminOrganization.id,
+        userId: admin.id,
+        role: OrgRole.OWNER,
+      },
+    });
+    console.log(`✅ Development administrator seeded: ${seedAdminEmail}`);
+  }
+
   // ─── 2. Server-Authoritative Tools ───────────────────────────
 
   const tools = [
@@ -145,6 +214,34 @@ async function main() {
           'pdf.editMetadata',
           'Set PDF title, author, subject, and keywords.',
         ],
+        ['organize-pdf', 'Organize PDF Pages', 'pdf.organize', 'Reorder or duplicate PDF pages.'],
+        [
+          'alternate-mix-pdf',
+          'Alternate & Mix PDF',
+          'pdf.alternateMix',
+          'Interleave pages from multiple PDFs.',
+        ],
+        ['crop-pdf', 'Crop PDF', 'pdf.crop', 'Trim PDF page margins without rasterizing content.'],
+        ['resize-pdf', 'Resize PDF', 'pdf.resize', 'Fit PDF pages onto standard paper sizes.'],
+        ['n-up-pdf', 'N-up PDF', 'pdf.nUp', 'Arrange two or four pages on each output sheet.'],
+        [
+          'header-footer-pdf',
+          'PDF Header & Footer',
+          'pdf.headerFooter',
+          'Add custom header and footer labels to PDF pages.',
+        ],
+        [
+          'bates-numbering-pdf',
+          'Bates Numbering',
+          'pdf.batesNumbering',
+          'Apply sequential Bates identifiers to PDF pages.',
+        ],
+        [
+          'flatten-pdf-forms',
+          'Flatten PDF Forms',
+          'pdf.flattenForms',
+          'Make interactive PDF form fields read-only.',
+        ],
       ] as const
     ).map(([slug, name, operation, description], index) => ({
       slug,
@@ -167,6 +264,26 @@ async function main() {
       },
       configJson: { operation, processingLocation: 'BROWSER' },
     })),
+    {
+      slug: 'word-to-pdf',
+      name: 'Word to PDF',
+      category: 'Document',
+      engine: 'libreoffice',
+      acceptedFormats: ['docx'],
+      outputFormats: ['pdf'],
+      minimumPlan: SubscriptionPlanTier.FREE,
+      anonymousEnabled: true,
+      costUnits: 1,
+      maxFileSizeBytes: BigInt(25 * 1024 * 1024),
+      isPublished: true,
+      isFeatured: true,
+      sortOrder: 19,
+      seoMetadata: {
+        title: 'Word to PDF Converter — DOCX to PDF Online',
+        description: 'Convert Microsoft Word DOCX documents to PDF with the LibreOffice worker.',
+        keywords: ['word to pdf', 'docx to pdf', 'convert word document'],
+      },
+    },
     {
       slug: 'pdf-to-docx',
       name: 'PDF to Word Converter',
@@ -214,6 +331,49 @@ async function main() {
           'Extract English text from digital and scanned PDF files into a downloadable text file.',
         keywords: ['pdf ocr', 'extract text from pdf', 'scanned pdf extractor'],
       },
+    },
+    {
+      slug: 'pdf-to-markdown',
+      name: 'PDF to Markdown Converter',
+      category: 'Document',
+      engine: 'pdf-extractor',
+      acceptedFormats: ['pdf'],
+      outputFormats: ['markdown'],
+      minimumPlan: SubscriptionPlanTier.FREE,
+      anonymousEnabled: true,
+      costUnits: 1,
+      maxFileSizeBytes: BigInt(10 * 1024 * 1024),
+      isPublished: true,
+      isFeatured: true,
+      sortOrder: 22,
+      seoMetadata: {
+        title: 'PDF to Markdown Converter — Structured MD Extraction',
+        description:
+          'Extract digital or scanned PDF content into readable Markdown with headings, lists, and page structure.',
+        keywords: ['pdf to markdown', 'pdf to md', 'extract pdf content'],
+      },
+    },
+    {
+      slug: 'pdf-to-images',
+      name: 'PDF to Image Converter',
+      category: 'Image',
+      engine: 'pdf-extractor',
+      acceptedFormats: ['pdf'],
+      outputFormats: ['png', 'jpg'],
+      minimumPlan: SubscriptionPlanTier.FREE,
+      anonymousEnabled: true,
+      costUnits: 1,
+      maxFileSizeBytes: BigInt(30 * 1024 * 1024),
+      isPublished: true,
+      isFeatured: true,
+      sortOrder: 23,
+      seoMetadata: {
+        title: 'PDF to PNG or JPG — High Compatibility Converter',
+        description:
+          'Render every PDF page as a high-resolution PNG or JPG with broad embedded-font support.',
+        keywords: ['pdf to image', 'pdf to png', 'pdf to jpg'],
+      },
+      configJson: { operation: 'pdf.toImages', processingLocation: 'NATIVE' },
     },
     {
       slug: 'url-to-pdf',
@@ -415,6 +575,109 @@ async function main() {
   }
 
   console.log('✅ Initial software marketplace products seeded.');
+
+  const blogStudio = await prisma.product.upsert({
+    where: { slug: 'blog-studio-addon' },
+    update: {
+      name: 'Blog Studio',
+      tagline: 'Research, generate, edit, and export high-quality articles',
+      isPublished: true,
+    },
+    create: {
+      slug: 'blog-studio-addon',
+      name: 'Blog Studio',
+      tagline: 'Research, generate, edit, and export high-quality articles',
+      description:
+        'A native AppToolkitLab SaaS workspace for staged AI research, article generation, SEO editing, usage tracking, and multi-format export.',
+      type: ProductType.SAAS,
+      isPublished: true,
+      isFeatured: true,
+      sortOrder: 10,
+      metadataJson: { blogLimit: 40, creditLimit: 800, hostedCredentials: 'managed' },
+    },
+  });
+
+  const blogDesktop = await prisma.product.upsert({
+    where: { slug: 'blog-studio-desktop-windows' },
+    update: { name: 'Blog Studio Desktop', isPublished: false },
+    create: {
+      slug: 'blog-studio-desktop-windows',
+      name: 'Blog Studio Desktop',
+      tagline: 'Standalone Windows article studio with your own AI provider key',
+      description:
+        'Windows x64 desktop edition with perpetual access to the purchased version, two machine activations, and twelve months of updates and support.',
+      type: ProductType.SOFTWARE,
+      isPublished: false,
+      isFeatured: false,
+      sortOrder: 11,
+      metadataJson: { platform: 'windows-x64', maxActivations: 2, updatesMonths: 12 },
+    },
+  });
+
+  for (const price of [
+    {
+      productId: blogStudio.id,
+      currency: CurrencyCode.USD,
+      amountMinorUnits: 1900,
+      provider: PaymentProvider.STRIPE,
+      providerPriceId: process.env.STRIPE_BLOG_STUDIO_PRICE_ID || null,
+      billingType: BillingType.RECURRING,
+      billingInterval: BillingInterval.MONTH,
+    },
+    {
+      productId: blogStudio.id,
+      currency: CurrencyCode.INR,
+      amountMinorUnits: 159900,
+      provider: PaymentProvider.RAZORPAY,
+      providerPriceId: process.env.RAZORPAY_BLOG_STUDIO_PLAN_ID || null,
+      billingType: BillingType.RECURRING,
+      billingInterval: BillingInterval.MONTH,
+    },
+    {
+      productId: blogDesktop.id,
+      currency: CurrencyCode.USD,
+      amountMinorUnits: 9900,
+      provider: PaymentProvider.STRIPE,
+      billingType: BillingType.ONE_TIME,
+      billingInterval: null,
+    },
+    {
+      productId: blogDesktop.id,
+      currency: CurrencyCode.INR,
+      amountMinorUnits: 829900,
+      provider: PaymentProvider.RAZORPAY,
+      billingType: BillingType.ONE_TIME,
+      billingInterval: null,
+    },
+  ]) {
+    await prisma.price.upsert({
+      where: { productId_currency: { productId: price.productId, currency: price.currency } },
+      update: price,
+      create: price,
+    });
+  }
+
+  await prisma.aiModelPrice.upsert({
+    where: {
+      provider_model_version: {
+        provider: 'openai-compatible',
+        model: process.env.AI_CHAT_MODEL || 'gpt-5-mini',
+        version: 1,
+      },
+    },
+    update: {},
+    create: {
+      provider: 'openai-compatible',
+      model: process.env.AI_CHAT_MODEL || 'gpt-5-mini',
+      version: 1,
+      inputPerMillionUsd: 0.5,
+      outputPerMillionUsd: 2,
+      imageUsd: 0.04,
+      effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+    },
+  });
+
+  console.log('✅ Blog Studio SaaS, desktop catalog entries, and model pricing seeded.');
   console.log('🎉 Seeding completed successfully.');
 }
 

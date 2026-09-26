@@ -25,6 +25,13 @@ test('routes PDF to editable Word through the PDF extractor', () => {
   assert.equal(conversionRouter.getQueueName(route.engine), 'conversion-pdf');
 });
 
+test('routes a PDF page-image archive through the native PDF extractor', () => {
+  const route = conversionRouter.findAdapter('pdf', 'zip');
+  assert.ok(route);
+  assert.equal(route.engine, 'pdf-extractor');
+  assert.equal(conversionRouter.getQueueName(route.engine), 'conversion-pdf');
+});
+
 test('routes URL to Word through Chromium before extraction', () => {
   const route = conversionRouter.findAdapter('url', 'docx');
   assert.ok(route);

@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../common/prisma.service';
-import { PlatformRole, UserStatus } from '@prisma/client';
+import { PlatformRole, SubscriptionStatus, UserStatus } from '@prisma/client';
 import { TransactionalEmailService } from './transactional-email.service';
 import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
@@ -185,7 +185,7 @@ export class AuthService {
   }
 
   /**
-   * Refresh session using a rotating refresh token.
+   * Refresh session using a rotating refresh token with transactional replay detection.
    */
   async refresh(
     rawRefreshToken: string,
@@ -197,36 +197,74 @@ export class AuthService {
 
     const tokenHash = this.hashToken(rawRefreshToken);
 
-    const session = await this.prisma.refreshSession.findUnique({
-      where: { tokenHash },
-      include: {
-        user: {
-          include: {
-            memberships: {
-              take: 1,
-              select: { organizationId: true },
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      const session = await tx.refreshSession.findUnique({
+        where: { tokenHash },
+        include: {
+          user: {
+            include: {
+              memberships: {
+                take: 1,
+                select: { organizationId: true },
+              },
             },
           },
         },
-      },
+      });
+
+      if (!session) {
+        throw new UnauthorizedException('Invalid or expired refresh token.');
+      }
+
+      // A replay invalidates only the affected device/token family. Return a
+      // sentinel instead of throwing here so the revocation transaction commits.
+      if (session.revokedAt) {
+        await tx.refreshSession.updateMany({
+          where: { familyId: session.familyId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+        return { replayDetected: true as const };
+      }
+
+      if (session.expiresAt < new Date()) {
+        throw new UnauthorizedException('Invalid or expired refresh token.');
+      }
+
+      if (session.user.status !== UserStatus.ACTIVE) {
+        throw new UnauthorizedException('Account is not active.');
+      }
+
+      // Compare-and-set claim. Concurrent refreshes cannot both rotate the
+      // same token even when they read it before either update commits.
+      const claimed = await tx.refreshSession.updateMany({
+        where: { id: session.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      if (claimed.count !== 1) {
+        await tx.refreshSession.updateMany({
+          where: { familyId: session.familyId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+        return { replayDetected: true as const };
+      }
+
+      const orgId = session.user.memberships[0]?.organizationId;
+      const tokens = await this.createAuthSessionInTx(
+        tx,
+        session.user,
+        orgId,
+        meta,
+        session.familyId,
+      );
+      return { replayDetected: false as const, tokens };
     });
 
-    if (!session || session.revokedAt || session.expiresAt < new Date()) {
-      throw new UnauthorizedException('Invalid or expired refresh token.');
+    if (outcome.replayDetected) {
+      throw new UnauthorizedException(
+        'Security alert: Refresh token replay detected. This session family was terminated.',
+      );
     }
-
-    if (session.user.status !== UserStatus.ACTIVE) {
-      throw new UnauthorizedException('Account is not active.');
-    }
-
-    // Revoke old session token
-    await this.prisma.refreshSession.update({
-      where: { id: session.id },
-      data: { revokedAt: new Date() },
-    });
-
-    const orgId = session.user.memberships[0]?.organizationId;
-    return this.createAuthSession(session.user, orgId, meta);
+    return outcome.tokens;
   }
 
   /**
@@ -399,6 +437,18 @@ export class AuthService {
                     hasApiAccess: true,
                   },
                 },
+                subscriptions: {
+                  where: {
+                    status: SubscriptionStatus.ACTIVE,
+                    currentPeriodEnd: { gt: new Date() },
+                  },
+                  orderBy: { currentPeriodEnd: 'desc' },
+                  take: 1,
+                  select: {
+                    currentPeriodEnd: true,
+                    plan: { select: { id: true, tier: true, name: true, monthlyOpsLimit: true } },
+                  },
+                },
               },
             },
           },
@@ -447,6 +497,24 @@ export class AuthService {
     },
     orgId?: string,
     meta?: { ipAddress?: string; userAgent?: string },
+    familyId?: string,
+  ): Promise<AuthTokens> {
+    return this.createAuthSessionInTx(this.prisma, user, orgId, meta, familyId);
+  }
+
+  private async createAuthSessionInTx(
+    tx: any,
+    user: {
+      id: string;
+      email: string;
+      firstName?: string | null;
+      lastName?: string | null;
+      platformRole: PlatformRole;
+      emailVerifiedAt?: Date | null;
+    },
+    orgId?: string,
+    meta?: { ipAddress?: string; userAgent?: string },
+    familyId: string = crypto.randomUUID(),
   ): Promise<AuthTokens> {
     const payload: JwtPayload = {
       sub: user.id,
@@ -466,10 +534,11 @@ export class AuthService {
     const refreshExpiresInDays = 30;
     const expiresAt = new Date(Date.now() + refreshExpiresInDays * 24 * 60 * 60 * 1000);
 
-    // Save refresh session in DB
-    await this.prisma.refreshSession.create({
+    // Save refresh session in DB within transaction
+    await tx.refreshSession.create({
       data: {
         userId: user.id,
+        familyId,
         tokenHash,
         ipAddress: meta?.ipAddress,
         userAgent: meta?.userAgent,

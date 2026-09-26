@@ -49,14 +49,20 @@ export default function WorkspaceSettingsPage() {
               <span className="text-xs font-bold text-slate-900 dark:text-white">
                 {profile?.memberships?.[0]?.organization?.name || 'Personal Workspace'}
               </span>
-              <p className="text-[11px] text-slate-500">Plan: Free Starter (10 ops/day)</p>
+              <p className="text-[11px] text-slate-500">
+                {profile?.platformRole === 'ADMIN'
+                  ? 'Platform administrator: unlimited tool and SaaS access'
+                  : `Plan: ${profile?.memberships?.[0]?.organization?.subscriptions?.[0]?.plan?.name || profile?.memberships?.[0]?.organization?.plan?.name || 'Free Starter'}`}
+              </p>
             </div>
-            <a
-              href="/pricing"
-              className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-sm"
-            >
-              Upgrade Plan
-            </a>
+            {profile?.platformRole !== 'ADMIN' && (
+              <a
+                href="/pricing"
+                className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-sm"
+              >
+                Upgrade Plan
+              </a>
+            )}
           </div>
         </div>
       </div>

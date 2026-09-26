@@ -7,6 +7,7 @@ import { ToolsService } from './tools.service';
 import { AnonymousQuotaService } from './anonymous-quota.service';
 import { OutputFormat } from '@docconv/shared-types';
 import { getExtension } from '@docconv/file-validation';
+import { PlatformRole } from '@prisma/client';
 
 const ANONYMOUS_EMAIL = 'anonymous@internal.toolsuite.local';
 const ANONYMOUS_ORG_SLUG = 'internal-anonymous-tools';
@@ -71,13 +72,18 @@ export class AnonymousToolsService {
           )
         : await this.files.uploadFile(principal.userId, principal.organizationId, params.file!);
 
+      const isPdfImageArchive = params.slug === 'pdf-to-images';
+      const imageFormat: 'png' | 'jpg' = targetFormat === 'jpg' ? 'jpg' : 'png';
       const conversion = await this.conversions.createConversion(
         principal.userId,
         principal.organizationId,
         {
           sourceFileId: storedFile.id,
-          targetFormat: targetFormat as OutputFormat,
-          settings: params.settings as any,
+          targetFormat: (isPdfImageArchive ? OutputFormat.ZIP : targetFormat) as OutputFormat,
+          settings: {
+            ...params.settings,
+            ...(isPdfImageArchive ? { imageFormat } : {}),
+          },
         },
       );
 
@@ -90,6 +96,75 @@ export class AnonymousToolsService {
       }
       throw error;
     }
+  }
+
+  async executeAuthenticated(params: {
+    slug: string;
+    userId: string;
+    organizationId: string;
+    platformRole: PlatformRole;
+    targetFormat?: string;
+    url?: string;
+    file?: Express.Multer.File;
+    settings?: Record<string, unknown>;
+  }) {
+    const tool = await this.tools.getToolBySlug(params.slug);
+    const targetFormat = (params.targetFormat || tool.outputFormats[0] || '').toLowerCase();
+    if (!tool.outputFormats.includes(targetFormat)) {
+      throw new BadRequestException(
+        `Unsupported output '${targetFormat}'. Choose: ${tool.outputFormats.join(', ')}.`,
+      );
+    }
+
+    const isUrlTool = tool.acceptedFormats.includes('url');
+    if (isUrlTool && !params.url) {
+      throw new BadRequestException('A public http:// or https:// URL is required.');
+    }
+    if (!isUrlTool && !params.file) {
+      throw new BadRequestException('A source file is required.');
+    }
+
+    const access = await this.tools.getAuthenticatedAccess(params.userId, params.organizationId);
+    const inputFormat = isUrlTool ? 'url' : getExtension(params.file!.originalname) || '';
+    const inputSize = isUrlTool ? Buffer.byteLength(params.url!, 'utf8') : params.file!.size;
+    await this.tools.validateToolExecution(
+      params.slug,
+      access.tier,
+      inputSize,
+      inputFormat,
+      access.platformRole,
+    );
+
+    const storedFile = isUrlTool
+      ? await this.files.uploadPastedContent(
+          params.userId,
+          params.organizationId,
+          params.url!,
+          'url',
+        )
+      : await this.files.uploadFile(params.userId, params.organizationId, params.file!);
+    const isPdfImageArchive = params.slug === 'pdf-to-images';
+    const imageFormat: 'png' | 'jpg' = targetFormat === 'jpg' ? 'jpg' : 'png';
+    return this.conversions.createConversion(params.userId, params.organizationId, {
+      sourceFileId: storedFile.id,
+      targetFormat: (isPdfImageArchive ? OutputFormat.ZIP : targetFormat) as OutputFormat,
+      settings: {
+        ...params.settings,
+        ...(isPdfImageArchive ? { imageFormat } : {}),
+      },
+    });
+  }
+
+  getAuthenticatedStatus(jobId: string, userId: string, organizationId: string) {
+    return this.conversions.getJobStatus(jobId, organizationId, userId);
+  }
+
+  getAuthenticatedDownloadUrl(jobId: string, userId: string, organizationId: string) {
+    return this.conversions.getDownloadUrl(jobId, organizationId, userId);
+  }
+
+  cancelAuthenticated(jobId: string, userId: string, organizationId: string) {
+    return this.conversions.cancelConversion(jobId, organizationId, userId);
   }
 
   async getStatus(jobId: string, anonId: string) {

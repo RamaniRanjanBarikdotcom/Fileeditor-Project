@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../common/redis.service';
 import * as crypto from 'crypto';
@@ -12,7 +12,8 @@ export interface AnonymousQuotaStatus {
   resetInSeconds: number;
 }
 
-const ANON_DAILY_LIMIT = 3;
+const ANON_DEVICE_DAILY_LIMIT = 5;
+const ANON_IP_DAILY_LIMIT = 15;
 const ANON_COOKIE_NAME = 'apptoolkitlab_anon_id';
 const LEGACY_ANON_COOKIE_NAME = 'toolsuite_anon_id';
 
@@ -66,28 +67,50 @@ export class AnonymousQuotaService {
     return crypto.createHmac('sha256', this.hmacSecret).update(cleanIp).digest('hex').slice(0, 32);
   }
 
+  private getKeys(ip: string, anonId: string) {
+    const ipHash = this.computeIpHmac(ip);
+    return {
+      deviceKey: `quota:anon:device:${anonId}`,
+      ipKey: `quota:anon:ip:${ipHash}`,
+    };
+  }
+
   /**
-   * Check and increment anonymous usage count in Redis.
+   * Check and increment anonymous usage count in Redis across both device and IP dimensions.
    */
   async consumeQuota(ip: string, anonId: string): Promise<AnonymousQuotaStatus> {
-    const ipHash = this.computeIpHmac(ip);
-    const redisKey = `quota:anon:${ipHash}:${anonId}`;
+    const { deviceKey, ipKey } = this.getKeys(ip, anonId);
     const ttlSeconds = 24 * 60 * 60; // 24 hours
 
-    const used = await this.redis.incrWithTtl(redisKey, ttlSeconds);
-    const remaining = Math.max(0, ANON_DAILY_LIMIT - used);
-    const allowed = used <= ANON_DAILY_LIMIT;
-
-    if (!allowed) {
-      throw new ForbiddenException(
-        `Anonymous limit reached (${ANON_DAILY_LIMIT} free operations/day). Create a free account or upgrade to Pro for higher limits!`,
+    let reservation;
+    try {
+      reservation = await this.redis.reserveQuotaPair(
+        deviceKey,
+        ipKey,
+        ANON_DEVICE_DAILY_LIMIT,
+        ANON_IP_DAILY_LIMIT,
+        ttlSeconds,
+      );
+    } catch {
+      throw new ServiceUnavailableException(
+        'Anonymous quota service is temporarily unavailable. No usage was consumed.',
       );
     }
 
+    if (!reservation.allowed) {
+      throw new ForbiddenException(
+        `Anonymous limit reached. Create a free account for higher quotas and unlimited tools!`,
+      );
+    }
+
+    const { deviceUsed } = reservation;
+
+    const remaining = Math.max(0, ANON_DEVICE_DAILY_LIMIT - deviceUsed);
+
     return {
       allowed: true,
-      limit: ANON_DAILY_LIMIT,
-      used,
+      limit: ANON_DEVICE_DAILY_LIMIT,
+      used: deviceUsed,
       remaining,
       anonId,
       resetInSeconds: ttlSeconds,
@@ -98,17 +121,26 @@ export class AnonymousQuotaService {
    * Read current quota status without incrementing.
    */
   async checkQuota(ip: string, anonId: string): Promise<AnonymousQuotaStatus> {
-    const ipHash = this.computeIpHmac(ip);
-    const redisKey = `quota:anon:${ipHash}:${anonId}`;
+    const { deviceKey, ipKey } = this.getKeys(ip, anonId);
 
-    const raw = await this.redis.get(redisKey);
-    const used = raw ? parseInt(raw, 10) : 0;
-    const remaining = Math.max(0, ANON_DAILY_LIMIT - used);
+    const [rawDevice, rawIp] = await Promise.all([
+      this.redis.get(deviceKey),
+      this.redis.get(ipKey),
+    ]);
+
+    const deviceUsed = rawDevice ? parseInt(rawDevice, 10) : 0;
+    const ipUsed = rawIp ? parseInt(rawIp, 10) : 0;
+
+    const remaining = Math.max(
+      0,
+      Math.min(ANON_DEVICE_DAILY_LIMIT - deviceUsed, ANON_IP_DAILY_LIMIT - ipUsed),
+    );
+    const allowed = deviceUsed < ANON_DEVICE_DAILY_LIMIT && ipUsed < ANON_IP_DAILY_LIMIT;
 
     return {
-      allowed: used < ANON_DAILY_LIMIT,
-      limit: ANON_DAILY_LIMIT,
-      used,
+      allowed,
+      limit: ANON_DEVICE_DAILY_LIMIT,
+      used: deviceUsed,
       remaining,
       anonId,
       resetInSeconds: 24 * 60 * 60,
@@ -116,9 +148,11 @@ export class AnonymousQuotaService {
   }
 
   async releaseQuota(ip: string, anonId: string): Promise<void> {
-    const ipHash = this.computeIpHmac(ip);
-    const redisKey = `quota:anon:${ipHash}:${anonId}`;
-    await this.redis.decrementFloorZero(redisKey);
+    const { deviceKey, ipKey } = this.getKeys(ip, anonId);
+    await Promise.all([
+      this.redis.decrementFloorZero(deviceKey),
+      this.redis.decrementFloorZero(ipKey),
+    ]);
   }
 
   private signAnonId(id: string): string {

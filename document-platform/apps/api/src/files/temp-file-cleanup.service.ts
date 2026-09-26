@@ -55,16 +55,18 @@ export class TempFileCleanupService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    // Only mark unfinished jobs that were stuck in QUEUED or PROCESSING past their expiry as EXPIRED.
+    // Completed jobs retain COMPLETED status in user history while their expired file assets are cleared.
     const expiredJobs = await this.prisma.conversionJob.updateMany({
       where: {
         expiresAt: { lte: now },
-        status: { notIn: [JobStatus.FAILED, JobStatus.CANCELLED, JobStatus.EXPIRED] },
+        status: { in: [JobStatus.QUEUED, JobStatus.PROCESSING] },
       },
       data: {
         status: JobStatus.EXPIRED,
         completedAt: now,
         errorCode: 'EXPIRED',
-        errorMessage: 'The conversion and its temporary files have expired.',
+        errorMessage: 'The conversion job timed out before completion.',
       },
     });
     if (deletedFiles || expiredJobs.count) {

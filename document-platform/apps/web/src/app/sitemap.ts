@@ -9,6 +9,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     '/software',
     '/automations',
     '/saas',
+    '/saas/blog-studio',
     '/pricing',
     '/about',
     '/blog',

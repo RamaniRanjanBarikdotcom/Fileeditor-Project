@@ -8,26 +8,24 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
+import { validateEnvironment } from './common/env.validator';
 
 async function bootstrap() {
+  const envConfig = validateEnvironment(process.env);
+
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
   });
 
-  // Respect the first reverse proxy (Next.js/nginx) so anonymous quotas use
-  // the real client address instead of grouping every visitor under Docker's IP.
-  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+  // Respect reverse proxy topology so client IP addresses and quotas are accurate
+  app.getHttpAdapter().getInstance().set('trust proxy', envConfig.trustProxy);
 
   // ─── Security ──────────────────────────────────────────────
   app.use(helmet());
   app.use(cookieParser());
 
-  const corsOrigins = (
-    process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5173,http://localhost:4000'
-  )
-    .split(',')
-    .map((o) => o.trim());
+  const corsOrigins = envConfig.corsOrigins;
 
   app.enableCors({
     origin: (
@@ -37,7 +35,7 @@ async function bootstrap() {
       // Allow non-browser requests or matching origins
       if (!origin || corsOrigins.includes(origin)) {
         callback(null, true);
-      } else if (process.env.NODE_ENV !== 'production') {
+      } else if (!envConfig.isProduction) {
         callback(null, true);
       } else {
         callback(new Error(`Origin ${origin} is not allowed by CORS`), false);
@@ -84,6 +82,7 @@ async function bootstrap() {
       .addTag('tools', 'Server-authoritative tool registry & execution')
       .addTag('files', 'File upload and storage management')
       .addTag('conversions', 'Document conversion operations & quota management')
+      .addTag('ai-memory', 'Project-aware AI conversations, persistent memory, and context')
       .addTag('templates', 'Document templates')
       .addTag('presets', 'Conversion presets')
       .addTag('health', 'Health check endpoints')

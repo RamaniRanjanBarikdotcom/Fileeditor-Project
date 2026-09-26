@@ -3,12 +3,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Wrench, CheckCircle2, HelpCircle, ArrowRight, ChevronRight, Sparkles } from 'lucide-react';
+import {
+  Wrench,
+  CheckCircle2,
+  ArrowRight,
+  ChevronRight,
+  ChevronDown,
+  Sparkles,
+  ShieldCheck,
+  Gauge,
+  FileOutput,
+} from 'lucide-react';
 import { ToolDto } from '@docconv/shared-types';
 import { InteractiveToolConverter } from '../../../components/InteractiveToolConverter';
 import { getToolPresentation } from '../../../lib/tools-registry';
 import { fetchApi } from '../../../lib/api';
-import { createStaticToolDto } from '../../../lib/tool-dtos';
+import { createStaticToolDto, listStaticToolDtos } from '../../../lib/tool-dtos';
 
 export default function ToolDetailPage() {
   const params = useParams();
@@ -31,6 +41,14 @@ export default function ToolDetailPage() {
 
   const pres = getToolPresentation(slug);
   const Icon = pres.icon || Wrench;
+  const relatedTools = useMemo(
+    () =>
+      listStaticToolDtos()
+        .filter((candidate) => candidate.slug !== slug && candidate.category === tool?.category)
+        .slice(0, 3),
+    [slug, tool?.category],
+  );
+  const isPrivateBrowserTool = Boolean(tool?.operation && tool.capability?.browser.supported);
 
   if (loading) {
     return (
@@ -114,6 +132,21 @@ export default function ToolDetailPage() {
               pres.features[0] ||
               'Fast, secure, and accurate online conversion engine. Convert directly in your browser.'}
           </p>
+
+          <div className="tool-detail-meta" aria-label="Tool processing details">
+            <span>
+              <ShieldCheck className="h-4 w-4" />
+              {isPrivateBrowserTool ? 'Files stay on your device' : 'Secure temporary processing'}
+            </span>
+            <span>
+              <Gauge className="h-4 w-4" />
+              Up to {Math.round(tool.maxFileSizeBytes / 1024 / 1024)} MB
+            </span>
+            <span>
+              <FileOutput className="h-4 w-4" />
+              {tool.outputFormats.map((format) => format.toUpperCase()).join(', ')} output
+            </span>
+          </div>
         </div>
       </section>
 
@@ -228,18 +261,16 @@ export default function ToolDetailPage() {
 
             <div className="tool-detail-faq-list">
               {pres.faq.map((item, idx) => (
-                <article
+                <details
                   key={idx}
                   className="card tool-detail-faq-card"
                   style={{ backgroundColor: 'var(--bg-card)' }}
+                  open={idx === 0}
                 >
-                  <h3
-                    className="text-base font-bold mb-2 flex items-center gap-2"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    <HelpCircle className="w-4 h-4" style={{ color: 'var(--brand-500)' }} />
-                    {item.q}
-                  </h3>
+                  <summary style={{ color: 'var(--text-primary)' }}>
+                    <span>{item.q}</span>
+                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                  </summary>
                   <p
                     style={{
                       fontSize: '0.875rem',
@@ -250,8 +281,49 @@ export default function ToolDetailPage() {
                   >
                     {item.a}
                   </p>
-                </article>
+                </details>
               ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {relatedTools.length > 0 && (
+        <section className="tool-detail-section tool-detail-related-section">
+          <div className="container-custom tool-detail-section-inner">
+            <div className="tool-detail-section-heading">
+              <span className="tool-detail-section-kicker">Continue working</span>
+              <h2 className="ts-h2" style={{ color: 'var(--text-primary)' }}>
+                More {tool.category} tools
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                Keep your workflow moving with another focused utility.
+              </p>
+            </div>
+            <div className="tool-detail-related-grid">
+              {relatedTools.map((relatedTool) => {
+                const related = getToolPresentation(relatedTool.slug);
+                const RelatedIcon = related.icon || Wrench;
+                return (
+                  <Link
+                    key={relatedTool.slug}
+                    href={`/tools/${relatedTool.slug}`}
+                    className="tool-detail-related-card"
+                  >
+                    <span
+                      className="tool-detail-related-icon"
+                      style={{ color: related.accentColor, background: `${related.accentColor}14` }}
+                    >
+                      <RelatedIcon className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0">
+                      <strong>{related.name || relatedTool.name}</strong>
+                      <small>{relatedTool.seoMetadata?.description}</small>
+                    </span>
+                    <ArrowRight className="h-4 w-4 shrink-0" />
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </section>

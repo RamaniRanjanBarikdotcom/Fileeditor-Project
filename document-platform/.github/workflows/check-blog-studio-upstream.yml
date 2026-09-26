@@ -1,0 +1,84 @@
+name: Check Blog Studio Upstream Parity
+
+on:
+  schedule:
+    - cron: '0 8 * * 1' # Runs every Monday at 08:00 UTC
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Upstream Parity Check
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/check-blog-studio-upstream.mjs > check_output.txt
+
+      - name: Create or Update Issue
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('check_output.txt', 'utf8');
+            
+            // Only create an issue if changes are detected
+            if (output.includes('Upstream is fully synchronized')) {
+              console.log('No new changes, skipping issue creation.');
+              return;
+            }
+            
+            const title = 'Blog Studio: Upstream Changes Detected';
+            const body = `### 🚨 Blog Studio Upstream Parity Alert
+            
+            The upstream repository \`tanmay-sahoo/Blog-generator\` has new changes.
+            
+            #### Check Results:
+            \`\`\`text
+            ${output}
+            \`\`\`
+            
+            **Required Action:**
+            1. Review ownership and licensing.
+            2. Review security and data-model impact.
+            3. Port behavior into native AppToolkitLab packages.
+            4. Update \`docs/BLOG_STUDIO_UPSTREAM_PARITY.md\` and \`blog-studio-upstream.lock.json\`.
+            5. Do NOT automatically merge untrusted code.
+            `;
+            
+            // Search for an existing open issue
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              creator: 'app/github-actions'
+            });
+            
+            const existingIssue = issues.data.find(i => i.title === title);
+            
+            if (existingIssue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: body
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['upstream-parity', 'needs-review']
+              });
+            }

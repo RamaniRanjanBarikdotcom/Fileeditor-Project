@@ -1,6 +1,12 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
-import { ProductType, CurrencyCode, PaymentProvider } from '@prisma/client';
+import {
+  BillingInterval,
+  BillingType,
+  ProductType,
+  CurrencyCode,
+  PaymentProvider,
+} from '@prisma/client';
 
 export interface CreateProductDto {
   slug: string;
@@ -17,6 +23,8 @@ export interface CreateProductDto {
     amountMinorUnits: number;
     provider: PaymentProvider;
     providerPriceId?: string;
+    billingType?: BillingType;
+    billingInterval?: BillingInterval;
   }[];
 }
 
@@ -120,6 +128,8 @@ export class ProductsService {
             amountMinorUnits: pr.amountMinorUnits,
             provider: pr.provider,
             providerPriceId: pr.providerPriceId,
+            billingType: pr.billingType ?? BillingType.ONE_TIME,
+            billingInterval: pr.billingInterval,
           })),
         },
       },

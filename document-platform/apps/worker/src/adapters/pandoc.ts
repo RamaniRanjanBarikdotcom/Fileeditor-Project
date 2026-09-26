@@ -17,6 +17,7 @@ export class PandocAdapter {
     inputStream: Readable,
     sourceFormat: string,
     targetFormat: string,
+    signal?: AbortSignal,
   ): Promise<Readable> {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docconv-pandoc-'));
     const inputPath = path.join(tmpDir, `input.${sourceFormat}`);
@@ -37,6 +38,7 @@ export class PandocAdapter {
       await execFileAsync('pandoc', args, {
         timeout: Number(process.env.CONVERSION_TIMEOUT_MS || 60_000),
         maxBuffer: 1024 * 1024,
+        signal,
       });
 
       // Read output into memory buffer (fine for small to medium docs)

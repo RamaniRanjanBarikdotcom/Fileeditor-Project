@@ -1,0 +1,30 @@
+{
+  "repository": "tanmay-sahoo/Blog-generator",
+  "branch": "main",
+  "commit": "d5663bbfd26ceaad55bc664ced140ae4947768f1",
+  "auditDate": "2026-09-23T00:00:00.000Z",
+  "implementedFeatures": [
+    "Ten-stage blog generation",
+    "Progress, cancellation, checkpoints",
+    "TipTap editing and autosave",
+    "History and search",
+    "SEO metadata and scoring",
+    "Image generation",
+    "WordPress, Shopify, custom and JTL publishing",
+    "Scheduler",
+    "Product context",
+    "Provider settings",
+    "Research settings",
+    "Prompt templates",
+    "Usage analytics",
+    "Logs and notifications",
+    "Permissions",
+    "Windows application"
+  ],
+  "deferredFeatures": [
+    "Complete English and German interface localization",
+    "Bidirectional remote-post synchronization",
+    "Remote category mapping",
+    "WordPress and Shopify scheduled-autonomous synchronization"
+  ]
+}

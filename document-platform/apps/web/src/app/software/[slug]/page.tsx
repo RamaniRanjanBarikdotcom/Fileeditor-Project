@@ -14,6 +14,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { fetchApi } from '../../../lib/api';
+import { useFeatureFlags } from '../../../lib/use-feature-flags';
 
 type Currency = 'USD' | 'INR';
 type Price = { currency: Currency; amountMinorUnits: number; provider: string };
@@ -72,6 +73,7 @@ export default function SoftwareDetailPage() {
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState(false);
   const [error, setError] = useState('');
+  const featureFlags = useFeatureFlags();
 
   useEffect(() => {
     void (async () => {
@@ -83,7 +85,7 @@ export default function SoftwareDetailPage() {
   }, [slug]);
 
   const checkout = async () => {
-    if (!product?.currentRelease) return;
+    if (!product?.currentRelease || !featureFlags.storeCheckout) return;
     setBuying(true);
     setError('');
     const result = await fetchApi<Checkout>('/orders/checkout', {
@@ -167,7 +169,11 @@ export default function SoftwareDetailPage() {
     );
 
   const price = product.prices.find((item) => item.currency === currency);
-  const available = Boolean(product.currentRelease && price);
+  const providerEnabled =
+    currency === 'INR' ? featureFlags.razorpayEnabled : featureFlags.stripeEnabled;
+  const available = Boolean(
+    product.currentRelease && price && featureFlags.storeCheckout && providerEnabled,
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-12">
@@ -225,12 +231,20 @@ export default function SoftwareDetailPage() {
           </div>
           <div className="text-4xl font-extrabold">{money(price, currency)}</div>
           <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-            {available ? 'One-time purchase' : 'Checkout opens when a release file is published'}
+            {available
+              ? 'One-time purchase'
+              : 'Checkout is unavailable until its release and payment provider are verified'}
           </p>
           {!product.currentRelease && (
             <div className="my-6 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-500">
               <Package className="mr-2 inline h-4 w-4" />
               This catalog item has no downloadable release yet, so purchasing is safely disabled.
+            </div>
+          )}
+          {!featureFlags.storeCheckout && (
+            <div className="my-6 rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-4 text-sm text-indigo-500">
+              Checkout is not enabled in this deployment. Product details remain available as a
+              preview, but no payment can be started.
             </div>
           )}
           {error && (
@@ -249,7 +263,8 @@ export default function SoftwareDetailPage() {
               </>
             ) : (
               <>
-                Buy securely <ArrowRight className="h-4 w-4" />
+                {available ? 'Buy securely' : 'Checkout unavailable'}{' '}
+                {available && <ArrowRight className="h-4 w-4" />}
               </>
             )}
           </button>
