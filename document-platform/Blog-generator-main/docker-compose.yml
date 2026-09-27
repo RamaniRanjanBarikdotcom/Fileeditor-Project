@@ -1,0 +1,53 @@
+# Blog-generator web platform — local/server deployment.
+# MongoDB and AWS S3 are EXTERNAL (configured via .env), not run here.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    env_file: .env
+    environment:
+      - PORT=4000
+    expose:
+      - "4000"
+    ports:
+      - "4000:4000" # remove in prod (only nginx needs to reach it)
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # Job worker (generation + scheduler). Same image, different entrypoint.
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    command: ["node", "src/worker/index.js"]
+    env_file: .env
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args:
+        # Served behind Apache at http://host/blog-app/. For a domain-root deploy,
+        # set these to "/" and "" respectively (and rebuild).
+        VITE_BASE_PATH: /blog-app/
+        VITE_API_BASE_URL: /blog-app
+    ports:
+      - "8080:80" # Apache reverse-proxies /blog-app/ -> here; not exposed publicly
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    expose:
+      - "6379"
+    restart: unless-stopped
+
+# Production note: terminate TLS (Let's Encrypt) at a Caddy/Traefik service in
+# front of `frontend`, or point your existing reverse proxy at it.

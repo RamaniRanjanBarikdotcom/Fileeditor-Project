@@ -4,6 +4,7 @@ export const PROVIDERS = [
     name: 'OpenAI',
     keyPrefix: 'sk-',
     models: [
+      'gpt-5-mini',
       'gpt-4o',
       'gpt-4o-mini',
       'gpt-4.1',

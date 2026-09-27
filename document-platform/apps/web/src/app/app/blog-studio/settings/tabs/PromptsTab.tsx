@@ -26,10 +26,6 @@ export default function PromptsTab() {
   const [systemPrompt, setSystemPrompt] = useState('');
   const [userPrompt, setUserPrompt] = useState('');
 
-  useEffect(() => {
-    loadPrompt(selectedStage);
-  }, [selectedStage]);
-
   async function loadPrompt(stage: string) {
     setLoading(true);
     const res = await fetchApi<any[]>(`/blog-studio/prompts?stage=${stage}`);
@@ -46,6 +42,11 @@ export default function PromptsTab() {
     }
     setLoading(false);
   }
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => loadPrompt(selectedStage), 0);
+    return () => window.clearTimeout(timer);
+  }, [selectedStage]);
 
   async function handleSave() {
     setSaving(true);

@@ -1,0 +1,49 @@
+# Apache config to serve the Blog Generator web app under /blog-app on your existing
+# port-80 vhost (the same Apache that already serves /ls/...). Add these directives
+# INSIDE your existing <VirtualHost *:80> block, or include this file from it.
+#
+# Build the frontend for the sub-path first:
+#   cd frontend
+#   VITE_BASE_PATH=/blog-app/  VITE_API_BASE_URL=/blog-app  npm run build
+# then copy frontend/dist/* to the DocumentRoot path below (e.g. /var/www/blog-app/).
+#
+# Required modules (Debian/Ubuntu):
+#   sudo a2enmod proxy proxy_http proxy_wstunnel rewrite alias headers
+#   sudo systemctl restart apache2
+# (RHEL/CentOS: ensure the matching LoadModule lines are present in httpd.conf.)
+
+# --- Node backend location (runs as a long-lived process, e.g. pm2/systemd/docker) ---
+# Apache proxies to it on localhost:4000. Nothing about :4000 is exposed publicly.
+
+# 0) Allow large image uploads. Local images are sent to /api as base64 data-URLs,
+#    which inflate the body by ~33%; match the backend's 25 MB limit (server.js
+#    bodyLimit). Apache's default is unlimited, but many hardened base configs set a
+#    low LimitRequestBody globally — without this, uploads fail with HTTP 413.
+<Location /blog-app/api/>
+    LimitRequestBody 26214400
+</Location>
+
+# 1) WebSocket: /blog-app/ws  ->  backend /ws   (must be a websocket tunnel)
+ProxyPass        /blog-app/ws   ws://127.0.0.1:4000/ws
+ProxyPassReverse /blog-app/ws   ws://127.0.0.1:4000/ws
+
+# 2) API: /blog-app/api/<channel>  ->  backend /api/<channel>
+#    timeout=600 because blog generation is one long POST (several AI calls).
+ProxyPass        /blog-app/api/  http://127.0.0.1:4000/api/  timeout=600
+ProxyPassReverse /blog-app/api/  http://127.0.0.1:4000/api/
+
+# 3) Everything else under /blog-app/ is the static SPA — do NOT proxy it.
+ProxyPass        /blog-app/      !
+
+# 4) Serve the built SPA files + client-side fallback to index.html.
+Alias /blog-app /var/www/blog-app
+<Directory /var/www/blog-app>
+    Require all granted
+    Options -Indexes
+    AllowOverride None
+    # Any unmatched path under /blog-app serves the SPA shell.
+    FallbackResource /blog-app/index.html
+</Directory>
+
+# 5) Make sure /blog-app redirects to /blog-app/ (so relative assets like ./tinymce/ resolve).
+RedirectMatch 301 ^/blog-app$ /blog-app/

@@ -29,7 +29,8 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 const FORMAT_OPTIONS = [
   { label: 'Export Markdown', value: 'markdown' },
   { label: 'Export HTML', value: 'html' },
-  { label: 'Export JSON', value: 'json' },
+  { label: 'Export Word', value: 'docx' },
+  { label: 'Export PDF', value: 'pdf' },
 ];
 
 export default function BlogStudioHistoryPage() {
@@ -91,9 +92,6 @@ export default function BlogStudioHistoryPage() {
   const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
   const paginated = useMemo(() => visible.slice((page - 1) * pageSize, page * pageSize), [visible, page, pageSize]);
 
-  // Reset to page 1 when filters change
-  useEffect(() => { setPage(1); }, [query, period, activeTab]);
-
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) setSelectedIds(new Set(paginated.map(b => b.id)));
     else setSelectedIds(new Set());
@@ -119,10 +117,41 @@ export default function BlogStudioHistoryPage() {
     }
   };
 
-  function handleExport(ids?: string[]) {
+  async function handleExport(ids?: string[]) {
     const toExport = ids ?? (selectedIds.size > 0 ? Array.from(selectedIds) : visible.map(b => b.id));
-    const params = new URLSearchParams({ format: exportFormat, ids: toExport.join(',') });
-    window.open(`/api/v1/blog-studio/blogs/export?${params.toString()}`, '_blank');
+    if (!toExport.length) return;
+    setError(`Preparing ${toExport.length} export${toExport.length === 1 ? '' : 's'}…`);
+    let downloaded = 0;
+    for (const id of toExport.slice(0, 20)) {
+      const created = await fetchApi<{ id: string; status: string; url?: string }>(
+        `/blog-studio/blogs/${id}/exports`,
+        { method: 'POST', body: JSON.stringify({ format: exportFormat }) },
+      );
+      if (!created.success || !created.data) continue;
+      let result = created.data;
+      for (let attempt = 0; !result.url && result.status !== 'FAILED' && attempt < 80; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+        const status = await fetchApi<{ id: string; status: string; url?: string }>(
+          `/blog-studio/exports/${result.id}`,
+        );
+        if (!status.success || !status.data) break;
+        result = status.data;
+      }
+      if (result.url) {
+        const anchor = document.createElement('a');
+        anchor.href = result.url;
+        anchor.download = '';
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        downloaded += 1;
+      }
+    }
+    setError(
+      downloaded === toExport.length
+        ? `${downloaded} export${downloaded === 1 ? '' : 's'} downloaded.`
+        : `${downloaded} of ${toExport.length} exports downloaded. Retry any failed items individually.`,
+    );
   }
 
   function handleExportCSV() {
@@ -169,7 +198,10 @@ export default function BlogStudioHistoryPage() {
               <Search className="h-4 w-4 shrink-0 text-slate-400" />
               <input
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setPage(1);
+                }}
                 placeholder="Search by title..."
                 className="w-full bg-transparent py-2.5 text-sm outline-none"
               />
@@ -179,7 +211,10 @@ export default function BlogStudioHistoryPage() {
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Filter by date</span>
             <select
               value={period}
-              onChange={(e) => setPeriod(e.target.value)}
+              onChange={(e) => {
+                setPeriod(e.target.value);
+                setPage(1);
+              }}
               className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none dark:border-slate-700 dark:bg-slate-800"
             >
               {DATE_OPTIONS.map(opt => (
@@ -201,7 +236,10 @@ export default function BlogStudioHistoryPage() {
           {TABS.map(tab => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => {
+                setActiveTab(tab.key);
+                setPage(1);
+              }}
               className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition mb-3 ${
                 activeTab === tab.key
                   ? 'bg-indigo-600 border-indigo-600 text-white'

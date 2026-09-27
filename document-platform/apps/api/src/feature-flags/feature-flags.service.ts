@@ -29,7 +29,11 @@ export class FeatureFlagsService {
   constructor(private readonly config: ConfigService) {}
 
   getFlags(): FeatureFlags {
-    const fullSuite = this.parseFlag('FEATURE_BLOG_STUDIO_FULL_SUITE', true);
+    // The complete studio is available in local development so every imported
+    // capability can be exercised. Production stays fail-closed until an
+    // operator explicitly enables the provider-dependent surfaces.
+    const development = this.config.get<string>('NODE_ENV') !== 'production';
+    const fullSuite = this.parseFlag('FEATURE_BLOG_STUDIO_FULL_SUITE', development);
     return {
       publicTools: this.parseFlag('FEATURE_PUBLIC_TOOLS', true),
       storeCheckout: this.parseFlag('FEATURE_STORE_CHECKOUT', false),
@@ -48,16 +52,20 @@ export class FeatureFlagsService {
       teamsEnabled: this.parseFlag('FEATURE_TEAMS', false),
       apiKeysEnabled: this.parseFlag('FEATURE_API_KEYS', false),
       blogStudio: this.parseFlag('FEATURE_BLOG_STUDIO', true),
-      blogStudioCheckout: this.parseFlag('FEATURE_BLOG_STUDIO_CHECKOUT', true),
-      blogStudioImages: this.parseFlag('FEATURE_BLOG_STUDIO_IMAGES', true),
-      blogDesktopSales: this.parseFlag('FEATURE_BLOG_DESKTOP_SALES', true),
+      blogStudioCheckout: this.parseFlag('FEATURE_BLOG_STUDIO_CHECKOUT', false),
+      blogStudioImages: this.parseFlag('FEATURE_BLOG_STUDIO_IMAGES', development),
+      blogDesktopSales: this.parseFlag('FEATURE_BLOG_DESKTOP_SALES', false),
       blogStudioFullSuite: fullSuite,
-      blogStudioPublishing: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_PUBLISHING', true),
-      blogStudioScheduler: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_SCHEDULER', true),
-      blogStudioScraping: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_SCRAPING', true),
-      blogStudioByok: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_BYOK', true),
-      blogStudioSync: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_SYNC', true),
-      blogStudioAnalytics: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_ANALYTICS', true),
+      blogStudioPublishing:
+        fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_PUBLISHING', development),
+      blogStudioScheduler:
+        fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_SCHEDULER', development),
+      blogStudioScraping:
+        fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_SCRAPING', development),
+      blogStudioByok: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_BYOK', development),
+      blogStudioSync: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_SYNC', development),
+      blogStudioAnalytics:
+        fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_ANALYTICS', development),
     };
   }
 

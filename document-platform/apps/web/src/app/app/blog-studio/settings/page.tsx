@@ -2,18 +2,27 @@
 
 import { useState } from 'react';
 import { Settings } from 'lucide-react';
+import { useFeatureFlags } from '../../../../lib/use-feature-flags';
 import AiTab from './tabs/AiTab';
 import ResearchTab from './tabs/ResearchTab';
 import ApiKeysTab from './tabs/ApiKeysTab';
 import PublishingTab from './tabs/PublishingTab';
-import StorageTab from './tabs/StorageTab';
 import PromptsTab from './tabs/PromptsTab';
 import UsageTab from './tabs/UsageTab';
 import UpdatesTab from './tabs/UpdatesTab';
-import AdminTab from './tabs/AdminTab';
 
 export default function BlogStudioSettingsPage() {
+  const flags = useFeatureFlags();
   const [activeTab, setActiveTab] = useState('AI');
+  const tabs = [
+    'AI',
+    'Research',
+    ...(flags.blogStudioByok ? ['API Keys'] : []),
+    ...(flags.blogStudioPublishing ? ['Publishing'] : []),
+    'Prompts',
+    'Usage',
+    'Updates',
+  ];
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 pb-12">
@@ -32,7 +41,7 @@ export default function BlogStudioSettingsPage() {
 
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
         <div className="flex gap-6 overflow-x-auto">
-          {['AI', 'Research', 'API Keys', 'Publishing', 'Storage', 'Prompts', 'Usage', 'Updates', 'Admin'].map(tab => (
+          {tabs.map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -53,11 +62,9 @@ export default function BlogStudioSettingsPage() {
         {activeTab === 'Research' && <ResearchTab />}
         {activeTab === 'API Keys' && <ApiKeysTab />}
         {activeTab === 'Publishing' && <PublishingTab />}
-        {activeTab === 'Storage' && <StorageTab />}
         {activeTab === 'Prompts' && <PromptsTab />}
         {activeTab === 'Usage' && <UsageTab />}
         {activeTab === 'Updates' && <UpdatesTab />}
-        {activeTab === 'Admin' && <AdminTab />}
       </section>
     </div>
   );

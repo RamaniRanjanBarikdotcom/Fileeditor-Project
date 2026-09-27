@@ -1,4 +1,5 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { PlatformRole } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 
 @Injectable()
@@ -13,15 +14,19 @@ export class BlogPermissionsService {
           userId,
         }
       },
-      
+      include: { user: { select: { platformRole: true } } },
     });
 
     if (!member) {
       return false;
     }
 
-    // Admins and owners can do everything
-    if (member.role === 'ADMIN' || member.role === 'OWNER') {
+    // Platform administrators and organization administrators/owners can do everything.
+    if (
+      member.user.platformRole === PlatformRole.ADMIN ||
+      member.role === 'ADMIN' ||
+      member.role === 'OWNER'
+    ) {
       return true;
     }
 

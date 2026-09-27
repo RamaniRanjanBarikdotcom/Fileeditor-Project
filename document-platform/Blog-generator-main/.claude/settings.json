@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check backend/src/services/blogGenerator.js)",
+      "Bash(node --check backend/src/routes/exports.js)",
+      "Bash(node --check backend/src/scripts/migrate-base64-images.js)",
+      "Bash(npx vite *)",
+      "Bash(node --check backend/src/db/actions.js)",
+      "Bash(node --check backend/src/scripts/backfill-genparams.js)",
+      "Bash(node -e \"const d=require\\('./backend/package.json'\\).dependencies||{}; const k=Object.keys\\(d\\); console.log\\('redis-ish deps:', k.filter\\(x=>/redis|bull|ioredis/i.test\\(x\\)\\).map\\(x=>x+'@'+d[x]\\).join\\(', '\\)||'NONE'\\); console.log\\('ws deps:', k.filter\\(x=>/websocket|fastify\\\\/websocket|ws/i.test\\(x\\)\\).map\\(x=>x+'@'+d[x]\\).join\\(', '\\)||'NONE'\\);\")",
+      "Bash(node --check backend/src/routes/generate.js)",
+      "Bash(node --check backend/src/routes/logs.js)",
+      "Bash(node --check backend/src/db/mongo.js)",
+      "Bash(node --check backend/src/services/publishService.js)",
+      "Bash(node -e ' *)",
+      "Bash(node --check src/db/actions.js)"
+    ]
+  }
+}

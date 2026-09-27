@@ -206,6 +206,21 @@ export class BlogStudioProcessor extends WorkerHost {
         await this.cancel(record.id);
         return;
       }
+      const maxAttempts = Math.max(1, Number(queueJob.opts.attempts || 1));
+      const willRetry = queueJob.attemptsMade + 1 < maxAttempts;
+      if (willRetry) {
+        await this.prisma.blogGenerationJob.update({
+          where: { id: record.id },
+          data: {
+            status: BlogGenerationStatus.QUEUED,
+            errorCode: 'GENERATION_RETRYING',
+            errorMessage:
+              error instanceof Error ? error.message.slice(0, 1_000) : 'Generation attempt failed.',
+            startedAt: null,
+          },
+        });
+        throw error;
+      }
       await this.prisma.blogGenerationJob.update({
         where: { id: record.id },
         data: {

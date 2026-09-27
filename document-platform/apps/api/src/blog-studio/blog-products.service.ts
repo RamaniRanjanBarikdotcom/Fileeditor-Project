@@ -13,7 +13,7 @@ import { CreateBlogProductCollectionDto, CreateBlogProductDto } from './blog-stu
 let puppeteer: typeof import('puppeteer') | null = null;
 try {
   puppeteer = require('puppeteer');
-} catch (error) {
+} catch {
   puppeteer = null;
 }
 
@@ -165,19 +165,19 @@ export class BlogProductsService {
     if (sourceType === 'shopify') {
       try {
         products = await this.fetchShopify(url);
-      } catch (e) {
+    } catch {
         products = [];
       }
     } else if (sourceType === 'woocommerce') {
       try {
         products = await this.fetchWooCommerce(url);
-      } catch (e) {
+      } catch {
         products = [];
       }
     } else {
       try {
         products = await this.fetchJsonLd(url);
-      } catch (e) {
+      } catch {
         products = [];
       }
     }
@@ -238,8 +238,8 @@ export class BlogProductsService {
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppToolkitLab/1.0');
         await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
         html = await page.content();
-      } catch (err) {
-        console.warn('Puppeteer failed, falling back to axios:', err);
+      } catch (error) {
+        console.warn('Puppeteer failed, falling back to axios:', error);
       } finally {
         if (browser) await browser.close();
       }
@@ -249,7 +249,7 @@ export class BlogProductsService {
     if (!html) {
       try {
         html = await this.getText(url);
-      } catch (err) {
+      } catch {
         return [];
       }
     }

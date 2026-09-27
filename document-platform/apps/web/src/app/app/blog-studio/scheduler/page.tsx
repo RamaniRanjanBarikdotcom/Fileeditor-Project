@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Calendar, Download, Plus, RefreshCw, Upload, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { AlertCircle, Calendar, Pencil, RefreshCw, Trash2, X } from 'lucide-react';
 import { fetchApi } from '../../../../lib/api';
 
 export default function BlogStudioSchedulerPage() {
@@ -9,6 +9,20 @@ export default function BlogStudioSchedulerPage() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [showCreate, setShowCreate] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
+  const [form, setForm] = useState({
+    topic: '',
+    scheduledAt: '',
+    targetLength: 1200,
+    language: 'English',
+    writingStyle: 'Educational',
+    tone: 'Professional',
+  });
 
   const loadSchedules = useCallback(async () => {
     setLoading(true);
@@ -18,7 +32,7 @@ export default function BlogStudioSchedulerPage() {
       if (!res.success) {
         throw new Error(res.error?.message || 'Failed to load schedules');
       }
-      setJobs(res.data?.schedules || []);
+      setJobs(Array.isArray(res.data) ? res.data : []);
     } catch (err: any) {
       setError(err.message || 'An error occurred loading schedules');
     } finally {
@@ -27,12 +41,114 @@ export default function BlogStudioSchedulerPage() {
   }, []);
 
   useEffect(() => {
-    loadSchedules();
+    const timer = window.setTimeout(loadSchedules, 0);
+    return () => window.clearTimeout(timer);
   }, [loadSchedules]);
 
-  const displayedJobs = jobs.filter(job => 
-    activeTab === 'scheduled' ? job.status !== 'COMPLETED' : job.status === 'COMPLETED'
-  );
+  const displayedJobs = useMemo(() => jobs.filter(job => {
+    const correctTab = activeTab === 'scheduled' ? job.status !== 'COMPLETED' : job.status === 'COMPLETED';
+    const correctStatus = statusFilter === 'ALL' || job.status === statusFilter;
+    const haystack = `${job.inputJson?.topic || ''} ${job.status || ''}`.toLowerCase();
+    return correctTab && correctStatus && haystack.includes(query.trim().toLowerCase());
+  }), [jobs, activeTab, statusFilter, query]);
+
+  async function createSchedule(event: React.FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    const result = await fetchApi('/blog-studio/schedules', {
+      method: 'POST',
+      body: JSON.stringify({
+        jobType: 'generate',
+        scheduledAt: new Date(form.scheduledAt).toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        inputJson: {
+          topic: form.topic,
+          keywords: [],
+          targetLength: form.targetLength,
+          language: form.language,
+          writingStyle: form.writingStyle,
+          tone: form.tone,
+        },
+      }),
+    });
+    setSaving(false);
+    if (!result.success) return setError(result.error?.message || 'Schedule could not be created.');
+    setShowCreate(false);
+    setMessage('Generation scheduled successfully.');
+    setForm({ ...form, topic: '', scheduledAt: '' });
+    await loadSchedules();
+  }
+
+  async function cancelSchedule(id: string) {
+    const result = await fetchApi(`/blog-studio/schedules/${id}/cancel`, { method: 'POST' });
+    if (!result.success) return setError(result.error?.message || 'Schedule could not be cancelled.');
+    setMessage('Schedule cancelled.');
+    await loadSchedules();
+  }
+
+  async function reschedule(job: any) {
+    const current = new Date(job.scheduledAt);
+    const suggested = new Date(current.getTime() - current.getTimezoneOffset() * 60_000)
+      .toISOString()
+      .slice(0, 16);
+    const next = window.prompt('Enter a new local date and time (YYYY-MM-DDTHH:mm)', suggested)?.trim();
+    if (!next) return;
+    const scheduledAt = new Date(next);
+    if (Number.isNaN(scheduledAt.getTime())) return setError('Enter a valid date and time.');
+    const result = await fetchApi(`/blog-studio/schedules/${job.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ scheduledAt: scheduledAt.toISOString() }),
+    });
+    if (!result.success) return setError(result.error?.message || 'Schedule could not be updated.');
+    setMessage('Schedule updated.');
+    await loadSchedules();
+  }
+
+  async function deleteSchedule(id: string) {
+    if (!window.confirm('Permanently delete this schedule and its run history?')) return;
+    const result = await fetchApi(`/blog-studio/schedules/${id}`, { method: 'DELETE' });
+    if (!result.success) return setError(result.error?.message || 'Schedule could not be deleted.');
+    setMessage('Schedule deleted.');
+    await loadSchedules();
+  }
+
+  function exportSchedules() {
+    const rows = [
+      ['topic', 'scheduledAt', 'status', 'language', 'targetLength'],
+      ...jobs.map((job) => [
+        job.inputJson?.topic || '',
+        job.scheduledAt,
+        job.status,
+        job.inputJson?.language || '',
+        job.inputJson?.targetLength || '',
+      ]),
+    ];
+    const csv = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `blog-schedules-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importSchedules(file: File) {
+    const lines = (await file.text()).split(/\r?\n/).filter(Boolean);
+    if (lines.length < 2) return setError('The CSV file contains no schedule rows.');
+    const headers = lines[0]!.split(',').map((value) => value.replace(/^"|"$/g, '').trim());
+    const rows = lines.slice(1).map((line) => {
+      const values = line.split(',').map((value) => value.replace(/^"|"$/g, '').trim());
+      return Object.fromEntries(headers.map((header, index) => [header, values[index] || '']));
+    });
+    const result = await fetchApi<{ validCount: number; errorCount: number }>('/blog-studio/schedules/import', {
+      method: 'POST',
+      body: JSON.stringify({ rows, filename: file.name }),
+    });
+    if (!result.success || !result.data) return setError(result.error?.message || 'CSV import failed.');
+    setMessage(`Imported ${result.data.validCount} schedules; ${result.data.errorCount} rows were skipped.`);
+    await loadSchedules();
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 pb-12">
@@ -55,20 +171,18 @@ export default function BlogStudioSchedulerPage() {
           <span>{error}</span>
         </div>
       )}
+      {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">{message}</div>}
 
       <div className="flex flex-wrap items-center gap-3">
         <input 
           placeholder="Search schedules by topic, keyword, destination..." 
-          className="flex-1 min-w-[300px] rounded-lg border border-slate-300 dark:border-slate-700 bg-[#0f172a] px-4 py-2 text-sm text-white outline-none"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="flex-1 min-w-[300px] rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-[#0f172a] dark:text-white"
         />
-        <select className="rounded-lg border border-slate-300 dark:border-slate-700 bg-[#0f172a] px-4 py-2 text-sm text-white outline-none">
-          <option>All status</option>
-        </select>
-        <select className="rounded-lg border border-slate-300 dark:border-slate-700 bg-[#0f172a] px-4 py-2 text-sm text-white outline-none">
-          <option>All destinations</option>
-        </select>
-        <select className="rounded-lg border border-slate-300 dark:border-slate-700 bg-[#0f172a] px-4 py-2 text-sm text-white outline-none">
-          <option>All platforms</option>
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-[#0f172a] dark:text-white">
+          <option value="ALL">All status</option>
+          {['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED'].map((status) => <option key={status} value={status}>{status}</option>)}
         </select>
         
         <div className="ml-auto flex items-center gap-2">
@@ -79,13 +193,14 @@ export default function BlogStudioSchedulerPage() {
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </button>
-          <button className="flex items-center gap-2 rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+          <button onClick={exportSchedules} className="flex items-center gap-2 rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
             Export schedules
           </button>
-          <button className="flex items-center gap-2 rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+          <input ref={importRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importSchedules(file); event.target.value = ''; }} />
+          <button onClick={() => importRef.current?.click()} className="flex items-center gap-2 rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
             + Import
           </button>
-          <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 transition">
+          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 transition">
             + Create schedule
           </button>
         </div>
@@ -157,9 +272,11 @@ export default function BlogStudioSchedulerPage() {
                     </td>
                     <td className="px-5 py-4 align-top text-slate-300">{job.generateImages ? 'Yes' : 'No'}</td>
                     <td className="px-5 py-4 align-top">
-                      <button className="rounded bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition">
-                        Edit
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        {job.status === 'PENDING' && <button onClick={() => void reschedule(job)} className="rounded bg-slate-800 p-2 text-slate-300 transition hover:bg-indigo-900 hover:text-indigo-200" title="Reschedule"><Pencil className="h-3.5 w-3.5" /></button>}
+                        {['PENDING', 'RUNNING'].includes(job.status) && <button onClick={() => void cancelSchedule(job.id)} className="rounded bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-red-900 hover:text-red-200 transition">Cancel</button>}
+                        {job.status !== 'RUNNING' && <button onClick={() => void deleteSchedule(job.id)} className="rounded bg-slate-800 p-2 text-slate-400 transition hover:bg-red-900 hover:text-red-200" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -168,6 +285,17 @@ export default function BlogStudioSchedulerPage() {
           </table>
         </div>
       </section>
+      {showCreate && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <form onSubmit={createSchedule} className="w-full max-w-xl space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex items-center justify-between"><div><h2 className="text-xl font-black text-slate-950 dark:text-white">Create generation schedule</h2><p className="text-sm text-slate-500">The job runs in the Blog Studio queue at the selected time.</p></div><button type="button" onClick={() => setShowCreate(false)} aria-label="Close"><X className="h-5 w-5 text-slate-500" /></button></div>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">Topic<input required maxLength={300} value={form.topic} onChange={(event) => setForm({ ...form, topic: event.target.value })} className="mt-2 w-full rounded-xl border border-slate-300 bg-transparent px-4 py-3 dark:border-slate-700" /></label>
+            <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">Run at<input required type="datetime-local" value={form.scheduledAt} onChange={(event) => setForm({ ...form, scheduledAt: event.target.value })} className="mt-2 w-full rounded-xl border border-slate-300 bg-transparent px-4 py-3 dark:border-slate-700" /></label><label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">Target words<input required type="number" min={300} max={10000} value={form.targetLength} onChange={(event) => setForm({ ...form, targetLength: Number(event.target.value) })} className="mt-2 w-full rounded-xl border border-slate-300 bg-transparent px-4 py-3 dark:border-slate-700" /></label></div>
+            <div className="grid gap-4 sm:grid-cols-3">{(['language', 'writingStyle', 'tone'] as const).map((field) => <label key={field} className="block text-sm font-semibold capitalize text-slate-700 dark:text-slate-200">{field.replace(/([A-Z])/g, ' $1')}<input required value={form[field]} onChange={(event) => setForm({ ...form, [field]: event.target.value })} className="mt-2 w-full rounded-xl border border-slate-300 bg-transparent px-3 py-2.5 dark:border-slate-700" /></label>)}</div>
+            <div className="flex justify-end gap-3"><button type="button" onClick={() => setShowCreate(false)} className="rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-bold dark:border-slate-700">Cancel</button><button disabled={saving} className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">{saving ? 'Scheduling…' : 'Schedule generation'}</button></div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

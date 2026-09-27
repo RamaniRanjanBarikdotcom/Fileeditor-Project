@@ -25,11 +25,12 @@ upstream code automatically.
 | Organization permissions | JWT organization identity plus membership/owner checks | authorization E2E required | Implemented |
 | Windows application | standalone Electron renderer, SQLite, `safeStorage`, signed offline license | desktop security/license unit tests; clean-VM smoke pending | Preview |
 | English/German interface | no complete translation catalog yet | none | Deferred |
-| Remote-post synchronization and category mapping | schema exists; bidirectional sync is not enabled | none | Deferred |
+| Remote-post synchronization | WordPress/Shopify remote listing, normalized records, manual sync, rename and remote deletion | provider sandbox E2E required | Guarded by `FEATURE_BLOG_STUDIO_SYNC` |
+| WordPress category mapping | remote category discovery/creation plus organization-scoped keyword-to-category mappings applied during publication | provider sandbox E2E required | Guarded by publishing/full-suite flags |
 
 “Implemented” means code is present and passes the current compile/unit gate. It does not mean an
-external integration may be enabled in production. Provider-dependent features stay disabled until
-their named sandbox E2E suite passes.
+external integration may be enabled in production. Provider-dependent production flags stay
+disabled until their named sandbox E2E suite passes; local development may enable them for testing.
 
 ## Safe update procedure
 
@@ -44,7 +45,8 @@ their named sandbox E2E suite passes.
    second authentication system, MongoDB service or remote Electron shell.
 6. Run `pnpm blog-studio:verify`, database migration tests, provider sandbox E2E and a regression run
    of existing document tools.
-7. Keep new capability flags disabled until external-service tests pass.
+7. Local development may enable guarded capabilities for integration work. Keep the corresponding
+   production flags disabled until their external-service tests pass.
 8. After review and acceptance, update `blog-studio-upstream.lock.json` with the reviewed commit,
    audit date and complete supported-feature inventory.
 

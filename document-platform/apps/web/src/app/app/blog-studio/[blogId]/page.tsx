@@ -158,20 +158,35 @@ export default function BlogEditorPage() {
     await save();
     setExporting(format);
     setError('');
-    const response = await fetchApi<{ status: string; url?: string; conversionId?: string }>(
+    const response = await fetchApi<{ id: string; status: string; url?: string; conversionId?: string }>(
       `/blog-studio/blogs/${blog.id}/exports`,
       { method: 'POST', body: JSON.stringify({ format }) },
     );
-    setExporting('');
     if (!response.success || !response.data) {
+      setExporting('');
       setError(response.error?.message || 'Export failed.');
       return;
     }
-    if (response.data.url) window.location.assign(response.data.url);
-    else if (response.data.conversionId)
-      setError(
-        `${format.toUpperCase()} export is processing in the document queue. Open conversion history to download it when complete.`,
-      );
+    let result = response.data;
+    for (let attempt = 0; !result.url && result.status !== 'FAILED' && attempt < 80; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      const status = await fetchApi<{
+        id: string;
+        status: string;
+        url?: string;
+        error?: string;
+      }>(`/blog-studio/exports/${result.id}`);
+      if (!status.success || !status.data) {
+        setExporting('');
+        setError(status.error?.message || 'Export status could not be checked.');
+        return;
+      }
+      result = { ...result, ...status.data };
+    }
+    setExporting('');
+    if (result.url) window.location.assign(result.url);
+    else if (result.status === 'FAILED') setError('The document export failed. Please try again.');
+    else setError('The export is still processing. You can retry it in a moment.');
   }
 
   async function regenerate() {

@@ -11,11 +11,14 @@ import {
   ExternalLink,
   FileEdit,
   Globe,
+  Pencil,
   RefreshCw,
   Send,
+  Trash2,
   Wifi,
 } from 'lucide-react';
 import { fetchApi } from '../../../../lib/api';
+import { useFeatureFlags } from '../../../../lib/use-feature-flags';
 
 type Destination = { id: string; label: string; type: string; endpointUrl: string; isActive: boolean };
 type Analytics = {
@@ -49,6 +52,7 @@ type RemotePost = {
 type ActiveTab = 'overview' | 'history' | 'remote';
 
 export default function PublishingAnalyticsPage() {
+  const flags = useFeatureFlags();
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [selectedDestId, setSelectedDestId] = useState<string>('');
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
@@ -60,6 +64,7 @@ export default function PublishingAnalyticsPage() {
   const [testing, setTesting] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
   const [destOpen, setDestOpen] = useState(false);
+  const [remoteActionId, setRemoteActionId] = useState('');
 
   const selectedDest = useMemo(
     () => destinations.find(d => d.id === selectedDestId) ?? destinations[0],
@@ -84,44 +89,40 @@ export default function PublishingAnalyticsPage() {
     }
     if (pubRes.success && pubRes.data) setPublications(pubRes.data);
 
-    // Try to load analytics if endpoint exists
-    const analyticsRes = await fetchApi<Analytics>(
-      `/blog-studio/analytics${id ? `?destinationId=${id}` : ''}`,
-    );
-    if (analyticsRes.success && analyticsRes.data) setAnalytics(analyticsRes.data);
-    else {
-      // Build analytics from publication data
-      const pubs = pubRes.data ?? [];
-      const published = pubs.filter(p => p.status === 'PUBLISHED');
-      const byMonth: Record<string, number> = {};
-      const byPlatform: Record<string, number> = {};
-      published.forEach(p => {
-        const month = new Date(p.createdAt).toISOString().slice(0, 7);
-        byMonth[month] = (byMonth[month] ?? 0) + 1;
-        const plat = p.destination?.type?.toLowerCase() ?? 'unknown';
-        byPlatform[plat] = (byPlatform[plat] ?? 0) + 1;
-      });
-      setAnalytics({
-        totalPublished: published.length,
-        totalDrafts: pubs.filter(p => p.status !== 'PUBLISHED').length,
-        totalViews: 0,
-        avgViewsPerPost: 0,
-        avgTimeOnPage: 0,
-        byMonth: Object.entries(byMonth).sort().map(([month, count]) => ({ month, count })),
-        byPlatform: Object.entries(byPlatform).map(([platform, count]) => ({ platform, count })),
-        topTopics: [],
-        topPosts: published.slice(0, 6).map(p => ({ title: p.blog?.title ?? '—', views: 0, remoteUrl: p.remoteUrl })),
-      });
-    }
+    // Build publishing analytics from the selected destination's actual publication records.
+    // The dedicated analytics endpoint has a different generation-dashboard response shape.
+    const pubs = pubRes.data ?? [];
+    const published = pubs.filter(p => p.status === 'PUBLISHED');
+    const byMonth: Record<string, number> = {};
+    const byPlatform: Record<string, number> = {};
+    published.forEach(p => {
+      const month = new Date(p.createdAt).toISOString().slice(0, 7);
+      byMonth[month] = (byMonth[month] ?? 0) + 1;
+      const plat = p.destination?.type?.toLowerCase() ?? 'unknown';
+      byPlatform[plat] = (byPlatform[plat] ?? 0) + 1;
+    });
+    setAnalytics({
+      totalPublished: published.length,
+      totalDrafts: pubs.filter(p => p.status !== 'PUBLISHED').length,
+      totalViews: 0,
+      avgViewsPerPost: 0,
+      avgTimeOnPage: 0,
+      byMonth: Object.entries(byMonth).sort().map(([month, count]) => ({ month, count })),
+      byPlatform: Object.entries(byPlatform).map(([platform, count]) => ({ platform, count })),
+      topTopics: [],
+      topPosts: published.slice(0, 6).map(p => ({ title: p.blog?.title ?? '—', views: 0, remoteUrl: p.remoteUrl })),
+    });
 
     // Load remote posts
-    if (id) {
+    if (id && flags.blogStudioSync) {
       const rpRes = await fetchApi<RemotePost[]>(`/blog-studio/remote-posts?destinationId=${id}`);
       if (rpRes.success && rpRes.data) setRemotePosts(rpRes.data);
+    } else {
+      setRemotePosts([]);
     }
 
     setLoading(false);
-  }, [selectedDestId]);
+  }, [selectedDestId, flags.blogStudioSync]);
 
   useEffect(() => {
     const timer = setTimeout(() => void loadData(), 0);
@@ -129,7 +130,7 @@ export default function PublishingAnalyticsPage() {
   }, [loadData]);
 
   async function handleSync() {
-    if (!selectedDest) return;
+    if (!selectedDest || !flags.blogStudioSync) return;
     setSyncing(true);
     setSyncMessage('');
     const res = await fetchApi<{ count: number }>(
@@ -158,6 +159,30 @@ export default function PublishingAnalyticsPage() {
         ? 'Connection successful!'
         : res.data?.message ?? 'Connection test failed.',
     );
+  }
+
+  async function renameRemotePost(post: RemotePost) {
+    const title = window.prompt('Update the remote post title', post.title)?.trim();
+    if (!title || title === post.title) return;
+    setRemoteActionId(post.id);
+    const res = await fetchApi(`/blog-studio/remote-posts/${post.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
+    });
+    setRemoteActionId('');
+    if (!res.success) return setSyncMessage(res.error?.message || 'Remote post could not be updated.');
+    setSyncMessage('Remote post updated.');
+    await loadData(selectedDestId);
+  }
+
+  async function deleteRemotePost(post: RemotePost) {
+    if (!window.confirm(`Permanently delete “${post.title}” from the connected destination?`)) return;
+    setRemoteActionId(post.id);
+    const res = await fetchApi(`/blog-studio/remote-posts/${post.id}`, { method: 'DELETE' });
+    setRemoteActionId('');
+    if (!res.success) return setSyncMessage(res.error?.message || 'Remote post could not be deleted.');
+    setSyncMessage('Remote post deleted.');
+    await loadData(selectedDestId);
   }
 
   // Simple bar chart using CSS
@@ -227,14 +252,16 @@ export default function PublishingAnalyticsPage() {
             <Wifi className="h-4 w-4" />
             {testing ? 'Testing…' : 'Test Connection'}
           </button>
-          <button
-            onClick={handleSync}
-            disabled={syncing || !selectedDest}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition"
-          >
-            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing…' : 'Sync'}
-          </button>
+          {flags.blogStudioSync && (
+            <button
+              onClick={handleSync}
+              disabled={syncing || !selectedDest}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition"
+            >
+              <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Syncing…' : 'Sync'}
+            </button>
+          )}
         </div>
       </header>
 
@@ -284,7 +311,7 @@ export default function PublishingAnalyticsPage() {
       {/* Tabs */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <div className="flex border-b border-slate-100 dark:border-slate-800">
-          {(['overview', 'history', 'remote'] as const).map(tab => (
+          {(['overview', 'history', ...(flags.blogStudioSync ? ['remote' as const] : [])] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -512,7 +539,7 @@ export default function PublishingAnalyticsPage() {
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {remotePosts.map(post => (
-                  <div key={post.id} className="grid md:grid-cols-[minmax(0,1fr)_160px_120px] gap-4 p-5 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <div key={post.id} className="grid gap-4 p-5 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 md:grid-cols-[minmax(0,1fr)_160px_220px]">
                     <div>
                       <h3 className="font-semibold text-slate-900 dark:text-white">{post.title}</h3>
                       <p className="text-xs text-slate-400 mt-0.5">Remote ID: {post.remoteId}</p>
@@ -520,12 +547,15 @@ export default function PublishingAnalyticsPage() {
                     <div className="text-xs text-slate-500">
                       Synced {new Date(post.syncedAt).toLocaleDateString()}
                     </div>
-                    {post.remoteUrl ? (
-                      <a href={post.remoteUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs font-bold text-indigo-500">
-                        <ExternalLink className="h-3 w-3" />
-                        Open post
-                      </a>
-                    ) : <span />}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {post.remoteUrl ? (
+                        <a href={post.remoteUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs font-bold text-indigo-500">
+                          <ExternalLink className="h-3 w-3" /> Open
+                        </a>
+                      ) : null}
+                      <button disabled={remoteActionId === post.id} onClick={() => void renameRemotePost(post)} className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-600 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300"><Pencil className="h-3 w-3" /> Rename</button>
+                      <button disabled={remoteActionId === post.id} onClick={() => void deleteRemotePost(post)} className="flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"><Trash2 className="h-3 w-3" /> Delete</button>
+                    </div>
                   </div>
                 ))}
               </div>

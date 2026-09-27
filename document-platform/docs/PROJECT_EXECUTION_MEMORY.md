@@ -1204,3 +1204,102 @@ externally blocked; they are not silently represented as completed.
 - Desktop public release still needs Authenticode signing and a clean Windows x64 installer smoke
   test. Complete interface localization and bidirectional remote-post/category synchronization are
   explicitly recorded as deferred in the upstream parity contract.
+
+## Blog Studio integration repair and live contract verification — 2026-09-27 Asia/Kolkata
+
+### Root causes repaired
+
+- The History page requested a nonexistent bulk-export endpoint and offered an unsupported JSON
+  export. It now creates supported per-blog exports, polls queued document exports and reports
+  partial failures without losing successful downloads.
+- PDF and DOCX exports previously stopped at the queued conversion response. The API now exposes an
+  organization-scoped export-status endpoint and the editor waits for the validated conversion
+  result before downloading it.
+- Regeneration discarded most of the original generation controls. It now preserves the original
+  focus keyword, style, tone, target length, brand context, provider credential and product context.
+- Schedule and audit-log pages expected response shapes that their APIs never returned. Their data
+  contracts are now aligned; scheduling also has working create, cancel, CSV import and CSV export
+  actions.
+- History publication filters had no publication data, destination publication analytics read an
+  unrelated analytics shape, and remote sync called missing endpoints. Blog lists now include recent
+  publications, destination analytics use publication records, and guarded remote-post listing and
+  WordPress/Shopify synchronization endpoints are implemented.
+- BYOK requests could send a Gemini model to OpenAI, Anthropic or another selected provider. Custom
+  model settings now apply only to the matching provider and otherwise use that provider's safe
+  default. Hugging Face uses its current OpenAI-compatible router endpoint.
+- Fresh installations exposed unfinished image, checkout and advanced Blog Studio routes because
+  code defaults were permissive and Compose did not pass the flags. All commercial and advanced
+  Blog Studio features now fail closed and require explicit environment enablement.
+- The settings UI no longer presents the unused plaintext storage-token form or placeholder admin
+  panel. Publishing credentials now match the server connector contracts and errors are no longer
+  reported as successful local deletion.
+
+### Verified in this pass
+
+- Compared the native integration against the pinned upstream commit
+  `d5663bbfd26ceaad55bc664ced140ae4947768f1`; the local lock still matches that exact commit.
+- API build, web production build, Blog Engine build and web/API TypeScript checks passed.
+- API unit suite passed 21/21, Blog Engine passed 5/5 and web regression tests passed 14/14.
+- Rebuilt and restarted the Docker API image successfully.
+- The live Blog Studio E2E contract passed 8/8 checks from inside the running API container,
+  including tenant isolation, allowances, unavailable-provider rollback, sanitized autosave,
+  optimistic conflicts, stored HTML/Markdown downloads, disabled feature guards and soft deletion.
+- The live general API contract suite passed 18/18 checks, including authentication, isolated
+  refresh-token families, file contracts, conversion validation and disabled commercial routes.
+- `git diff --check` passed after the changes.
+
+### External verification still required
+
+- Managed image generation, each BYOK provider, WordPress/Shopify publishing and synchronization,
+  scheduler queue execution, Stripe/Razorpay subscriptions and desktop activation still require
+  their real sandbox credentials and provider-specific E2E runs before their flags are enabled.
+- Bidirectional category reconciliation, complete localization, and the clean Windows signed-
+  installer smoke test remain deferred as documented in the parity contract.
+
+## Blog Studio PostgreSQL completion and parity hardening — 2026-09-27 Asia/Kolkata
+
+### Completed
+
+- Added the forward-only `20260927000000_blog_studio_relational_integrity` migration. Publications,
+  remote posts, schedules, CSV imports, notifications and Blog Studio permissions now have enforced
+  PostgreSQL organization/user/destination foreign keys instead of application-only identifiers.
+- Added the missing Prisma relations without replacing AppToolkitLab's PostgreSQL data model or
+  introducing the upstream MongoDB database, duplicate authentication system or second web app.
+- Platform administrators now retain Blog Studio settings and integration access even if their
+  current organization membership is not owner-level. Organization owners/admins retain the same
+  access, while normal members remain restricted.
+- Corrected BullMQ retry handling. A retriable provider error returns a generation to `QUEUED`,
+  preserves its checkpoint and reservation, and records `GENERATION_RETRYING`; quota is released
+  and the job is marked failed only after the final attempt.
+- Added WordPress category discovery and creation, persistent local-keyword mappings, mapped
+  categories during publication, and WordPress/Shopify remote post view, rename and deletion.
+- Added pending schedule rescheduling and deletion, including removal/replacement of the delayed
+  BullMQ job, and exposed those actions in the scheduler interface.
+- Local Node.js and Docker development explicitly enable the Blog Studio suite while checkout stays
+  disabled. Production deployments remain fail-closed unless each capability is explicitly enabled.
+
+### Verified in this pass
+
+- Rebuilt the database initializer and applied all nine migrations to the live PostgreSQL service;
+  the new migration completed successfully and the idempotent seed created plans, tools, anonymous
+  identities, marketplace data, Blog Studio catalog entries and model prices.
+- Queried PostgreSQL directly and confirmed every newly required organization, user and destination
+  foreign-key constraint exists.
+- API and web TypeScript checks passed; the Nest API build and Next.js production build passed, with
+  all 47 web routes generated.
+- Blog Engine tests passed 5/5, API Blog Studio tests passed 3/3, and web regression tests passed
+  14/14.
+- Rebuilt the API and web Docker images, recreated both containers and confirmed the API, web,
+  PostgreSQL, Redis, MinIO, Gotenberg and ClamAV services are healthy.
+- Confirmed the live API registered category, category-mapping, remote-post update/delete and
+  schedule update/delete routes. The live Blog Studio contract suite passed 8/8 checks.
+
+### External release gates
+
+- A full managed generation cannot be claimed until a real AI provider credential is configured.
+  The unavailable-provider live path was verified to return a controlled error without consuming a
+  quota reservation.
+- Image generation, WordPress/Shopify operations, scheduled provider execution and Stripe/Razorpay
+  billing still require their corresponding sandbox accounts and provider-specific end-to-end runs.
+- Checkout remains disabled. Public desktop release still requires a signed Windows installer and a
+  clean-VM smoke test. Complete German localization remains deferred.

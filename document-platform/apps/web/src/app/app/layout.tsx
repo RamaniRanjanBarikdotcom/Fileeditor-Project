@@ -158,8 +158,6 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
-              const isBlogStudio = item.path === '/app/blog-studio';
-
               return (
                 <Link
                   key={item.name}

@@ -1,6 +1,12 @@
 FROM node:22-bookworm-slim
 
 WORKDIR /app
+
+# Puppeteer is present through the API workspace used for Prisma generation,
+# but browser rendering in this image is handled by Gotenberg. Do not download
+# an unused browser while installing the worker dependency graph.
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
       openssl pandoc poppler-utils tesseract-ocr python3 python3-venv \

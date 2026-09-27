@@ -25,7 +25,23 @@ export class BlogLogsService {
       }),
       this.prisma.auditLog.count({ where }),
     ]);
-    return { items, total, limit: safeLimit, offset: Math.max(0, offset) };
+    return {
+      items: items.map((item) => ({
+        ...item,
+        level: /FAILED|ERROR|REJECTED/i.test(item.action) ? 'error' : 'info',
+        category: item.resourceType || 'Blog Studio',
+        message: item.action
+          .toLowerCase()
+          .split('_')
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' '),
+        detailsJson: item.metadataJson,
+        blogId: item.resourceType === 'BlogDocument' ? item.resourceId : undefined,
+      })),
+      total,
+      limit: safeLimit,
+      offset: Math.max(0, offset),
+    };
   }
 
   createActivityLog(

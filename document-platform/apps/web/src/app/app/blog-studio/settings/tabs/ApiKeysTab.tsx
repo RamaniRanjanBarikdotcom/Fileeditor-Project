@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Plus, Trash2, Key } from 'lucide-react';
+import { Plus, Trash2, Key } from 'lucide-react';
 import { fetchApi } from '../../../../../lib/api';
 import { GENERATION_PROVIDERS } from '../constants';
 

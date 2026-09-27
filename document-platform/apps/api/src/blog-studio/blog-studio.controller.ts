@@ -35,6 +35,7 @@ import { PlatformRolesGuard } from '../common/guards/platform-roles.guard';
 import {
   BlogExportDto,
   BlogImageDto,
+  CreateBlogCategoryDto,
   CreateBlogDestinationDto,
   CreateBlogGenerationDto,
   CreateBlogProductCollectionDto,
@@ -43,10 +44,13 @@ import {
   CreateBlogScheduleDto,
   ImportBlogSchedulesDto,
   CreatePromptTemplateDto,
+  UpdateBlogScheduleDto,
   UpdateBlogDto,
   UpdateBlogDestinationDto,
   UpdateBlogProviderDto,
+  UpdateRemoteBlogPostDto,
   UpdateBlogStudioSettingsDto,
+  UpsertBlogCategoryMappingDto,
 } from './blog-studio.dto';
 
 @ApiTags('blog-studio')
@@ -175,6 +179,14 @@ export class BlogStudioController {
     return {
       success: true,
       data: await this.studio.exportBlog(req.user.userId, req.user.orgId, id, dto),
+    };
+  }
+
+  @Get('exports/:id')
+  async exportStatus(@Request() req: any, @Param('id') id: string) {
+    return {
+      success: true,
+      data: await this.studio.getExport(req.user.userId, req.user.orgId, id),
     };
   }
 
@@ -309,6 +321,58 @@ export class BlogStudioController {
     };
   }
 
+  @Get('destinations/:id/categories')
+  @RequireFeatures('blogStudioPublishing')
+  @UseGuards(BlogStudioPermissionGuard)
+  async listCategories(@Request() req: any, @Param('id') id: string) {
+    return {
+      success: true,
+      data: await this.publishingService.listCategories(req.user.orgId, id),
+    };
+  }
+
+  @Post('destinations/:id/categories')
+  @RequireFeatures('blogStudioPublishing')
+  @UseGuards(BlogStudioPermissionGuard)
+  async createCategory(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: CreateBlogCategoryDto,
+  ) {
+    return {
+      success: true,
+      data: await this.publishingService.createCategory(req.user.orgId, id, dto),
+    };
+  }
+
+  @Post('destinations/:id/category-mappings')
+  @RequireFeatures('blogStudioPublishing')
+  @UseGuards(BlogStudioPermissionGuard)
+  async upsertCategoryMapping(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpsertBlogCategoryMappingDto,
+  ) {
+    return {
+      success: true,
+      data: await this.publishingService.upsertCategoryMapping(req.user.orgId, id, dto),
+    };
+  }
+
+  @Delete('destinations/:id/category-mappings/:mappingId')
+  @RequireFeatures('blogStudioPublishing')
+  @UseGuards(BlogStudioPermissionGuard)
+  async deleteCategoryMapping(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Param('mappingId') mappingId: string,
+  ) {
+    return {
+      success: true,
+      data: await this.publishingService.deleteCategoryMapping(req.user.orgId, id, mappingId),
+    };
+  }
+
   @Post('blogs/:id/publish')
   @RequireFeatures('blogStudioPublishing')
   @UseGuards(BlogStudioPermissionGuard)
@@ -318,10 +382,62 @@ export class BlogStudioController {
 
   @Get('publishing')
   @RequireFeatures('blogStudioPublishing')
-  async listPublishing(@Request() req: any) {
+  async listPublishing(@Request() req: any, @Query('destinationId') destinationId?: string) {
     return {
       success: true,
-      data: await this.publishingService.listPublications(req.user.orgId),
+      data: await this.publishingService.listPublications(req.user.orgId, destinationId),
+    };
+  }
+
+  @Get('remote-posts')
+  @RequireFeatures('blogStudioPublishing', 'blogStudioSync')
+  async listRemotePosts(@Request() req: any, @Query('destinationId') destinationId?: string) {
+    return {
+      success: true,
+      data: await this.publishingService.listRemotePosts(req.user.orgId, destinationId),
+    };
+  }
+
+  @Get('remote-posts/:id')
+  @RequireFeatures('blogStudioPublishing', 'blogStudioSync')
+  async getRemotePost(@Request() req: any, @Param('id') id: string) {
+    return {
+      success: true,
+      data: await this.publishingService.getRemotePost(req.user.orgId, id),
+    };
+  }
+
+  @Patch('remote-posts/:id')
+  @RequireFeatures('blogStudioPublishing', 'blogStudioSync')
+  @UseGuards(BlogStudioPermissionGuard)
+  async updateRemotePost(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateRemoteBlogPostDto,
+  ) {
+    return {
+      success: true,
+      data: await this.publishingService.updateRemotePost(req.user.orgId, id, dto),
+    };
+  }
+
+  @Delete('remote-posts/:id')
+  @RequireFeatures('blogStudioPublishing', 'blogStudioSync')
+  @UseGuards(BlogStudioPermissionGuard)
+  async deleteRemotePost(@Request() req: any, @Param('id') id: string) {
+    return {
+      success: true,
+      data: await this.publishingService.deleteRemotePost(req.user.orgId, id),
+    };
+  }
+
+  @Post('destinations/:id/sync')
+  @RequireFeatures('blogStudioPublishing', 'blogStudioSync')
+  @UseGuards(BlogStudioPermissionGuard)
+  async syncDestination(@Request() req: any, @Param('id') id: string) {
+    return {
+      success: true,
+      data: await this.publishingService.syncDestination(req.user.orgId, id),
     };
   }
 
@@ -360,6 +476,28 @@ export class BlogStudioController {
     return {
       success: true,
       data: await this.schedulerService.cancelSchedule(req.user.orgId, id),
+    };
+  }
+
+  @Patch('schedules/:id')
+  @RequireFeatures('blogStudioScheduler')
+  async updateSchedule(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateBlogScheduleDto,
+  ) {
+    return {
+      success: true,
+      data: await this.schedulerService.updateSchedule(req.user.orgId, id, dto),
+    };
+  }
+
+  @Delete('schedules/:id')
+  @RequireFeatures('blogStudioScheduler')
+  async deleteSchedule(@Request() req: any, @Param('id') id: string) {
+    return {
+      success: true,
+      data: await this.schedulerService.deleteSchedule(req.user.orgId, id),
     };
   }
 

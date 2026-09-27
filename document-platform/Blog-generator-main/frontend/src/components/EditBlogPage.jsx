@@ -1,0 +1,974 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
+
+const TINYMCE_SCRIPT_ID = 'tinymce-local-script';
+const TINYMCE_SCRIPT_SRC = './tinymce/tinymce.min.js';
+const TINYMCE_BASE_URL = './tinymce';
+
+function EditBlogPage({ blog, t, onSave, onCancel }) {
+  const normalizeList = (value) => {
+    if (Array.isArray(value)) {
+      return value.map((item) => String(item || '').trim()).filter(Boolean);
+    }
+    if (typeof value === 'string' && value.trim()) {
+      const raw = value.trim();
+      const tryParse = (input) => {
+        try {
+          const parsed = JSON.parse(input);
+          if (Array.isArray(parsed)) {
+            return parsed.map((item) => String(item || '').trim()).filter(Boolean);
+          }
+          if (typeof parsed === 'string' && parsed.trim().startsWith('[')) {
+            return tryParse(parsed);
+          }
+        } catch {
+          return null;
+        }
+        return null;
+      };
+      const parsed = tryParse(raw);
+      if (parsed) return parsed;
+      return raw
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    return [];
+  };
+
+  const normalizedKeywords = normalizeList(blog.keywords);
+  const normalizedCategories = normalizeList(blog.categories);
+
+  const [title, setTitle] = useState(blog.title || '');
+  const [metaDescription, setMetaDescription] = useState(blog.metaDescription || '');
+  const [keywords, setKeywords] = useState(normalizedKeywords.join(', '));
+  const [categories, setCategories] = useState(normalizedCategories.join(', '));
+  const [plainContent, setPlainContent] = useState(blog.content || '');
+  const [htmlContent, setHtmlContent] = useState('');
+  const normalizeImageGallery = (galleryValue, imageUrl) => {
+    if (Array.isArray(galleryValue)) {
+      const list = galleryValue.filter(Boolean);
+      if (imageUrl && !list.includes(imageUrl)) list.unshift(imageUrl);
+      return list;
+    }
+    if (typeof galleryValue === 'string' && galleryValue.trim()) {
+      try {
+        const parsed = JSON.parse(galleryValue);
+        if (Array.isArray(parsed)) {
+          const list = parsed.filter(Boolean);
+          if (imageUrl && !list.includes(imageUrl)) list.unshift(imageUrl);
+          return list;
+        }
+      } catch (error) {
+        // ignore parse error
+      }
+    }
+    return imageUrl ? [imageUrl] : [];
+  };
+  const [imageGallery, setImageGallery] = useState(() =>
+    normalizeImageGallery(blog.imageGallery || blog.image_gallery, blog.imageUrl)
+  );
+  const [featuredImage, setFeaturedImage] = useState(blog.imageUrl || '');
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [imageActionModalOpen, setImageActionModalOpen] = useState(false);
+  const [showImageGenConfirm, setShowImageGenConfirm] = useState(false);
+  const [uploadingLocalImage, setUploadingLocalImage] = useState(false);
+  const [removedImageUrls, setRemovedImageUrls] = useState([]);
+  const [showImageDeleteConfirm, setShowImageDeleteConfirm] = useState(false);
+  const [showUnsavedImageWarning, setShowUnsavedImageWarning] = useState(false);
+  const [isSavingBeforeImage, setIsSavingBeforeImage] = useState(false);
+  const [editorMode, setEditorMode] = useState('visual');
+  const [localImagePath, setLocalImagePath] = useState('');
+
+  const tinyTextareaRef = useRef(null);
+  const tinyEditorRef = useRef(null);
+  const tinyReadyRef = useRef(false);
+  const syncingFromTinyRef = useRef(false);
+  const savedDraftRef = useRef(null);
+  const pendingTinyContentRef = useRef(null);
+  const htmlContentRef = useRef(htmlContent);
+  const [tinyLoaded, setTinyLoaded] = useState(Boolean(window.tinymce));
+  const [tinyLoadError, setTinyLoadError] = useState('');
+  const [isDarkMode, setIsDarkMode] = useState(() =>
+    typeof document !== 'undefined' ? document.documentElement.classList.contains('dark') : false
+  );
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const root = document.documentElement;
+    const syncTheme = () => setIsDarkMode(root.classList.contains('dark'));
+    syncTheme();
+
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    htmlContentRef.current = htmlContent;
+  }, [htmlContent]);
+
+  const safeGetTinyContent = () => {
+    const editor = tinyEditorRef.current;
+    if (!editor || !tinyReadyRef.current) return htmlContentRef.current || '';
+    try {
+      if (editor.destroyed || !editor.initialized) return htmlContentRef.current || '';
+      return editor.getContent() || '';
+    } catch (error) {
+      return htmlContentRef.current || '';
+    }
+  };
+
+  const escapeHtml = (value) =>
+    value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const plainToHtml = (text) => {
+    if (!text) return '';
+    const lines = text.split(/\r?\n/);
+    let html = '';
+    let buffer = [];
+
+    const flushParagraph = () => {
+      if (buffer.length === 0) return;
+      const paragraph = escapeHtml(buffer.join(' ').trim());
+      if (paragraph) html += `<p>${paragraph}</p>`;
+      buffer = [];
+    };
+
+    lines.forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        flushParagraph();
+        return;
+      }
+      if (trimmed.startsWith('H2:')) {
+        flushParagraph();
+        html += `<h2>${escapeHtml(trimmed.replace(/^H2:\s*/, ''))}</h2>`;
+        return;
+      }
+      if (trimmed.startsWith('H3:')) {
+        flushParagraph();
+        html += `<h3>${escapeHtml(trimmed.replace(/^H3:\s*/, ''))}</h3>`;
+        return;
+      }
+      if (trimmed.startsWith('Quote:')) {
+        flushParagraph();
+        html += `<blockquote>${escapeHtml(trimmed.replace(/^Quote:\s*/, ''))}</blockquote>`;
+        return;
+      }
+      if (trimmed.startsWith('Pro Tip:')) {
+        flushParagraph();
+        html += `<p><strong>Pro Tip:</strong> ${escapeHtml(trimmed.replace(/^Pro Tip:\s*/, ''))}</p>`;
+        return;
+      }
+      if (trimmed.startsWith('Q:')) {
+        flushParagraph();
+        html += `<p><strong>Q:</strong> ${escapeHtml(trimmed.replace(/^Q:\s*/, ''))}</p>`;
+        return;
+      }
+      if (trimmed.startsWith('A:')) {
+        flushParagraph();
+        html += `<p><strong>A:</strong> ${escapeHtml(trimmed.replace(/^A:\s*/, ''))}</p>`;
+        return;
+      }
+      if (trimmed.startsWith('Code:')) {
+        flushParagraph();
+        html += `<pre><code>${escapeHtml(trimmed.replace(/^Code:\s*/, ''))}</code></pre>`;
+        return;
+      }
+      buffer.push(trimmed);
+    });
+
+    flushParagraph();
+    return html;
+  };
+
+  const htmlToPlain = (html) => {
+    if (!html) return '';
+    let text = html;
+    text = text.replace(/<br\s*\/?>/gi, '\n');
+    text = text.replace(/<\/p>/gi, '\n\n');
+    text = text.replace(/<\/h2>/gi, '\n');
+    text = text.replace(/<\/h3>/gi, '\n');
+    text = text.replace(/<h2[^>]*>/gi, 'H2: ');
+    text = text.replace(/<h3[^>]*>/gi, 'H3: ');
+    text = text.replace(/<blockquote[^>]*>/gi, 'Quote: ');
+    text = text.replace(/<pre><code[^>]*>/gi, 'Code: ');
+    text = text.replace(/<\/code><\/pre>/gi, '\n');
+    text = text.replace(/<strong>\s*Q:\s*<\/strong>/gi, 'Q: ');
+    text = text.replace(/<strong>\s*A:\s*<\/strong>/gi, 'A: ');
+    text = text.replace(/<strong>\s*Pro Tip:\s*<\/strong>/gi, 'Pro Tip: ');
+    text = text.replace(/<[^>]*>/g, '');
+    text = text.replace(/\n{3,}/g, '\n\n');
+    return text.trim();
+  };
+
+  useEffect(() => {
+    const raw = blog.content || '';
+    const hasHtml = /<\w+[^>]*>/.test(raw);
+    const nextPlain = hasHtml ? htmlToPlain(raw) : raw;
+    const nextHtml = hasHtml ? raw : plainToHtml(raw);
+    const nextKeywords = normalizedKeywords.join(', ');
+    const nextCategories = normalizedCategories.join(', ');
+
+    setTitle(blog.title || '');
+    setMetaDescription(blog.metaDescription || '');
+    setKeywords(nextKeywords);
+    setCategories(nextCategories);
+    setPlainContent(nextPlain);
+    setHtmlContent(nextHtml);
+    pendingTinyContentRef.current = nextHtml;
+    if (editorMode === 'visual' && tinyEditorRef.current) {
+      tinyEditorRef.current.setContent(nextHtml || '');
+      pendingTinyContentRef.current = null;
+    }
+    const nextGallery = normalizeImageGallery(blog.imageGallery || blog.image_gallery, blog.imageUrl);
+    setImageGallery(nextGallery);
+    setFeaturedImage(blog.imageUrl || nextGallery[0] || '');
+    setRemovedImageUrls([]);
+    setShowImageDeleteConfirm(false);
+    setLocalImagePath('');
+
+    savedDraftRef.current = {
+      title: (blog.title || '').trim(),
+      metaDescription: (blog.metaDescription || '').trim(),
+      keywords: nextKeywords.trim(),
+      categories: nextCategories.trim(),
+      plainContent: (nextPlain || '').trim(),
+      htmlContent: (nextHtml || '').trim(),
+    };
+  }, [blog]);
+
+  useEffect(() => {
+    if (window.tinymce) {
+      setTinyLoaded(true);
+      return;
+    }
+
+    const existingScript = document.getElementById(TINYMCE_SCRIPT_ID);
+    if (existingScript) {
+      existingScript.addEventListener('load', () => setTinyLoaded(true));
+      existingScript.addEventListener('error', () => setTinyLoadError('Failed to load local TinyMCE assets.'));
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = TINYMCE_SCRIPT_ID;
+    script.src = TINYMCE_SCRIPT_SRC;
+    script.onload = () => setTinyLoaded(true);
+    script.onerror = () => setTinyLoadError('Failed to load local TinyMCE assets.');
+    document.head.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    if (!tinyLoaded || editorMode !== 'visual' || !tinyTextareaRef.current || !window.tinymce) return;
+    if (tinyEditorRef.current) return;
+
+    window.tinymce
+      .init({
+        target: tinyTextareaRef.current,
+        license_key: 'gpl',
+        base_url: TINYMCE_BASE_URL,
+        suffix: '.min',
+        skin: isDarkMode ? 'oxide-dark' : 'oxide',
+        content_css: isDarkMode ? 'dark' : 'default',
+        menubar: false,
+        branding: false,
+        promotion: false,
+        height: 520,
+        resize: true,
+        toolbar_sticky: true,
+        toolbar_sticky_offset: 12,
+        plugins: 'autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime table help wordcount',
+        toolbar:
+          'undo redo | blocks | bold italic underline | alignleft aligncenter alignright | bullist numlist outdent indent | link image | blockquote code removeformat',
+        content_style:
+          `body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.65; padding: 8px; ${
+            isDarkMode
+              ? 'background: #0f172a; color: #e2e8f0 !important; } h1, h2, h3, h4, h5, h6, p, li, blockquote, span, div, a { color: inherit !important; '
+              : ''
+          } } img { max-width: 100%; height: auto; }`,
+        setup: (editor) => {
+          tinyEditorRef.current = editor;
+
+          editor.on('init', () => {
+            const initialContent =
+              pendingTinyContentRef.current ?? htmlContentRef.current ?? '';
+            editor.setContent(initialContent);
+            pendingTinyContentRef.current = null;
+            tinyReadyRef.current = true;
+          });
+
+          editor.on('change input undo redo setcontent', () => {
+            const nextHtml = editor.getContent();
+            syncingFromTinyRef.current = true;
+            setHtmlContent(nextHtml);
+            setPlainContent(htmlToPlain(nextHtml));
+          });
+
+          editor.on('remove', () => {
+            tinyReadyRef.current = false;
+            tinyEditorRef.current = null;
+          });
+        },
+      })
+      .catch(() => {
+        setTinyLoadError('Failed to initialize TinyMCE.');
+      });
+
+    return () => {
+      if (tinyEditorRef.current) {
+        tinyEditorRef.current.remove();
+        tinyEditorRef.current = null;
+      }
+      tinyReadyRef.current = false;
+    };
+  }, [tinyLoaded, editorMode, isDarkMode]);
+
+  useEffect(() => {
+    if (editorMode !== 'visual' || !tinyEditorRef.current) return;
+    const current = safeGetTinyContent();
+    if (syncingFromTinyRef.current) {
+      syncingFromTinyRef.current = false;
+      if (current === (htmlContent || '')) return;
+    }
+    if (current !== (htmlContent || '')) {
+      try {
+        if (!tinyEditorRef.current.destroyed) {
+          tinyEditorRef.current.setContent(htmlContent || '');
+        }
+      } catch (error) {
+        // ignore setContent if editor is torn down
+      }
+    }
+  }, [editorMode, htmlContent]);
+
+  const getCurrentDraftState = () => {
+    const visualHtml = safeGetTinyContent();
+    let nextHtml = htmlContent || '';
+    let nextPlain = plainContent || '';
+
+    if (editorMode === 'visual') {
+      nextHtml = visualHtml || '';
+      nextPlain = htmlToPlain(nextHtml);
+    } else if (editorMode === 'html') {
+      nextHtml = htmlContent || '';
+      nextPlain = htmlToPlain(nextHtml);
+    } else {
+      nextPlain = plainContent || '';
+      nextHtml = plainToHtml(nextPlain);
+    }
+
+    return {
+      title: title.trim(),
+      metaDescription: metaDescription.trim(),
+      keywords: keywords
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .join(', '),
+      categories: categories
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .join(', '),
+      plainContent: nextPlain.trim(),
+      htmlContent: nextHtml.trim(),
+    };
+  };
+
+  const hasUnsavedChanges = () => {
+    const saved = savedDraftRef.current;
+    if (!saved) return false;
+    const current = getCurrentDraftState();
+    return (
+      current.title !== (saved.title || '').trim() ||
+      current.metaDescription !== (saved.metaDescription || '').trim() ||
+      current.keywords !== (saved.keywords || '').trim() ||
+      current.categories !== (saved.categories || '').trim() ||
+      current.plainContent !== (saved.plainContent || '').trim() ||
+      current.htmlContent !== (saved.htmlContent || '').trim()
+    );
+  };
+
+  const applySavedDraft = () => {
+    const saved = savedDraftRef.current;
+    if (!saved) return;
+    setTitle(saved.title || '');
+    setMetaDescription(saved.metaDescription || '');
+    setKeywords(saved.keywords || '');
+    setCategories(saved.categories || '');
+    setPlainContent(saved.plainContent || '');
+    setHtmlContent(saved.htmlContent || '');
+  };
+
+  const handleModeChange = (mode) => {
+    if (mode === editorMode) return;
+
+    let sourceHtml = htmlContent;
+
+    if (editorMode === 'visual' && tinyEditorRef.current) {
+      const visualHtml = safeGetTinyContent();
+      sourceHtml = visualHtml;
+      setHtmlContent(sourceHtml);
+      setPlainContent(htmlToPlain(sourceHtml));
+    }
+
+    if (mode === 'visual') {
+      setHtmlContent(plainToHtml(plainContent));
+    }
+
+    if (mode === 'plain') {
+      setPlainContent(htmlToPlain(sourceHtml));
+    }
+
+    setEditorMode(mode);
+  };
+
+  const handleSave = () => {
+    const visualHtml = safeGetTinyContent();
+    const contentToSave = editorMode === 'html' ? htmlContent : editorMode === 'visual' ? visualHtml : plainContent;
+
+    onSave({
+      ...blog,
+      title: title.trim(),
+      metaDescription: metaDescription.trim(),
+      keywords: keywords
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+      categories: categories
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+      content: contentToSave,
+      imageUrl: featuredImage || null,
+      imageGallery,
+    });
+  };
+
+  const generateImageNow = async () => {
+    if (isGeneratingImage) return;
+    setIsGeneratingImage(true);
+
+    const visualHtml = safeGetTinyContent();
+    const contentSource = editorMode === 'html' ? htmlContent : editorMode === 'plain' ? plainContent : visualHtml;
+
+    const result = await window.electronAPI.generateBlogImage({
+      blogId: blog.id,
+      title: title.trim() || blog.title,
+      content: contentSource || '',
+    });
+
+    if (result.success) {
+      const nextGallery = normalizeImageGallery(
+        result.imageGallery || imageGallery,
+        result.imageUrl || featuredImage
+      );
+      setImageGallery(nextGallery);
+      setFeaturedImage(result.imageUrl || nextGallery[0] || '');
+      if (result.localPath) setLocalImagePath(result.localPath);
+    } else {
+      alert(result.error || 'Image generation failed');
+    }
+
+    setIsGeneratingImage(false);
+  };
+
+  const handleGenerateImage = async () => {
+    if (hasUnsavedChanges()) {
+      setShowUnsavedImageWarning(true);
+      return;
+    }
+    await generateImageNow();
+  };
+
+  const handleSaveBeforeImage = async () => {
+    if (isSavingBeforeImage) return;
+    setIsSavingBeforeImage(true);
+    try {
+      const visualHtml = safeGetTinyContent();
+      const contentToSave = editorMode === 'html' ? htmlContent : editorMode === 'visual' ? visualHtml : plainContent;
+      const payload = {
+        ...blog,
+        title: title.trim(),
+        metaDescription: metaDescription.trim(),
+        keywords: keywords
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean),
+        categories: categories
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean),
+        content: contentToSave,
+        imageUrl: featuredImage || null,
+        imageGallery,
+      };
+      const result = await window.electronAPI.updateBlog({ blog: payload });
+      if (!result.success) {
+        alert(result.error || 'Save failed');
+        return;
+      }
+      const latest = getCurrentDraftState();
+      savedDraftRef.current = {
+        title: latest.title,
+        metaDescription: latest.metaDescription,
+        keywords: latest.keywords,
+        categories: latest.categories,
+        plainContent: latest.plainContent,
+        htmlContent: latest.htmlContent,
+      };
+      setShowUnsavedImageWarning(false);
+      await generateImageNow();
+    } finally {
+      setIsSavingBeforeImage(false);
+    }
+  };
+
+  const handleDiscardBeforeImage = async () => {
+    applySavedDraft();
+    setShowUnsavedImageWarning(false);
+    await generateImageNow();
+  };
+
+  const handleSelectImage = async (url) => {
+    if (removedImageUrls.includes(url)) return;
+    if (!url || url === featuredImage) return;
+    const nextGallery = normalizeImageGallery(imageGallery, url);
+    setFeaturedImage(url);
+    setImageGallery(nextGallery);
+    if (blog.id) {
+      const result = await window.electronAPI.updateBlog({
+        blog: { ...blog, imageUrl: url, imageGallery: nextGallery },
+      });
+      if (!result.success) {
+        alert(result.error || 'Failed to update featured image');
+      }
+    }
+  };
+
+  const applyDeletedImages = async () => {
+    if (!removedImageUrls.length) return;
+    const nextGallery = imageGallery.filter((url) => !removedImageUrls.includes(url));
+    const nextFeatured = removedImageUrls.includes(featuredImage)
+      ? nextGallery[0] || ''
+      : featuredImage || nextGallery[0] || '';
+
+    if (!blog.id) {
+      setImageGallery(nextGallery);
+      setFeaturedImage(nextFeatured);
+      setRemovedImageUrls([]);
+      setShowImageDeleteConfirm(false);
+      return;
+    }
+
+    const result = await window.electronAPI.updateBlog({
+      blog: { ...blog, imageUrl: nextFeatured || null, imageGallery: nextGallery },
+    });
+    if (!result.success) {
+      alert(result.error || 'Failed to delete images');
+      return;
+    }
+
+    setImageGallery(nextGallery);
+    setFeaturedImage(nextFeatured);
+    setRemovedImageUrls([]);
+    setShowImageDeleteConfirm(false);
+  };
+
+  const handleUploadLocalImage = async () => {
+    if (!blog?.id) {
+      alert(t.imageUploadMissingBlog || 'Save the blog first before uploading an image.');
+      return;
+    }
+
+    setUploadingLocalImage(true);
+    const picked = await window.electronAPI.selectLocalImageFile();
+    if (!picked?.success) {
+      setUploadingLocalImage(false);
+      if (!picked?.canceled) {
+        alert(picked?.error || t.imageSelectFailed || 'Unable to select image file.');
+      }
+      return;
+    }
+
+    const result = await window.electronAPI.attachLocalBlogImage({
+      blogId: blog.id,
+      title: title || blog.title,
+      localImagePath: picked.path,
+    });
+
+    setUploadingLocalImage(false);
+    if (!result.success) {
+      alert(result.error || t.imageUploadFailed || 'Failed to upload image.');
+      return;
+    }
+
+    const nextGallery = normalizeImageGallery(
+      result.imageGallery || imageGallery,
+      result.imageUrl || featuredImage
+    );
+    setImageGallery(nextGallery);
+    setFeaturedImage(result.imageUrl || nextGallery[0] || featuredImage);
+    setLocalImagePath(result.localPath || '');
+    setImageActionModalOpen(false);
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto p-8 space-y-6">
+      <div>
+        <h2 className="text-3xl font-bold text-slate-900 mb-2">{t.editBlogTitle}</h2>
+        <p className="text-slate-600">{t.editBlogSubtitle}</p>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+        <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">{t.featuredImageLabel}</p>
+              <p className="text-xs text-slate-500">{t.featuredImageHint}</p>
+            </div>
+          </div>
+          {featuredImage ? (
+            <img
+              src={featuredImage}
+              alt={title || 'Featured'}
+              className="max-h-64 w-full rounded-lg object-cover"
+            />
+          ) : (
+            <p className="text-xs text-slate-500">{t.noImageLabel}</p>
+          )}
+          {localImagePath && <p className="text-xs text-slate-500 break-all">Saved locally: {localImagePath}</p>}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-slate-600">
+              {t.generatedImagesLabel || 'Generated images'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {imageGallery.map((url) => (
+                <div key={url} className="relative h-16 w-20">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectImage(url)}
+                    className={`h-full w-full overflow-hidden rounded-md border ${
+                      url === featuredImage ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200'
+                    } ${removedImageUrls.includes(url) ? 'opacity-40' : ''}`}
+                    title={t.selectImageLabel || 'Use as featured image'}
+                  >
+                    <img src={url} alt="Generated" className="h-full w-full object-cover" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setRemovedImageUrls((prev) =>
+                        prev.includes(url) ? prev.filter((item) => item !== url) : [...prev, url]
+                      );
+                    }}
+                    className="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow hover:bg-white"
+                    title={t.deleteLabel || 'Delete'}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setImageActionModalOpen(true)}
+                className="flex h-16 w-20 items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50 text-lg font-semibold text-slate-500 hover:border-blue-400 hover:text-blue-600"
+                title={t.addImageLabel || 'Add image'}
+              >
+                +
+              </button>
+            </div>
+            {removedImageUrls.length > 0 && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowImageDeleteConfirm(true)}
+                  className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-700"
+                >
+                  {t.saveChanges || 'Save changes'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">{t.blogTitleLabel}</label>
+          <input
+            type="text"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">{t.metaDescriptionLabel}</label>
+          <input
+            type="text"
+            value={metaDescription}
+            onChange={(event) => setMetaDescription(event.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">{t.keywordsLabel}</label>
+          <input
+            type="text"
+            value={keywords}
+            onChange={(event) => setKeywords(event.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">{t.categoriesLabel || 'Categories'}</label>
+          <input
+            type="text"
+            value={categories}
+            onChange={(event) => setCategories(event.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+            placeholder={t.categoriesPlaceholder || 'marketing, tutorials, ai tools'}
+          />
+          <p className="text-xs text-slate-500 mt-1">{t.categoriesHint || 'Comma separated; sent to WordPress during publish.'}</p>
+        </div>
+
+        <div>
+          <div className="sticky top-4 z-20 -mx-2 mb-2 rounded-lg border border-slate-200 bg-white/95 px-2 py-2 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+            <div className="flex items-center justify-between gap-2">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">{t.contentLabel}</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleModeChange('visual')}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    editorMode === 'visual'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                  }`}
+                >
+                  {t.editorModeVisual}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleModeChange('plain')}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    editorMode === 'plain'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                  }`}
+                >
+                  {t.editorModePlain}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleModeChange('html')}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    editorMode === 'html'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                  }`}
+                >
+                  {t.editorModeHtml || 'Code'}
+                </button>
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              {t.editorHelp || 'Visual = WYSIWYG, Plain = text only, Code = raw HTML editor with monospaced view.'}
+            </p>
+          </div>
+
+          {editorMode === 'visual' && (
+            <div className="space-y-2">
+              {tinyLoadError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
+                  {tinyLoadError}
+                </div>
+              ) : null}
+              {!tinyLoaded ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
+                  Loading TinyMCE editor...
+                </div>
+              ) : null}
+              <textarea ref={tinyTextareaRef} defaultValue={htmlContent} className="hidden" />
+            </div>
+          )}
+
+          {editorMode === 'plain' && (
+            <textarea
+              value={plainContent}
+              onChange={(event) => setPlainContent(event.target.value)}
+              rows={12}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            />
+          )}
+
+          {editorMode === 'html' && (
+            <textarea
+              value={htmlContent}
+              onChange={(event) => setHtmlContent(event.target.value)}
+              rows={12}
+              className="w-full px-3 py-2 border border-slate-800 bg-slate-900 text-slate-100 rounded-lg font-mono text-sm leading-relaxed"
+              spellCheck={false}
+            />
+          )}
+        </div>
+
+        <div className="sticky bottom-4 z-20 -mx-2 rounded-lg border border-slate-200 bg-white/95 px-2 py-2 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+          <div className="flex items-center gap-3">
+            <button onClick={handleSave} className="px-4 py-2 rounded-lg bg-blue-500 text-white">
+              {t.saveChanges}
+            </button>
+            <button onClick={onCancel} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300">
+              {t.cancel}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {imageActionModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/45 px-4">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900">
+              {t.imageActionsTitle || 'Image actions'}
+            </h3>
+            <p className="mt-1 text-sm text-slate-600">
+              {t.imageActionsHint || 'Generate a new image or upload one from your computer.'}
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setImageActionModalOpen(false);
+                  setShowImageGenConfirm(true);
+                }}
+                className="rounded-lg border border-blue-500 bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
+              >
+                {isGeneratingImage ? (t.generatingImageLabel || 'Generating...') : (t.generateImageLabel || 'Generate image')}
+              </button>
+              <button
+                type="button"
+                onClick={handleUploadLocalImage}
+                disabled={uploadingLocalImage}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                {uploadingLocalImage ? (t.uploadingLabel || 'Uploading...') : (t.uploadImageLabel || 'Upload image')}
+              </button>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setImageActionModalOpen(false)}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700"
+              >
+                {t.cancel || 'Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showImageGenConfirm && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/45 px-4">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900">
+              {t.generateImageConfirmTitle || 'Generate a new image?'}
+            </h3>
+            <p className="mt-2 text-sm text-slate-600">
+              {t.generateImageConfirm ||
+                'This generates a new AI image and adds it to this blog. It uses image credits and may take a moment.'}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowImageGenConfirm(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-700"
+              >
+                {t.cancel || 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImageGenConfirm(false);
+                  handleGenerateImage();
+                }}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                {t.generateImageLabel || 'Generate image'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showImageDeleteConfirm && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900">
+              {t.deleteConfirmTitle || 'Delete selected images'}
+            </h3>
+            <p className="mt-2 text-sm text-slate-600">
+              {t.deleteConfirm || 'Delete selected images? This action cannot be undone.'}
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowImageDeleteConfirm(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-700"
+              >
+                {t.cancel || 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={applyDeletedImages}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
+              >
+                {t.deleteLabel || 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showUnsavedImageWarning && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/45 px-4">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900">{t.unsavedEditTitle || 'Unsaved changes'}</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              {t.unsavedEditBeforeImageMessage || 'Please save or discard your edits before generating an image.'}
+            </p>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowUnsavedImageWarning(false)}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={handleDiscardBeforeImage}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700"
+              >
+                {t.discardChanges || 'Discard changes'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveBeforeImage}
+                className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500"
+              >
+                {isSavingBeforeImage ? (t.saving || 'Saving...') : t.saveAndGenerateImage || 'Save and generate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default EditBlogPage;

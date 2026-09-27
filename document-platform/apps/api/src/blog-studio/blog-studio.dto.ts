@@ -274,7 +274,44 @@ export class UpdateBlogDestinationDto {
   configJson?: Record<string, unknown>;
 
   @IsOptional()
+  @IsBoolean()
   isActive?: boolean;
+}
+
+export class CreateBlogCategoryDto {
+  @IsString()
+  @MaxLength(120)
+  name!: string;
+}
+
+export class UpsertBlogCategoryMappingDto {
+  @IsString()
+  @MaxLength(120)
+  localCategory!: string;
+
+  @IsString()
+  @MaxLength(120)
+  remoteId!: string;
+
+  @IsString()
+  @MaxLength(120)
+  remoteName!: string;
+}
+
+export class UpdateRemoteBlogPostDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  html?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['draft', 'published', 'publish', 'pending', 'private'])
+  status?: string;
 }
 
 // ─── Blog Studio Scheduler & CSV ────────────────────────────
@@ -326,6 +363,32 @@ export class ImportBlogSchedulesDto {
   @IsString()
   @MaxLength(255)
   filename?: string;
+}
+
+export class UpdateBlogScheduleDto {
+  @IsOptional()
+  @IsString()
+  scheduledAt?: string;
+
+  @IsOptional()
+  @IsString()
+  timezone?: string;
+
+  @IsOptional()
+  @IsObject()
+  inputJson?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  destinationId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  generateImages?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  autoPublish?: boolean;
 }
 
 // ─── Blog Studio Products ───────────────────────────────────

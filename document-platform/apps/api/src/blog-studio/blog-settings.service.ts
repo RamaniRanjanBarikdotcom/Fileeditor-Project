@@ -18,9 +18,10 @@ export class BlogSettingsService {
       settings = await this.prisma.blogStudioSetting.create({
         data: {
           organizationId,
-          defaultTextModel: 'gemini-1.5-pro',
-          defaultImageModel: 'dall-e-3',
+          defaultTextModel: 'gpt-5-mini',
+          defaultImageModel: 'gpt-image-1',
           enableModelDiscovery: true,
+          settingsJson: { aiProvider: 'openai', imageProvider: 'openai' },
         },
       });
     }

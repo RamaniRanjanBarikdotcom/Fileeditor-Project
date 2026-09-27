@@ -330,6 +330,10 @@ model User {
   blogGenerationJobs      BlogGenerationJob[]
   blogImages              BlogImage[]
   blogExports             BlogExport[]
+  blogPublications        BlogPublication[]        @relation("BlogPublicationCreator")
+  blogSchedules           BlogSchedule[]           @relation("BlogScheduleCreator")
+  blogCsvImports          BlogCsvImport[]          @relation("BlogCsvImportCreator")
+  blogNotifications       BlogNotification[]
 
   @@map("users")
 }
@@ -438,6 +442,12 @@ model Organization {
   blogPromptTemplates     BlogPromptTemplate[]
   blogStudioSetting       BlogStudioSetting?
   blogDestinations        BlogDestination[]
+  blogPublications        BlogPublication[]
+  blogRemotePosts         BlogRemotePost[]
+  blogSchedules           BlogSchedule[]
+  blogCsvImports          BlogCsvImport[]
+  blogNotifications       BlogNotification[]
+  blogStudioPermissions   BlogStudioPermission[]
   blogProductCollections  BlogProductCollection[]
   saasSubscriptions       SaasSubscription[]
   saasUsageWindows        SaasUsageWindow[]
@@ -837,6 +847,7 @@ model BlogDestination {
   organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   publications BlogPublication[]
   categoryMaps BlogCategoryMapping[]
+  remotePosts  BlogRemotePost[]
   schedules    BlogSchedule[]
 
   @@unique([organizationId, type, label])
@@ -878,8 +889,10 @@ model BlogPublication {
   createdAt       DateTime              @default(now()) @map("created_at")
   updatedAt       DateTime              @updatedAt @map("updated_at")
 
-  blog        BlogDocument    @relation(fields: [blogId], references: [id], onDelete: Cascade)
-  destination BlogDestination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  blog         BlogDocument    @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  destination  BlogDestination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  createdBy    User            @relation("BlogPublicationCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
 
   @@index([organizationId, blogId, status])
   @@index([destinationId, status])
@@ -900,7 +913,9 @@ model BlogRemotePost {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  blog BlogDocument? @relation(fields: [blogId], references: [id], onDelete: SetNull)
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  destination  BlogDestination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  blog         BlogDocument?   @relation(fields: [blogId], references: [id], onDelete: SetNull)
 
   @@unique([destinationId, remoteId])
   @@index([organizationId, destinationId])
@@ -928,10 +943,12 @@ model BlogSchedule {
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
 
-  blog        BlogDocument?     @relation(fields: [blogId], references: [id], onDelete: SetNull)
-  destination BlogDestination?  @relation(fields: [destinationId], references: [id], onDelete: SetNull)
-  csvImport   BlogCsvImport?    @relation(fields: [csvImportId], references: [id], onDelete: SetNull)
-  runs        BlogScheduleRun[]
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User              @relation("BlogScheduleCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  blog         BlogDocument?     @relation(fields: [blogId], references: [id], onDelete: SetNull)
+  destination  BlogDestination?  @relation(fields: [destinationId], references: [id], onDelete: SetNull)
+  csvImport    BlogCsvImport?    @relation(fields: [csvImportId], references: [id], onDelete: SetNull)
+  runs         BlogScheduleRun[]
 
   @@index([organizationId, status, scheduledAt])
   @@index([queueJobId])
@@ -969,7 +986,9 @@ model BlogCsvImport {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  schedules BlogSchedule[]
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User           @relation("BlogCsvImportCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  schedules    BlogSchedule[]
 
   @@index([organizationId, createdAt])
   @@map("blog_csv_imports")
@@ -1031,6 +1050,9 @@ model BlogNotification {
   readAt         DateTime?            @map("read_at")
   createdAt      DateTime             @default(now()) @map("created_at")
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([organizationId, userId, readAt])
   @@index([organizationId, createdAt])
   @@map("blog_notifications")
@@ -1046,6 +1068,8 @@ model BlogStudioPermission {
   allowed        Boolean  @default(true)
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, roleOrUserId, action])
   @@index([organizationId])

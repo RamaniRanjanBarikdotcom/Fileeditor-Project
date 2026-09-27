@@ -9,6 +9,7 @@ try {
 }
 
 const { PrismaClient } = require('@prisma/client');
+const { StorageClient, createStorageConfig } = require('@docconv/storage');
 
 const configuredApiUrl = (process.env.API_URL || 'http://localhost:4201').replace(/\/$/, '');
 const API_URL = configuredApiUrl.endsWith('/api/v1')
@@ -16,6 +17,31 @@ const API_URL = configuredApiUrl.endsWith('/api/v1')
   : `${configuredApiUrl}/api/v1`;
 const ORIGIN = process.env.ORIGIN || 'http://localhost:5173';
 const prisma = new PrismaClient();
+
+async function downloadText(url) {
+  const internalEndpoint = process.env.E2E_STORAGE_INTERNAL_ENDPOINT;
+  if (!internalEndpoint) {
+    const response = await fetch(url);
+    assert.equal(response.status, 200);
+    return response.text();
+  }
+
+  // Signed URLs intentionally use the browser-facing localhost endpoint in
+  // Docker development. Containerized E2E reaches the same object through the
+  // internal S3 endpoint instead of incorrectly treating the API container's
+  // localhost as MinIO.
+  const parsed = new URL(url);
+  const [, ...keyParts] = parsed.pathname.split('/').filter(Boolean);
+  const client = new StorageClient(
+    createStorageConfig({
+      ...process.env,
+      STORAGE_ENDPOINT: internalEndpoint,
+      STORAGE_PUBLIC_ENDPOINT: undefined,
+      STORAGE_FORCE_PATH_STYLE: 'true',
+    }),
+  );
+  return (await client.downloadBuffer('outputs', keyParts.join('/'))).toString('utf8');
+}
 
 async function api(path, token, options = {}) {
   return fetch(`${API_URL}${path}`, {
@@ -162,16 +188,17 @@ test('Blog Studio live tenant, editor, export, usage, and feature-flag contracts
       const result = (await response.json()).data;
       assert.equal(result.status, 'COMPLETED');
       assert.ok(result.url);
-      const download = await fetch(result.url);
-      assert.equal(download.status, 200);
-      const body = await download.text();
+      const body = await downloadText(result.url);
       assert.ok(body.length > 5);
       assert.match(body, /Updated/i);
       assert.doesNotMatch(body, /<script|onclick|javascript:/i);
     }
   });
 
-  await t.test('checkout and image generation stay backend-hidden while disabled', async () => {
+  await t.test('commercial and provider routes follow their feature flags', async () => {
+    const flagsResponse = await api('/feature-flags', owner.token);
+    assert.equal(flagsResponse.status, 200);
+    const flags = (await flagsResponse.json()).data;
     const checkout = await api('/blog-studio/subscription/checkout', owner.token, {
       method: 'POST',
       body: JSON.stringify({
@@ -180,13 +207,19 @@ test('Blog Studio live tenant, editor, export, usage, and feature-flag contracts
         cancelUrl: `${ORIGIN}/app/billing?cancelled=1`,
       }),
     });
-    assert.equal(checkout.status, 404);
+    assert.equal(checkout.status, flags.blogStudioCheckout ? 201 : 404);
 
     const image = await api(`/blog-studio/blogs/${blog.id}/images`, owner.token, {
       method: 'POST',
       body: JSON.stringify({ prompt: 'A safe abstract illustration' }),
     });
-    assert.equal(image.status, 404);
+    if (flags.blogStudioImages) {
+      // The route is exposed locally, but an installation without a configured
+      // image provider must fail explicitly rather than fabricate an image.
+      assert.ok([201, 402, 503].includes(image.status), `unexpected image status ${image.status}`);
+    } else {
+      assert.equal(image.status, 404);
+    }
   });
 
   await t.test('soft deletion removes the blog from all normal reads', async () => {

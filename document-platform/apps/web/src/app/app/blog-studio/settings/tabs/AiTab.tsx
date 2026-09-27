@@ -10,9 +10,9 @@ export default function AiTab() {
   const [success, setSuccess] = useState('');
 
   const [aiProvider, setAiProvider] = useState('openai');
-  const [aiModel, setAiModel] = useState('gpt-4o');
+  const [aiModel, setAiModel] = useState('gpt-5-mini');
   const [imageProvider, setImageProvider] = useState('openai');
-  const [imageModel, setImageModel] = useState('dall-e-3');
+  const [imageModel, setImageModel] = useState('gpt-image-1');
   const [maxTokens, setMaxTokens] = useState('');
   const [temperature, setTemperature] = useState<number | string>(0.7);
   const [enableModelDiscovery, setEnableModelDiscovery] = useState(true);
@@ -21,8 +21,8 @@ export default function AiTab() {
     async function load() {
       const res = await fetchApi<any>('/blog-studio/settings');
       if (res.success && res.data) {
-        setAiModel(res.data.defaultTextModel || 'gpt-4o');
-        setImageModel(res.data.defaultImageModel || 'dall-e-3');
+        setAiModel(res.data.defaultTextModel || 'gpt-5-mini');
+        setImageModel(res.data.defaultImageModel || 'gpt-image-1');
         setEnableModelDiscovery(res.data.enableModelDiscovery ?? true);
         
         if (res.data.settingsJson) {

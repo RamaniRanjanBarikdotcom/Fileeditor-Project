@@ -1,0 +1,21 @@
+{
+  "name": "blog-generator-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Web + desktop platform for the AI Blog Generator. Install/run each part (backend, frontend, desktop) via the scripts below — there are no dependencies at this root.",
+  "scripts": {
+    "setup": "npm --prefix backend install && npm --prefix frontend install",
+    "setup:desktop": "npm --prefix desktop install",
+
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "worker": "npm --prefix backend run worker",
+    "worker:dev": "npm --prefix backend run worker:dev",
+
+    "build:frontend": "npm --prefix frontend run build",
+    "start:backend": "npm --prefix backend run start",
+    "start:desktop": "npm --prefix desktop run start",
+
+    "docker": "docker compose up --build"
+  }
+}

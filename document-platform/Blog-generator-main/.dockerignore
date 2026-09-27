@@ -1,0 +1,29 @@
+# Keep the build context small and prevent host (Windows) artifacts from
+# clobbering what the images install/build themselves. The build context is the
+# repo root (docker-compose `context: .`), so these are repo-relative globs.
+
+# Dependencies — reinstalled inside the image for the correct platform.
+**/node_modules
+
+# Build outputs — regenerated inside the image.
+frontend/dist
+frontend/public/tinymce
+backend/dist
+desktop/dist
+desktop/out
+
+# Local env / secrets (compose injects .env via env_file, not the image build).
+.env
+.env.*
+!.env.example
+
+# VCS / editor / OS noise.
+.git
+.gitignore
+**/.DS_Store
+**/*.log
+npm-debug.log*
+
+# Docs and desktop app are not needed by the server/SPA images.
+docs
+desktop

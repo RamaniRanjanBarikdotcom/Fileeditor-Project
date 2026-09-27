@@ -64,7 +64,7 @@ export function defaultProviderEndpoint(type: BlogProviderTypeName): string | nu
     OPENROUTER: 'https://openrouter.ai/api/v1',
     GROQ: 'https://api.groq.com/openai/v1',
     XAI: 'https://api.x.ai/v1',
-    HUGGINGFACE: 'https://api-inference.huggingface.co',
+    HUGGINGFACE: 'https://router.huggingface.co/v1',
     MISTRAL: 'https://api.mistral.ai/v1',
     TOGETHER: 'https://api.together.xyz/v1',
     FIREWORKS: 'https://api.fireworks.ai/inference/v1',

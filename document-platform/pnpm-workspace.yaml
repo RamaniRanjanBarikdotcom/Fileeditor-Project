@@ -13,6 +13,12 @@ allowBuilds:
   '@scarf/scarf': true
   bcrypt: true
   electron-winstaller: true
-  msgpackr-extract: true
+  # msgpackr treats this native addon as an optional accelerator and falls
+  # back to its JavaScript decoder when it is unavailable. Disabling its
+  # lifecycle build keeps arm64 Docker installs deterministic and avoids a
+  # node-gyp toolchain in the runtime images.
+  msgpackr-extract: false
   prisma: true
-  puppeteer: set this to true or false
+  # Puppeteer's lifecycle script is reviewed. Docker uses system Chromium,
+  # while native development installs may download Puppeteer's pinned browser.
+  puppeteer: true

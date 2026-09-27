@@ -132,6 +132,11 @@ export class BlogStudioService {
         version: true,
         createdAt: true,
         updatedAt: true,
+        publications: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: { status: true, remoteUrl: true, destinationId: true, createdAt: true },
+        },
       },
       take: 100,
     });
@@ -202,15 +207,56 @@ export class BlogStudioService {
   async regenerate(userId: string, organizationId: string, id: string) {
     const blog = await this.getBlog(userId, organizationId, id);
     const metadata = blog.metadataJson as Record<string, unknown>;
+    const previousJob = await this.prisma.blogGenerationJob.findFirst({
+      where: { blogId: id, organizationId, status: BlogGenerationStatus.COMPLETED },
+      orderBy: { completedAt: 'desc' },
+      select: { inputJson: true },
+    });
+    const previousInput = (previousJob?.inputJson || {}) as Record<string, any>;
     return this.createGeneration(userId, organizationId, {
       topic: blog.topic,
       keywords: blog.keywords,
-      focusKeyword: typeof metadata.focusKeyword === 'string' ? metadata.focusKeyword : undefined,
+      focusKeyword:
+        typeof previousInput.focusKeyword === 'string'
+          ? previousInput.focusKeyword
+          : typeof metadata.focusKeyword === 'string'
+            ? metadata.focusKeyword
+            : undefined,
       language: blog.language,
       writingStyle:
-        typeof metadata.writingStyle === 'string' ? metadata.writingStyle : 'Educational',
-      tone: typeof metadata.tone === 'string' ? metadata.tone : 'Professional',
-      targetLength: Math.max(300, blog.wordCount),
+        typeof previousInput.writingStyle === 'string'
+          ? previousInput.writingStyle
+          : typeof metadata.writingStyle === 'string'
+            ? metadata.writingStyle
+            : 'Educational',
+      tone:
+        typeof previousInput.tone === 'string'
+          ? previousInput.tone
+          : typeof metadata.tone === 'string'
+            ? metadata.tone
+            : 'Professional',
+      targetLength:
+        typeof previousInput.targetLength === 'number'
+          ? Math.min(10_000, Math.max(300, previousInput.targetLength))
+          : Math.min(10_000, Math.max(300, blog.wordCount)),
+      brandContext:
+        typeof previousInput.brandContext === 'string' ? previousInput.brandContext : undefined,
+      brandWebsiteUrl:
+        typeof previousInput.brandWebsiteUrl === 'string'
+          ? previousInput.brandWebsiteUrl
+          : undefined,
+      promptTemplateVersion:
+        typeof previousInput.promptTemplateVersion === 'number'
+          ? previousInput.promptTemplateVersion
+          : undefined,
+      providerCredentialId:
+        typeof previousInput.providerCredentialId === 'string'
+          ? previousInput.providerCredentialId
+          : undefined,
+      productContext:
+        previousInput.productContext && typeof previousInput.productContext === 'object'
+          ? previousInput.productContext
+          : undefined,
     });
   }
 
@@ -287,6 +333,65 @@ export class BlogStudioService {
       });
       throw error;
     }
+  }
+
+  async getExport(userId: string, organizationId: string, exportId: string) {
+    await this.assertMembership(userId, organizationId);
+    const record = await this.prisma.blogExport.findFirst({
+      where: { id: exportId, organizationId, createdByUserId: userId },
+      include: { blog: { select: { slug: true } } },
+    });
+    if (!record) throw new NotFoundException('Blog export was not found.');
+
+    if (record.storageKey?.startsWith('conversion:')) {
+      const conversionId = record.storageKey.slice('conversion:'.length);
+      const conversion = await this.conversions.getJobStatus(
+        conversionId,
+        organizationId,
+        userId,
+      );
+      if (conversion.status === 'COMPLETED') {
+        const url = await this.conversions.getDownloadUrl(conversionId, organizationId, userId);
+        await this.prisma.blogExport.updateMany({
+          where: { id: record.id, status: { not: 'COMPLETED' } },
+          data: { status: 'COMPLETED', completedAt: new Date(), errorMessage: null },
+        });
+        return {
+          id: record.id,
+          format: record.format,
+          status: 'COMPLETED',
+          progress: 100,
+          url,
+          expiresInSeconds: 600,
+        };
+      }
+      if (['FAILED', 'CANCELLED', 'EXPIRED'].includes(conversion.status)) {
+        const message = conversion.errorMessage || `Document conversion ${conversion.status.toLowerCase()}.`;
+        await this.prisma.blogExport.updateMany({
+          where: { id: record.id, status: { not: 'FAILED' } },
+          data: { status: 'FAILED', errorMessage: message, completedAt: new Date() },
+        });
+        return { id: record.id, format: record.format, status: 'FAILED', error: message };
+      }
+      return {
+        id: record.id,
+        format: record.format,
+        status: conversion.status === 'PROCESSING' ? 'PROCESSING' : 'QUEUED',
+        progress: conversion.progress,
+        conversionId,
+      };
+    }
+
+    if (record.status === 'COMPLETED' && record.storageKey) {
+      const url = await this.storage.getSignedDownloadUrl(
+        'outputs',
+        record.storageKey,
+        900,
+        `${record.blog.slug}.${record.format === 'markdown' ? 'md' : record.format}`,
+      );
+      return { ...record, url, expiresInSeconds: 900 };
+    }
+    return record;
   }
 
   getUsage(userId: string, organizationId: string) {

@@ -1,0 +1,46 @@
+# Reference nginx config for serving the app under a SUB-PATH (e.g. /blog-app).
+# Use this when the frontend is built with:
+#   VITE_BASE_PATH=/blog-app/   VITE_API_BASE_URL=/blog-app
+#
+# Place the built `frontend/dist/` contents at /usr/share/nginx/html/blog-app/.
+# If you run the backend in Docker, "backend" resolves to the backend service; otherwise
+# replace it with 127.0.0.1:4000 (or wherever the Node backend listens).
+
+server {
+  listen 80;
+  server_name _;
+  root /usr/share/nginx/html;
+
+  # Ensure the trailing slash (so relative assets like ./tinymce/ resolve correctly).
+  location = /blog-app {
+    return 301 /blog-app/;
+  }
+
+  # SPA assets + client-side routing fallback, all under /blog-app/
+  location /blog-app/ {
+    try_files $uri $uri/ /blog-app/index.html;
+  }
+
+  # API → Node backend. The trailing slashes strip the /blog-app/api prefix so the
+  # backend still sees /api/<channel>.
+  location /blog-app/api/ {
+    proxy_pass http://backend:4000/api/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    # Blog generation is one long POST (several AI calls).
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+  }
+
+  # WebSocket → Node backend (/blog-app/ws  ->  /ws)
+  location = /blog-app/ws {
+    proxy_pass http://backend:4000/ws;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_read_timeout 3600s;
+  }
+}

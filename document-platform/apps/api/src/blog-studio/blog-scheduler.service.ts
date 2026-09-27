@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
-import { CreateBlogScheduleDto } from './blog-studio.dto';
+import { CreateBlogScheduleDto, UpdateBlogScheduleDto } from './blog-studio.dto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { BLOG_STUDIO_QUEUE } from './blog-studio.constants';
@@ -103,6 +103,67 @@ export class BlogSchedulerService {
       where: { id: scheduleId },
       data: { status: 'CANCELLED' },
     });
+  }
+
+  async updateSchedule(
+    organizationId: string,
+    scheduleId: string,
+    dto: UpdateBlogScheduleDto,
+  ) {
+    const schedule = await this.prisma.blogSchedule.findFirst({
+      where: { id: scheduleId, organizationId },
+    });
+    if (!schedule) throw new NotFoundException('Schedule not found');
+    if (schedule.status !== 'PENDING') {
+      throw new BadRequestException('Only pending schedules can be edited.');
+    }
+    const scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : schedule.scheduledAt;
+    if (Number.isNaN(scheduledAt.getTime()) || scheduledAt <= new Date()) {
+      throw new BadRequestException('Scheduled time must be a valid future date.');
+    }
+    if (schedule.queueJobId) {
+      const previousJob = await this.blogQueue.getJob(schedule.queueJobId);
+      if (previousJob) await previousJob.remove();
+    }
+    const updated = await this.prisma.blogSchedule.update({
+      where: { id: scheduleId },
+      data: {
+        scheduledAt,
+        ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
+        ...(dto.inputJson !== undefined ? { inputJson: dto.inputJson as any } : {}),
+        ...(dto.destinationId !== undefined ? { destinationId: dto.destinationId || null } : {}),
+        ...(dto.generateImages !== undefined ? { generateImages: dto.generateImages } : {}),
+        ...(dto.autoPublish !== undefined ? { autoPublish: dto.autoPublish } : {}),
+      },
+    });
+    const queueJob = await this.blogQueue.add(
+      'process_schedule',
+      { scheduleId: updated.id, organizationId },
+      {
+        delay: Math.max(0, scheduledAt.getTime() - Date.now()),
+        jobId: `schedule-${updated.id}`,
+      },
+    );
+    return this.prisma.blogSchedule.update({
+      where: { id: updated.id },
+      data: { queueJobId: queueJob.id },
+    });
+  }
+
+  async deleteSchedule(organizationId: string, scheduleId: string) {
+    const schedule = await this.prisma.blogSchedule.findFirst({
+      where: { id: scheduleId, organizationId },
+    });
+    if (!schedule) throw new NotFoundException('Schedule not found');
+    if (schedule.status === 'RUNNING') {
+      throw new BadRequestException('A running schedule cannot be deleted. Cancel it first.');
+    }
+    if (schedule.queueJobId) {
+      const queueJob = await this.blogQueue.getJob(schedule.queueJobId);
+      if (queueJob) await queueJob.remove().catch(() => undefined);
+    }
+    await this.prisma.blogSchedule.delete({ where: { id: scheduleId } });
+    return { deleted: true };
   }
 
   async processSchedule(scheduleId: string, organizationId: string) {

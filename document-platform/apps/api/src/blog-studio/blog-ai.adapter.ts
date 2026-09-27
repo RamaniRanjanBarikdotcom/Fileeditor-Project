@@ -54,11 +54,20 @@ export class BlogAiAdapter {
     if (!endpoint) throw new BadRequestException('The selected provider requires an endpoint.');
     await this.urlSecurity.validateUrl(endpoint);
     const settings = await this.prisma.blogStudioSetting.findUnique({ where: { organizationId } });
+    const settingsJson = (settings?.settingsJson || {}) as Record<string, unknown>;
+    const configuredProvider =
+      typeof settingsJson.aiProvider === 'string'
+        ? settingsJson.aiProvider.toUpperCase()
+        : undefined;
+    const model =
+      configuredProvider === credential.providerType && settings?.defaultTextModel
+        ? settings.defaultTextModel
+        : defaultModel(credential.providerType as BlogProviderTypeName);
     const adapter = new CredentialBlogAiAdapter(
       credential.providerType as BlogProviderTypeName,
       endpoint,
       this.encryption.decrypt(credential.encryptedCredential),
-      settings?.defaultTextModel || defaultModel(credential.providerType as BlogProviderTypeName),
+      model,
       this.urlSecurity,
     );
     return this.withPromptTemplates(adapter, organizationId, promptTemplateVersion);

@@ -14,7 +14,13 @@ import {
   createSafeHttpsAgent,
 } from '@docconv/url-security';
 import { PrismaService } from '../common/prisma.service';
-import { CreateBlogDestinationDto, UpdateBlogDestinationDto } from './blog-studio.dto';
+import {
+  CreateBlogCategoryDto,
+  CreateBlogDestinationDto,
+  UpdateBlogDestinationDto,
+  UpdateRemoteBlogPostDto,
+  UpsertBlogCategoryMappingDto,
+} from './blog-studio.dto';
 import { EncryptionService } from './encryption.service';
 
 type Credential = {
@@ -44,9 +50,9 @@ export class BlogPublishingService {
     return destinations.map((destination) => this.sanitizeDestination(destination));
   }
 
-  async listPublications(organizationId: string) {
+  async listPublications(organizationId: string, destinationId?: string) {
     return this.prisma.blogPublication.findMany({
-      where: { organizationId },
+      where: { organizationId, ...(destinationId ? { destinationId } : {}) },
       orderBy: { createdAt: 'desc' },
       include: {
         blog: { select: { id: true, title: true, slug: true } },
@@ -54,6 +60,192 @@ export class BlogPublishingService {
       },
       take: 200,
     });
+  }
+
+  async listRemotePosts(organizationId: string, destinationId?: string) {
+    if (destinationId) await this.getDestination(organizationId, destinationId);
+    const posts = await this.prisma.blogRemotePost.findMany({
+      where: { organizationId, ...(destinationId ? { destinationId } : {}) },
+      orderBy: { lastSyncedAt: 'desc' },
+      include: {
+        blog: { select: { id: true, title: true } },
+      },
+      take: 500,
+    });
+    const destinations = await this.prisma.blogDestination.findMany({
+      where: { organizationId, ...(destinationId ? { id: destinationId } : {}) },
+      select: { id: true, label: true, type: true },
+    });
+    const byId = new Map(destinations.map((destination) => [destination.id, destination]));
+    return posts.map((post) => ({
+      ...post,
+      title: post.remoteTitle,
+      syncedAt: post.lastSyncedAt,
+      destination: byId.get(post.destinationId),
+    }));
+  }
+
+  async getRemotePost(organizationId: string, postId: string) {
+    const post = await this.prisma.blogRemotePost.findFirst({
+      where: { id: postId, organizationId },
+      include: {
+        blog: {
+          select: {
+            id: true,
+            title: true,
+            html: true,
+            images: {
+              select: { id: true, storageKey: true, mimeType: true, prompt: true, isFeatured: true },
+              orderBy: { createdAt: 'desc' },
+            },
+          },
+        },
+        destination: { select: { id: true, label: true, type: true, endpointUrl: true } },
+      },
+    });
+    if (!post) throw new NotFoundException('Remote post not found');
+    return { ...post, title: post.remoteTitle, syncedAt: post.lastSyncedAt };
+  }
+
+  async updateRemotePost(
+    organizationId: string,
+    postId: string,
+    dto: UpdateRemoteBlogPostDto,
+  ) {
+    const post = await this.getRemotePost(organizationId, postId);
+    const destination = await this.getDestination(organizationId, post.destinationId);
+    const response = await this.updateRemote(destination, post.remoteId, dto);
+    const remote = response.data?.article || response.data || {};
+    return this.prisma.blogRemotePost.update({
+      where: { id: postId },
+      data: {
+        ...(dto.title !== undefined ? { remoteTitle: dto.title.trim() } : {}),
+        ...(dto.status !== undefined
+          ? { remoteStatus: dto.status === 'publish' ? 'published' : dto.status }
+          : {}),
+        ...(remote.link || remote.url ? { remoteUrl: String(remote.link || remote.url) } : {}),
+        metadataJson: this.safeRemoteResult(remote) as Prisma.InputJsonValue,
+        lastSyncedAt: new Date(),
+      },
+    });
+  }
+
+  async deleteRemotePost(organizationId: string, postId: string) {
+    const post = await this.getRemotePost(organizationId, postId);
+    const destination = await this.getDestination(organizationId, post.destinationId);
+    await this.deleteRemote(destination, post.remoteId);
+    await this.prisma.blogRemotePost.delete({ where: { id: postId } });
+    return { deleted: true };
+  }
+
+  async listCategories(organizationId: string, destinationId: string) {
+    const destination = await this.getDestination(organizationId, destinationId);
+    if (destination.type !== 'WORDPRESS') {
+      return { categories: [], mappings: await this.listCategoryMappings(organizationId, destinationId) };
+    }
+    const base = this.wordpressApiBase(destination);
+    const response = await this.request({
+      method: 'GET',
+      url: `${base}/categories`,
+      params: { per_page: 100, hide_empty: false },
+      headers: this.authHeaders(this.credential(destination)),
+    });
+    const categories = (Array.isArray(response.data) ? response.data : []).map((category: any) => ({
+      id: String(category.id),
+      name: String(category.name || 'Untitled category'),
+      slug: String(category.slug || ''),
+      count: Number(category.count || 0),
+    }));
+    return { categories, mappings: await this.listCategoryMappings(organizationId, destinationId) };
+  }
+
+  async createCategory(
+    organizationId: string,
+    destinationId: string,
+    dto: CreateBlogCategoryDto,
+  ) {
+    const destination = await this.getDestination(organizationId, destinationId);
+    if (destination.type !== 'WORDPRESS') {
+      throw new BadRequestException('Remote category creation is currently supported for WordPress.');
+    }
+    const response = await this.request({
+      method: 'POST',
+      url: `${this.wordpressApiBase(destination)}/categories`,
+      headers: { 'Content-Type': 'application/json', ...this.authHeaders(this.credential(destination)) },
+      data: { name: dto.name.trim() },
+    });
+    return {
+      id: String(response.data.id),
+      name: String(response.data.name || dto.name),
+      slug: String(response.data.slug || ''),
+      count: Number(response.data.count || 0),
+    };
+  }
+
+  async listCategoryMappings(organizationId: string, destinationId: string) {
+    await this.getDestination(organizationId, destinationId);
+    return this.prisma.blogCategoryMapping.findMany({
+      where: { destinationId },
+      orderBy: { localCategory: 'asc' },
+    });
+  }
+
+  async upsertCategoryMapping(
+    organizationId: string,
+    destinationId: string,
+    dto: UpsertBlogCategoryMappingDto,
+  ) {
+    await this.getDestination(organizationId, destinationId);
+    const localCategory = dto.localCategory.trim();
+    if (!localCategory) throw new BadRequestException('A local category is required.');
+    return this.prisma.blogCategoryMapping.upsert({
+      where: { destinationId_localCategory: { destinationId, localCategory } },
+      update: { remoteId: dto.remoteId.trim(), remoteName: dto.remoteName.trim() },
+      create: {
+        destinationId,
+        localCategory,
+        remoteId: dto.remoteId.trim(),
+        remoteName: dto.remoteName.trim(),
+      },
+    });
+  }
+
+  async deleteCategoryMapping(organizationId: string, destinationId: string, mappingId: string) {
+    await this.getDestination(organizationId, destinationId);
+    const deleted = await this.prisma.blogCategoryMapping.deleteMany({
+      where: { id: mappingId, destinationId },
+    });
+    if (deleted.count !== 1) throw new NotFoundException('Category mapping not found');
+    return { deleted: true };
+  }
+
+  async syncDestination(organizationId: string, destinationId: string) {
+    const destination = await this.getDestination(organizationId, destinationId);
+    if (!destination.isActive) throw new BadRequestException('This destination is disabled.');
+    const remotePosts = await this.fetchRemotePosts(destination);
+    for (const post of remotePosts) {
+      await this.prisma.blogRemotePost.upsert({
+        where: { destinationId_remoteId: { destinationId, remoteId: post.id } },
+        update: {
+          remoteTitle: post.title,
+          remoteUrl: post.url,
+          remoteStatus: post.status,
+          lastSyncedAt: new Date(),
+          metadataJson: post.raw as Prisma.InputJsonValue,
+        },
+        create: {
+          organizationId,
+          destinationId,
+          remoteId: post.id,
+          remoteTitle: post.title,
+          remoteUrl: post.url,
+          remoteStatus: post.status,
+          lastSyncedAt: new Date(),
+          metadataJson: post.raw as Prisma.InputJsonValue,
+        },
+      });
+    }
+    return { count: remotePosts.length };
   }
 
   async createDestination(organizationId: string, dto: CreateBlogDestinationDto) {
@@ -171,11 +363,21 @@ export class BlogPublishingService {
     });
 
     try {
+      const categoryMappings = await this.prisma.blogCategoryMapping.findMany({
+        where: {
+          destinationId,
+          localCategory: { in: blog.keywords },
+        },
+        select: { remoteId: true },
+      });
       const result = await this.publishRemote(destination, {
         title: blog.title,
         slug: blog.slug,
         html: blog.html,
-        metadata: (blog.metadataJson || {}) as Record<string, unknown>,
+        metadata: {
+          ...((blog.metadataJson || {}) as Record<string, unknown>),
+          mappedCategoryIds: categoryMappings.map((mapping) => Number(mapping.remoteId)).filter(Number.isFinite),
+        },
         keywords: blog.keywords,
         publishedAs,
       });
@@ -249,7 +451,10 @@ export class BlogPublishingService {
           content: article.html,
           status: article.publishedAs === 'live' ? 'publish' : 'draft',
           excerpt: article.metadata.metaDescription || '',
-          categories: config.categoryIds || undefined,
+          categories:
+            (article.metadata.mappedCategoryIds as number[] | undefined) ||
+            config.categoryIds ||
+            undefined,
         },
       });
       return {
@@ -307,6 +512,133 @@ export class BlogPublishingService {
       url: String(remote.url || remote.link || base),
       raw: this.safeRemoteResult(remote),
     };
+  }
+
+  private async fetchRemotePosts(destination: BlogDestination) {
+    const credential = this.credential(destination);
+    const config = (destination.configJson || {}) as Record<string, any>;
+    const base = destination.endpointUrl.replace(/\/$/, '');
+    if (destination.type === 'WORDPRESS') {
+      const postsUrl = base.includes('/wp-json/wp/v2/posts')
+        ? base
+        : base.includes('/wp-json/')
+          ? `${base.replace(/\/$/, '')}/wp/v2/posts`
+          : `${base}/wp-json/wp/v2/posts`;
+      const response = await this.request({
+        method: 'GET',
+        url: postsUrl,
+        params: { per_page: 100, status: 'any', context: 'edit' },
+        headers: this.authHeaders(credential),
+      });
+      const posts = Array.isArray(response.data) ? response.data : [];
+      return posts.map((post: any) => ({
+        id: String(post.id),
+        title: String(post.title?.rendered || post.title || 'Untitled post'),
+        url: post.link ? String(post.link) : null,
+        status: String(post.status || 'unknown'),
+        raw: this.safeRemoteResult(post),
+      }));
+    }
+    if (destination.type === 'SHOPIFY') {
+      if (!config.blogId) throw new BadRequestException('Shopify destination requires configJson.blogId.');
+      const apiVersion = String(config.apiVersion || '2026-07');
+      const response = await this.request({
+        method: 'GET',
+        url: `${base}/admin/api/${apiVersion}/blogs/${config.blogId}/articles.json`,
+        params: { limit: 250 },
+        headers: { 'X-Shopify-Access-Token': credential.token || credential.password || '' },
+      });
+      const posts = Array.isArray(response.data?.articles) ? response.data.articles : [];
+      return posts.map((post: any) => ({
+        id: String(post.id),
+        title: String(post.title || 'Untitled article'),
+        url: post.url ? String(post.url) : null,
+        status: post.published_at ? 'published' : 'draft',
+        raw: this.safeRemoteResult(post),
+      }));
+    }
+    throw new BadRequestException(
+      'Remote synchronization is currently supported for WordPress and Shopify destinations.',
+    );
+  }
+
+  private async updateRemote(
+    destination: BlogDestination,
+    remoteId: string,
+    dto: UpdateRemoteBlogPostDto,
+  ) {
+    const credential = this.credential(destination);
+    const config = (destination.configJson || {}) as Record<string, any>;
+    const base = destination.endpointUrl.replace(/\/$/, '');
+    if (destination.type === 'WORDPRESS') {
+      return this.request({
+        method: 'POST',
+        url: `${this.wordpressApiBase(destination)}/posts/${encodeURIComponent(remoteId)}`,
+        headers: { 'Content-Type': 'application/json', ...this.authHeaders(credential) },
+        data: {
+          ...(dto.title !== undefined ? { title: dto.title } : {}),
+          ...(dto.html !== undefined ? { content: dto.html } : {}),
+          ...(dto.status !== undefined
+            ? { status: dto.status === 'published' ? 'publish' : dto.status }
+            : {}),
+        },
+      });
+    }
+    if (destination.type === 'SHOPIFY') {
+      if (!config.blogId) throw new BadRequestException('Shopify destination requires configJson.blogId.');
+      const apiVersion = String(config.apiVersion || '2026-07');
+      return this.request({
+        method: 'PUT',
+        url: `${base}/admin/api/${apiVersion}/blogs/${config.blogId}/articles/${encodeURIComponent(remoteId)}.json`,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': credential.token || credential.password || '',
+        },
+        data: {
+          article: {
+            id: remoteId,
+            ...(dto.title !== undefined ? { title: dto.title } : {}),
+            ...(dto.html !== undefined ? { body_html: dto.html } : {}),
+            ...(dto.status !== undefined
+              ? { published: ['publish', 'published'].includes(dto.status) }
+              : {}),
+          },
+        },
+      });
+    }
+    throw new BadRequestException('Remote editing is supported for WordPress and Shopify destinations.');
+  }
+
+  private async deleteRemote(destination: BlogDestination, remoteId: string) {
+    const credential = this.credential(destination);
+    const config = (destination.configJson || {}) as Record<string, any>;
+    const base = destination.endpointUrl.replace(/\/$/, '');
+    if (destination.type === 'WORDPRESS') {
+      await this.request({
+        method: 'DELETE',
+        url: `${this.wordpressApiBase(destination)}/posts/${encodeURIComponent(remoteId)}`,
+        params: { force: true },
+        headers: this.authHeaders(credential),
+      });
+      return;
+    }
+    if (destination.type === 'SHOPIFY') {
+      if (!config.blogId) throw new BadRequestException('Shopify destination requires configJson.blogId.');
+      await this.request({
+        method: 'DELETE',
+        url: `${base}/admin/api/${String(config.apiVersion || '2026-07')}/blogs/${config.blogId}/articles/${encodeURIComponent(remoteId)}.json`,
+        headers: { 'X-Shopify-Access-Token': credential.token || credential.password || '' },
+      });
+      return;
+    }
+    throw new BadRequestException('Remote deletion is supported for WordPress and Shopify destinations.');
+  }
+
+  private wordpressApiBase(destination: BlogDestination) {
+    const base = destination.endpointUrl.replace(/\/$/, '');
+    const marker = '/wp-json/wp/v2';
+    const markerIndex = base.indexOf(marker);
+    return markerIndex >= 0 ? base.slice(0, markerIndex + marker.length) : `${base}/wp-json/wp/v2`;
   }
 
   private testRequest(destination: BlogDestination): AxiosRequestConfig {
