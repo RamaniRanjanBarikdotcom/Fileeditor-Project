@@ -657,25 +657,39 @@ async function main() {
     });
   }
 
-  await prisma.aiModelPrice.upsert({
-    where: {
-      provider_model_version: {
-        provider: 'openai-compatible',
-        model: process.env.AI_CHAT_MODEL || 'gpt-5-mini',
-        version: 1,
+  const configuredChatModel = process.env.AI_CHAT_MODEL || 'gpt-6-luna';
+  const currentModelPrices = [
+    { model: 'gpt-6-luna', input: 0.1, output: 0.5 },
+    { model: 'gpt-6-sol', input: 2, output: 10 },
+    { model: 'gpt-6-astra', input: 10, output: 50 },
+  ];
+  if (!currentModelPrices.some((price) => price.model === configuredChatModel)) {
+    currentModelPrices.push({ model: configuredChatModel, input: 0.5, output: 2 });
+  }
+  for (const price of currentModelPrices) {
+    await prisma.aiModelPrice.upsert({
+      where: {
+        provider_model_version: {
+          provider: 'openai-compatible',
+          model: price.model,
+          version: 1,
+        },
       },
-    },
-    update: {},
-    create: {
-      provider: 'openai-compatible',
-      model: process.env.AI_CHAT_MODEL || 'gpt-5-mini',
-      version: 1,
-      inputPerMillionUsd: 0.5,
-      outputPerMillionUsd: 2,
-      imageUsd: 0.04,
-      effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
-    },
-  });
+      update: {
+        inputPerMillionUsd: price.input,
+        outputPerMillionUsd: price.output,
+      },
+      create: {
+        provider: 'openai-compatible',
+        model: price.model,
+        version: 1,
+        inputPerMillionUsd: price.input,
+        outputPerMillionUsd: price.output,
+        imageUsd: 0.04,
+        effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    });
+  }
 
   console.log('✅ Blog Studio SaaS, desktop catalog entries, and model pricing seeded.');
   console.log('🎉 Seeding completed successfully.');

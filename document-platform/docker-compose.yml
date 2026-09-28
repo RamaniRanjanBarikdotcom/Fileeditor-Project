@@ -238,9 +238,13 @@ services:
       AI_PROVIDER: ${AI_PROVIDER:-openai-compatible}
       AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
       AI_API_KEY: ${AI_API_KEY:-}
-      AI_CHAT_MODEL: ${AI_CHAT_MODEL:-gpt-5-mini}
+      AI_CHAT_MODEL: ${AI_CHAT_MODEL:-gpt-6-luna}
       AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-text-embedding-3-small}
       AI_REQUEST_TIMEOUT_MS: ${AI_REQUEST_TIMEOUT_MS:-60000}
+      BLOG_STUDIO_ENCRYPTION_KEY: ${BLOG_STUDIO_ENCRYPTION_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      BLOG_IMAGE_MODEL: ${BLOG_IMAGE_MODEL:-gpt-image-2.5-flare}
+      BLOG_IMAGE_CREDITS: ${BLOG_IMAGE_CREDITS:-4}
     command: ['node', 'apps/api/dist/main.js']
     depends_on:
       postgres:

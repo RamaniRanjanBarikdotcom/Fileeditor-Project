@@ -2,6 +2,41 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { UpdateBlogStudioSettingsDto, CreatePromptTemplateDto } from './blog-studio.dto';
 
+const BLOG_MODEL_CATALOG_VERSION = 2;
+
+type ModelCatalogSettings = Record<string, unknown> & {
+  modelCatalogVersion?: number;
+};
+
+export function getBlogModelCatalogUpgrade(
+  defaultTextModel: string | null,
+  defaultImageModel: string | null,
+  rawSettings: unknown,
+) {
+  const settingsJson: ModelCatalogSettings =
+    rawSettings && typeof rawSettings === 'object' && !Array.isArray(rawSettings)
+      ? { ...(rawSettings as Record<string, unknown>) }
+      : {};
+
+  if (
+    typeof settingsJson.modelCatalogVersion === 'number' &&
+    settingsJson.modelCatalogVersion >= BLOG_MODEL_CATALOG_VERSION
+  ) {
+    return null;
+  }
+
+  return {
+    ...(defaultTextModel === 'gpt-5-mini' ? { defaultTextModel: 'gpt-6-luna' } : {}),
+    ...(defaultImageModel === 'gpt-image-1'
+      ? { defaultImageModel: 'gpt-image-2.5-flare' }
+      : {}),
+    settingsJson: {
+      ...settingsJson,
+      modelCatalogVersion: BLOG_MODEL_CATALOG_VERSION,
+    },
+  };
+}
+
 @Injectable()
 export class BlogSettingsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -18,12 +53,31 @@ export class BlogSettingsService {
       settings = await this.prisma.blogStudioSetting.create({
         data: {
           organizationId,
-          defaultTextModel: 'gpt-5-mini',
-          defaultImageModel: 'gpt-image-1',
+          defaultTextModel: 'gpt-6-luna',
+          defaultImageModel: 'gpt-image-2.5-flare',
           enableModelDiscovery: true,
-          settingsJson: { aiProvider: 'openai', imageProvider: 'openai' },
+          settingsJson: {
+            aiProvider: 'openai',
+            imageProvider: 'openai',
+            modelCatalogVersion: BLOG_MODEL_CATALOG_VERSION,
+          },
         },
       });
+    } else {
+      // Upgrade only the former application defaults once. Custom model IDs are
+      // deliberately preserved so an organization is never silently moved off
+      // a model it selected itself.
+      const catalogUpgrade = getBlogModelCatalogUpgrade(
+        settings.defaultTextModel,
+        settings.defaultImageModel,
+        settings.settingsJson,
+      );
+      if (catalogUpgrade) {
+        settings = await this.prisma.blogStudioSetting.update({
+          where: { organizationId },
+          data: catalogUpgrade,
+        });
+      }
     }
 
     return settings;

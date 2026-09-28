@@ -4,7 +4,9 @@ import { EncryptionService } from './encryption.service';
 import { CreateBlogProviderDto, UpdateBlogProviderDto } from './blog-studio.dto';
 import { 
   defaultProviderEndpoint,
+  isBlogGenerationModel,
   maskApiKey, 
+  normalizeProviderModelId,
   isValidProviderType 
 } from '@docconv/blog-engine';
 import type { BlogProviderType } from '@prisma/client';
@@ -244,14 +246,37 @@ export class BlogProvidersService {
         : Array.isArray(response.data?.models)
           ? response.data.models
           : [];
+      const models = entries
+        .map((model: any) => ({
+          ...model,
+          normalizedId: normalizeProviderModelId(
+            config.type,
+            String(model.id || model.name || ''),
+          ),
+        }))
+        .filter((model: any) => {
+          if (!model.normalizedId) return false;
+          if (
+            config.type === 'GOOGLE' &&
+            Array.isArray(model.supportedGenerationMethods) &&
+            !model.supportedGenerationMethods.includes('generateContent')
+          ) {
+            return false;
+          }
+          return isBlogGenerationModel(model.normalizedId);
+        });
       return {
         success: true,
         latencyMs,
-        models: entries.slice(0, 250).map((model: any) => ({
-          id: String(model.id || model.name || 'unknown'),
-          name: String(model.id || model.displayName || model.name || 'unknown'),
-          supportsStructuredOutput: false,
-          supportsImages: false,
+        models: models.slice(0, 250).map((model: any) => ({
+          id: model.normalizedId,
+          name: String(model.displayName || model.normalizedId),
+          supportsStructuredOutput: Boolean(
+            model.supportsStructuredOutput || model.capabilities?.structured_outputs,
+          ),
+          supportsImages: Boolean(
+            model.supportsImages || model.capabilities?.vision || model.input_modalities?.includes?.('image'),
+          ),
         })),
       };
     } catch (error) {

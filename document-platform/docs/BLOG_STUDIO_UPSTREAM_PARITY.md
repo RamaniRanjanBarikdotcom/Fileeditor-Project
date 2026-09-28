@@ -17,8 +17,8 @@ upstream code automatically.
 | Image generation | managed image API, credit settlement, MinIO and signed URLs | provider sandbox E2E required | Guarded by `FEATURE_BLOG_STUDIO_IMAGES` |
 | WordPress, Shopify, custom and JTL publishing | DNS-pinned connectors and publication history | provider sandbox E2E required | Guarded by `FEATURE_BLOG_STUDIO_PUBLISHING` |
 | Scheduler | delayed BullMQ jobs, runs and generation/publish continuation | live queue E2E required | Guarded by `FEATURE_BLOG_STUDIO_SCHEDULER` |
-| Product context | manual products plus Shopify, WooCommerce and JSON-LD import | hostile URL and storefront fixtures required | Guarded by full-suite/scraping flags |
-| Provider settings (BYOK) | encrypted credentials and scoped provider adapters | provider sandbox E2E required | Guarded by `FEATURE_BLOG_STUDIO_BYOK` |
+| Product context | manual products plus auto-detected Shopify, WooCommerce, Magento, PrestaShop, BigCommerce, JTL, React/Next.js and custom storefront import; optional custom CSS mappings | authenticated/bot-protected stores and broader hostile storefront fixtures remain provider-specific | Guarded by full-suite/scraping flags |
+| Provider settings (BYOK) | encrypted credentials, current curated models, live provider discovery and custom future model IDs | provider sandbox E2E required | Guarded by `FEATURE_BLOG_STUDIO_BYOK` |
 | Research settings and prompts | organization settings and versioned stage templates | API integration coverage required | Guarded by `FEATURE_BLOG_STUDIO_FULL_SUITE` |
 | Usage analytics | settled credit, image, generation and publication metrics | API/live database E2E required | Guarded by `FEATURE_BLOG_STUDIO_ANALYTICS` |
 | Logs and notifications | real audit-log queries and persistent in-app notifications | API integration coverage required | Implemented behind full suite |

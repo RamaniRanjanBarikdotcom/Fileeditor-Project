@@ -55,7 +55,7 @@ export class OpenAiCompatibleProvider extends AiProvider {
       .get<string>('AI_BASE_URL', 'https://api.openai.com/v1')
       .replace(/\/$/, '');
     this.apiKey = config.get<string>('AI_API_KEY') || undefined;
-    this.chatModel = config.get<string>('AI_CHAT_MODEL', 'gpt-5-mini');
+    this.chatModel = config.get<string>('AI_CHAT_MODEL', 'gpt-6-luna');
     this.embeddingModel = config.get<string>('AI_EMBEDDING_MODEL', 'text-embedding-3-small');
     this.timeoutMs = Number(config.get<string>('AI_REQUEST_TIMEOUT_MS', '60000'));
   }

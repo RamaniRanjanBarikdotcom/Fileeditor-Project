@@ -225,18 +225,21 @@ function parseStructured<T>(value: unknown): T {
 
 function defaultModel(type: BlogProviderTypeName) {
   const models: Partial<Record<BlogProviderTypeName, string>> = {
-    OPENAI: 'gpt-5-mini',
-    GOOGLE: 'gemini-2.5-flash',
-    ANTHROPIC: 'claude-sonnet-4-5',
-    OPENROUTER: 'openai/gpt-5-mini',
+    OPENAI: 'gpt-6-luna',
+    GOOGLE: 'gemini-3.8-flash',
+    ANTHROPIC: 'claude-sonnet-5',
+    OPENROUTER: 'openai/gpt-6-luna',
     GROQ: 'openai/gpt-oss-120b',
-    XAI: 'grok-4-fast',
-    MISTRAL: 'mistral-medium-latest',
+    XAI: 'grok-4.7',
+    HUGGINGFACE: 'Qwen/Qwen2.5-72B-Instruct',
+    MISTRAL: 'mistral-medium-3-5',
     TOGETHER: 'openai/gpt-oss-120b',
     FIREWORKS: 'accounts/fireworks/models/gpt-oss-120b',
     PERPLEXITY: 'sonar-pro',
+    SARVAM: 'sarvam-m',
+    CUSTOM: 'gpt-6-luna',
   };
-  return models[type] || 'gpt-5-mini';
+  return models[type] || 'gpt-6-luna';
 }
 
 function applyTemplate(template: string, placeholder: string, original: string) {

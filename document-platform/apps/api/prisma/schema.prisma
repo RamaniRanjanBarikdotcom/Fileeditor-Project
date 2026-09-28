@@ -1001,7 +1001,8 @@ model BlogProductCollection {
   organizationId String   @map("organization_id")
   name           String
   sourceUrl      String?  @map("source_url")
-  sourceType     String?  @map("source_type") // shopify | woocommerce | jtl | generic
+  sourceType     String?  @map("source_type") // auto | shopify | woocommerce | magento | prestashop | bigcommerce | jtl | react | custom
+  scrapeConfigJson Json?  @map("scrape_config_json")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 

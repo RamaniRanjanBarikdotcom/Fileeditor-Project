@@ -183,10 +183,12 @@ export class UpdateBlogProviderDto {
 export class UpdateBlogStudioSettingsDto {
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   defaultTextModel?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   defaultImageModel?: string;
 
   @IsOptional()
@@ -405,7 +407,19 @@ export class CreateBlogProductCollectionDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(40)
   sourceType?: string;
+
+  @IsOptional()
+  @IsObject()
+  scrapeConfig?: Record<string, unknown>;
+}
+
+export class ScrapeBlogProductsDto {
+  @IsOptional()
+  @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
+  @MaxLength(2000)
+  url?: string;
 }
 
 export class CreateBlogProductDto {

@@ -6,6 +6,7 @@ import { ArrowLeft, Check, CircleStop, Eye, Gauge, Globe, Sparkles } from 'lucid
 import Link from 'next/link';
 import { fetchApi, fetchWithAuth } from '../../../../lib/api';
 import { useFeatureFlags } from '../../../../lib/use-feature-flags';
+import { PRODUCT_PLATFORMS } from '../product-platforms';
 
 const STAGES = [
   'Research',
@@ -23,7 +24,6 @@ const STAGES = [
 const WRITING_STYLES = ['Professional', 'Casual', 'Technical', 'Creative', 'Educational', 'Thought leadership', 'Story-driven'];
 const WRITING_TONES = ['Friendly', 'Formal', 'Persuasive', 'Casual', 'Authoritative', 'Playful', 'Direct'];
 const LANGUAGES = ['English', 'German', 'Spanish', 'French', 'Italian', 'Dutch', 'Polish', 'Portuguese', 'Hindi', 'Japanese', 'Chinese'];
-const PLATFORMS = ['Generic', 'Shopify', 'WooCommerce', 'Magento', 'PrestaShop', 'BigCommerce', 'JTL', 'Custom'];
 
 type Job = {
   id: string;
@@ -50,7 +50,7 @@ export default function NewBlogPage() {
     brandContext: '',
     brandWebsiteUrl: '',
     storeUrl: '',
-    platform: 'Generic',
+    platform: 'auto',
     useProductContext: false,
     providerCredentialId: '',
     promptTemplateVersion: '',
@@ -460,8 +460,8 @@ export default function NewBlogPage() {
                 onChange={(e) => update('platform', e.target.value)}
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:focus:border-indigo-500 dark:focus:ring-indigo-900/30"
               >
-                {PLATFORMS.map((p) => (
-                  <option key={p}>{p}</option>
+                {PRODUCT_PLATFORMS.map((platform) => (
+                  <option key={platform.id} value={platform.id}>{platform.label}</option>
                 ))}
               </select>
             </div>

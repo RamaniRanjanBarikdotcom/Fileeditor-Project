@@ -1,28 +1,57 @@
 'use client';
 
 import { useState } from 'react';
-import { Database, Play, Save, Server, AlertCircle } from 'lucide-react';
+import { Database, Play, Server, AlertCircle, CheckCircle2, SlidersHorizontal } from 'lucide-react';
 import { fetchApi } from '../../../../lib/api';
+import {
+  CUSTOM_SELECTOR_FIELDS,
+  PRODUCT_PLATFORMS,
+  type CustomSelectorKey,
+} from '../product-platforms';
 
 export default function BlogStudioProductsPage() {
   const [url, setUrl] = useState('');
-  const [platform, setPlatform] = useState('Generic');
+  const [platform, setPlatform] = useState('auto');
   const [running, setRunning] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{
+    scrapedCount: number;
+    inserted: number;
+    updated: number;
+    detectedPlatform?: string;
+  } | null>(null);
+  const [customSelectors, setCustomSelectors] = useState<Record<CustomSelectorKey, string>>({
+    productCard: '',
+    title: '',
+    price: '',
+    link: '',
+    image: '',
+    description: '',
+    sku: '',
+  });
 
   async function handleScrape() {
     setError(null);
     setRunning(true);
     setProducts([]);
+    setResult(null);
 
     try {
+      const normalizedUrl = new URL(url).toString();
       // 1. Create or get collection
-      const collectionName = `Scrape ${new URL(url).hostname}`;
+      const collectionName = `Scrape ${new URL(normalizedUrl).hostname}`;
+      const scrapeConfig = Object.fromEntries(
+        Object.entries(customSelectors).filter(([, value]) => value.trim()),
+      );
       const createRes = await fetchApi('/blog-studio/product-collections', {
         method: 'POST',
-        body: JSON.stringify({ name: collectionName, sourceUrl: url, sourceType: platform }),
+        body: JSON.stringify({
+          name: collectionName,
+          sourceUrl: normalizedUrl,
+          sourceType: platform,
+          scrapeConfig: platform === 'custom' ? scrapeConfig : undefined,
+        }),
       });
 
       if (!createRes.success) {
@@ -39,6 +68,7 @@ export default function BlogStudioProductsPage() {
       if (!scrapeRes.success) {
         throw new Error(scrapeRes.error?.message || 'Failed to scrape products');
       }
+      setResult(scrapeRes.data);
 
       // 3. Fetch scraped products
       const productsRes = await fetchApi(`/blog-studio/product-collections/${collectionId}/products`);
@@ -55,11 +85,6 @@ export default function BlogStudioProductsPage() {
     }
   }
 
-  async function handleSave() {
-    setSaving(true);
-    setTimeout(() => setSaving(false), 800);
-  }
-
   return (
     <div className="mx-auto max-w-7xl space-y-8 pb-12">
       <header>
@@ -71,7 +96,8 @@ export default function BlogStudioProductsPage() {
           Product Scraper
         </h1>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Scrape your store and build a local product database.
+          Import products from JTL, React/Next.js, major commerce platforms, or any public
+          custom-coded storefront.
         </p>
       </header>
 
@@ -101,13 +127,43 @@ export default function BlogStudioProductsPage() {
               onChange={e => setPlatform(e.target.value)}
               className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm outline-none focus:border-indigo-500 text-white"
             >
-              <option value="Generic">Generic</option>
-              <option value="Shopify">Shopify</option>
-              <option value="WooCommerce">WooCommerce</option>
-              <option value="Magento">Magento</option>
+              {PRODUCT_PLATFORMS.map((item) => (
+                <option key={item.id} value={item.id}>{item.label}</option>
+              ))}
             </select>
           </div>
         </div>
+
+        {platform === 'custom' && (
+          <div className="mt-6 rounded-xl border border-indigo-400/30 bg-indigo-500/10 p-5">
+            <div className="flex items-start gap-3">
+              <SlidersHorizontal className="mt-0.5 h-5 w-5 text-indigo-300" />
+              <div>
+                <h2 className="text-sm font-bold text-white">Optional custom CSS mapping</h2>
+                <p className="mt-1 text-xs leading-5 text-slate-400">
+                  Leave these empty for automatic structured-data and visual detection. For an
+                  unusual custom site, add selectors from one product card to make extraction exact.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {CUSTOM_SELECTOR_FIELDS.map((field) => (
+                <label key={field.key} className="space-y-1.5 text-xs font-semibold text-slate-300">
+                  <span>{field.label}</span>
+                  <input
+                    value={customSelectors[field.key]}
+                    onChange={(event) => setCustomSelectors((current) => ({
+                      ...current,
+                      [field.key]: event.target.value,
+                    }))}
+                    placeholder={field.placeholder}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 font-mono text-xs text-white outline-none focus:border-indigo-400"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-6 flex items-center gap-4">
           <button
@@ -128,14 +184,12 @@ export default function BlogStudioProductsPage() {
             )}
           </button>
           
-          <button
-            onClick={handleSave}
-            disabled={saving || products.length === 0}
-            className="flex items-center gap-2 rounded-xl border border-slate-700 bg-transparent px-6 py-2.5 text-sm font-bold text-slate-300 hover:bg-slate-800 disabled:opacity-50 transition"
-          >
-            <Save className="h-4 w-4" />
-            {saving ? 'Saving...' : 'Save database'}
-          </button>
+          {result && (
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-300">
+              <CheckCircle2 className="h-4 w-4" />
+              Saved automatically · detected {result.detectedPlatform || platform}
+            </span>
+          )}
         </div>
       </section>
 

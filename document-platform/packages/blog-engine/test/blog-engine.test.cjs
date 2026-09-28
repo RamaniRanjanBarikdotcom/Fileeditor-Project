@@ -4,9 +4,23 @@ const {
   BLOG_PIPELINE_STAGES,
   BlogEngine,
   estimateBlogCredits,
+  isBlogGenerationModel,
+  normalizeProviderModelId,
   sanitizeGeneratedHtml,
   usageToCredits,
 } = require('../dist');
+
+test('provider model discovery normalizes Google IDs and excludes non-writing models', () => {
+  assert.equal(
+    normalizeProviderModelId('GOOGLE', 'models/gemini-3.8-flash'),
+    'gemini-3.8-flash',
+  );
+  assert.equal(isBlogGenerationModel('gpt-6-luna'), true);
+  assert.equal(isBlogGenerationModel('claude-sonnet-5'), true);
+  assert.equal(isBlogGenerationModel('text-embedding-3-small'), false);
+  assert.equal(isBlogGenerationModel('gpt-image-2'), false);
+  assert.equal(isBlogGenerationModel('whisper-large-v3'), false);
+});
 
 const input = {
   topic: 'Reliable document automation',

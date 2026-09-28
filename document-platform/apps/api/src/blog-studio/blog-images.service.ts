@@ -65,7 +65,7 @@ export class BlogImagesService {
     const baseUrl = this.config
       .get<string>('AI_BASE_URL', 'https://api.openai.com/v1')
       .replace(/\/$/, '');
-    const model = this.config.get<string>('BLOG_IMAGE_MODEL', 'gpt-image-1');
+    const model = this.config.get<string>('BLOG_IMAGE_MODEL', 'gpt-image-2.5-flare');
     const credits = Number(this.config.get<string>('BLOG_IMAGE_CREDITS', '4'));
     if (!apiKey) {
       throw new ServiceUnavailableException(
@@ -85,12 +85,7 @@ export class BlogImagesService {
       [actualWidth, actualHeight] = size.split('x').map(Number) as [number, number];
       const response = await axios.post(
         endpoint,
-        {
-          model,
-          prompt: dto.prompt,
-          size,
-          response_format: 'b64_json',
-        },
+        buildImageGenerationRequest(model, dto.prompt, size),
         {
           timeout: 120_000,
           maxRedirects: 0,
@@ -181,6 +176,15 @@ export class BlogImagesService {
     }
     return image;
   }
+}
+
+export function buildImageGenerationRequest(model: string, prompt: string, size: string) {
+  return {
+    model,
+    prompt,
+    size,
+    ...(model.startsWith('dall-e-') ? { response_format: 'b64_json' } : {}),
+  };
 }
 
 function closestImageSize(width: number, height: number) {

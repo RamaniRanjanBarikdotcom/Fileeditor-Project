@@ -1303,3 +1303,88 @@ externally blocked; they are not silently represented as completed.
   billing still require their corresponding sandbox accounts and provider-specific end-to-end runs.
 - Checkout remains disabled. Public desktop release still requires a signed Windows installer and a
   clean-VM smoke test. Complete German localization remains deferred.
+
+## Blog Studio current-model and live-discovery upgrade — 2026-09-27 Asia/Kolkata
+
+### Completed
+
+- Replaced retired Blog Studio suggestions with current writing-capable OpenAI, Anthropic, Google,
+  xAI, Groq and Mistral model IDs. The managed development defaults are now `gpt-6-luna` for text
+  and `gpt-image-2.5-flare` for images.
+- Activated the existing model-discovery setting. The AI settings screen can test an active,
+  organization-scoped provider credential and merge models returned by that provider into its
+  catalog without exposing the credential to the browser. Curated models remain selectable without
+  a customer API key; missing optional BYOK credentials are no longer presented as an error.
+- Changed text and image selection to visible current-model dropdowns with an explicit custom/future
+  model-ID option. Customers can therefore use the curated catalog immediately or enter a newly
+  released, provider-authorized or fine-tuned model before the catalog receives another release.
+- Added a versioned, one-time organization-settings upgrade. Only the former application defaults
+  (`gpt-5-mini` and `gpt-image-1`) are advanced to the new managed defaults; customer-selected model
+  IDs are preserved. The live legacy organization was upgraded and persisted at catalog version 2.
+- Normalized Google `models/...` identifiers and excluded embeddings, moderation, speech, realtime,
+  image, video and reranking models from the writing-model discovery result.
+- Made image-generation payloads model-aware: current GPT Image models omit the legacy
+  `response_format` parameter, while DALL-E requests retain it.
+- Added length validation for saved model IDs and seeded current GPT-6 Luna, Sol and Astra token
+  prices in PostgreSQL for quota settlement.
+
+### Verified
+
+- Blog Engine tests passed 6/6, including provider ID normalization and non-writing-model filtering.
+- Web tests passed 16/16, including current-model presence and custom/live model merging.
+- Blog Studio API tests passed 6/6, including the versioned legacy-default upgrade and preservation
+  of custom model IDs. API and web TypeScript checks, focused lint and
+  `git diff --check` passed.
+- NestJS and the 47-route Next.js production build passed. API, database initializer and web Docker
+  images rebuilt successfully; the seed completed and the recreated API/web containers are healthy.
+- Live health returned HTTP 200 with PostgreSQL, Redis, MinIO, worker engines, Gotenberg, ClamAV and
+  queues available. The API container reports `gpt-6-luna` and `gpt-image-2.5-flare`, and PostgreSQL
+  contains the expected GPT-6 pricing rows.
+
+### External verification still required
+
+- Live model discovery and generation require a valid credential for the selected provider. Model
+  availability is account- and region-specific, so a curated suggestion is not a promise that every
+  provider account can access it. Provider errors remain explicit and do not silently fall back to a
+  different model.
+
+## Blog Studio universal product-context scraper — 2026-09-28 Asia/Kolkata
+
+### Completed
+
+- Unified the Product Context page and generator around one platform registry: automatic detection,
+  Shopify, WooCommerce, Magento/Adobe Commerce, PrestaShop, BigCommerce, JTL-Shop, React/Next.js SPA
+  and custom-coded websites.
+- Added a custom-site advanced mode with optional CSS selectors for the product card, title, price,
+  link, image, description and SKU. Selector mappings are validated and persisted per organization
+  collection in PostgreSQL through the forward-only
+  `20260927010000_blog_product_custom_scraper` migration.
+- Expanded extraction into a layered pipeline: public Shopify/WooCommerce APIs, JSON-LD, platform
+  fingerprinting, Chromium-rendered DOM, controlled auto-scroll, platform selectors and bounded
+  same-origin product-detail discovery. Static HTTP fetching now supports up to three revalidated
+  redirects.
+- Preserved outbound protections for custom URLs: every navigation and Chromium request is checked
+  by the URL-security service, private/internal destinations are rejected, non-HTTP browser requests
+  are blocked, and extracted image/product origins are validated before persistence.
+- Removed the misleading no-op Save Database button. Successful scrape results already persist
+  transactionally through the API, and the interface now reports automatic saving, the detected
+  platform and imported product count.
+
+### Verified
+
+- Prisma schema validation, API/web TypeScript checks, web lint and `git diff --check` passed.
+- Blog Studio API tests passed 8/8, including JTL/React/custom normalization and custom CSS extraction.
+  Web regression tests passed 16/16.
+- NestJS and the 47-route Next.js production build passed. The database initializer applied all ten
+  migrations and completed the idempotent seed.
+- Rebuilt and recreated the API and web Docker services; both are healthy. PostgreSQL contains the
+  new `scrape_config_json` column, and both deployed page bundles contain the expanded platform list.
+- A live custom scrape against the public Web Scraper e-commerce test storefront extracted and
+  persisted 6/6 products through Chromium, custom selectors, the guarded API and PostgreSQL. The
+  temporary verification collection was deleted immediately afterward.
+
+### Honest boundary
+
+- “Any site” means publicly reachable product pages with structured data, recognizable markup or
+  user-supplied CSS mappings. Login-only catalogs, CAPTCHAs, explicit anti-bot blocks and pages whose
+  terms prohibit automated access are intentionally not bypassed.

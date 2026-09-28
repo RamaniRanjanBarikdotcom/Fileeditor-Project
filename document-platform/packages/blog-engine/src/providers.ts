@@ -75,6 +75,35 @@ export function defaultProviderEndpoint(type: BlogProviderTypeName): string | nu
   return endpoints[type] ?? null;
 }
 
+export function normalizeProviderModelId(type: BlogProviderTypeName, value: string): string {
+  const normalized = value.trim();
+  if (type === 'GOOGLE') return normalized.replace(/^models\//, '');
+  return normalized;
+}
+
+export function isBlogGenerationModel(modelId: string): boolean {
+  const id = modelId.toLowerCase();
+  return ![
+    'embedding',
+    'embed-',
+    'moderation',
+    'whisper',
+    'transcri',
+    'speech',
+    'tts',
+    'realtime',
+    'live-',
+    '-live',
+    'audio',
+    'image',
+    'imagen',
+    'veo-',
+    'sora-',
+    'lyria',
+    'rerank',
+  ].some((marker) => id.includes(marker));
+}
+
 /**
  * Masks an API key for safe display (e.g., "sk-****7x4Z").
  */
@@ -167,13 +196,36 @@ export async function testProviderConnection(
       };
     }
 
-    const body = (await response.json()) as { data?: Array<{ id: string }> };
-    const models: ProviderModel[] = (body.data || []).map((m) => ({
-      id: m.id,
-      name: m.id,
-      supportsStructuredOutput: false,
-      supportsImages: false,
-    }));
+    const body = (await response.json()) as {
+      data?: Array<Record<string, unknown>>;
+      models?: Array<Record<string, unknown>>;
+    };
+    const entries = Array.isArray(body.data) ? body.data : Array.isArray(body.models) ? body.models : [];
+    const models: ProviderModel[] = entries
+      .map((model) => {
+        const id = normalizeProviderModelId(
+          config.type,
+          String(model.id || model.name || ''),
+        );
+        return { model, id };
+      })
+      .filter(({ model, id }) => {
+        const methods = model.supportedGenerationMethods;
+        return Boolean(id) &&
+          isBlogGenerationModel(id) &&
+          !(
+            config.type === 'GOOGLE' &&
+            Array.isArray(methods) &&
+            !methods.includes('generateContent')
+          );
+      })
+      .slice(0, 250)
+      .map(({ model, id }) => ({
+        id,
+        name: String(model.displayName || id),
+        supportsStructuredOutput: Boolean(model.supportsStructuredOutput),
+        supportsImages: Boolean(model.supportsImages),
+      }));
 
     return { success: true, latencyMs, models };
   } catch (error) {

@@ -40,6 +40,7 @@ import {
   CreateBlogGenerationDto,
   CreateBlogProductCollectionDto,
   CreateBlogProductDto,
+  ScrapeBlogProductsDto,
   CreateBlogProviderDto,
   CreateBlogScheduleDto,
   ImportBlogSchedulesDto,
@@ -552,7 +553,7 @@ export class BlogStudioController {
   async scrapeProducts(
     @Request() req: any,
     @Param('id') id: string,
-    @Body() dto: { url?: string },
+    @Body() dto: ScrapeBlogProductsDto,
   ) {
     return {
       success: true,

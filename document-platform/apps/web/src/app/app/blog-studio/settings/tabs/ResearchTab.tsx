@@ -17,7 +17,7 @@ export default function ResearchTab() {
   
   const [serpProvider, setSerpProvider] = useState('openai');
   const [deepResearchProvider, setDeepResearchProvider] = useState('openai');
-  const [deepResearchModel, setDeepResearchModel] = useState('gpt-4o-mini');
+  const [deepResearchModel, setDeepResearchModel] = useState('gpt-6-luna');
 
   useEffect(() => {
     async function load() {
@@ -32,7 +32,7 @@ export default function ResearchTab() {
           setUseWikipedia(res.data.settingsJson.useWikipedia !== false);
           setTavilyKey(res.data.settingsJson.tavilyKey || '');
           setPerplexityKey(res.data.settingsJson.perplexityKey || '');
-          setDeepResearchModel(res.data.settingsJson.deepResearchModel || 'gpt-4o-mini');
+          setDeepResearchModel(res.data.settingsJson.deepResearchModel || 'gpt-6-luna');
         }
       }
       setLoading(false);
@@ -168,7 +168,7 @@ export default function ResearchTab() {
               type="text"
               value={deepResearchModel}
               onChange={(e) => setDeepResearchModel(e.target.value)}
-              placeholder="e.g. gpt-4o-mini"
+              placeholder="e.g. gpt-6-luna"
               className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500"
             />
           </div>
