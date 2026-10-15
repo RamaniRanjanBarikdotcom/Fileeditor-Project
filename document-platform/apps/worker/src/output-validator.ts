@@ -36,7 +36,9 @@ export async function validateOutputBuffer(output: Buffer, targetFormat: string)
       throw new Error('Generated output is not a PDF');
     }
     try {
-      const pdf = await PDFDocument.load(output, { updateMetadata: false });
+      // Protect PDF intentionally produces encrypted output; its page tree is
+      // still parseable, so check structure without decrypting content.
+      const pdf = await PDFDocument.load(output, { updateMetadata: false, ignoreEncryption: true });
       if (pdf.getPageCount() < 1) throw new Error('PDF has no pages');
     } catch (error: any) {
       throw new Error(`Generated PDF cannot be parsed: ${error?.message || 'invalid document'}`);
@@ -84,6 +86,20 @@ export async function validateOutputBuffer(output: Buffer, targetFormat: string)
     }
     return;
   }
+  if (format === 'pptx') {
+    try {
+      const zip = await JSZip.loadAsync(output);
+      if (!zip.file('ppt/presentation.xml') || !zip.file('[Content_Types].xml')) {
+        throw new Error('PowerPoint package is missing required parts');
+      }
+      if (!Object.keys(zip.files).some((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))) {
+        throw new Error('PowerPoint package has no slides');
+      }
+    } catch (error: any) {
+      throw new Error(`Generated PPTX cannot be parsed: ${error?.message || 'invalid package'}`);
+    }
+    return;
+  }
   if (format === 'png') {
     if (!output.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
       throw new Error('Generated PNG has an invalid signature');
@@ -105,7 +121,9 @@ export async function validateOutputBuffer(output: Buffer, targetFormat: string)
       const entries = Object.values(archive.files).filter((entry) => !entry.dir);
       if (!entries.length) throw new Error('Archive has no files');
       for (const entry of entries) {
-        if (!/\.png$|\.jpe?g$/i.test(entry.name)) {
+        // PDF page archives hold PNG/JPEG; embedded-image extraction can also
+        // yield the original JPEG 2000, TIFF, JBIG2 or other image encodings.
+        if (!/\.(png|jpe?g|jpx|jp2|tiff?|bmp|gif|jb2|pbm|pgm|pnm|ppm|pam|webp)$/i.test(entry.name)) {
           throw new Error(`Unexpected archive entry '${entry.name}'`);
         }
         const bytes = await entry.async('nodebuffer');

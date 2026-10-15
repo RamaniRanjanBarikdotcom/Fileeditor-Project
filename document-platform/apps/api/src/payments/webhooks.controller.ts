@@ -102,6 +102,17 @@ export class WebhooksController {
       }
     } else if (event.type.startsWith('customer.subscription.')) {
       await this.syncStripeSubscription(event.data.object, event.type);
+    } else if (event.type === 'charge.refunded') {
+      const charge = event.data.object;
+      const paymentIntentId =
+        typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
+      if (paymentIntentId) {
+        await this.paymentsService.refundOrder({
+          provider: PaymentProvider.STRIPE,
+          providerPaymentId: paymentIntentId,
+          refundedMinorUnits: Number(charge.amount_refunded) || 0,
+        });
+      }
     }
 
     // Mark event processed
@@ -159,9 +170,21 @@ export class WebhooksController {
 
     if (eventType === 'payment.captured' || eventType === 'order.paid') {
       const paymentEntity = body.payload?.payment?.entity;
-      const orderId = paymentEntity?.notes?.orderId;
       const paymentId = paymentEntity?.id;
       const rzpOrderId = paymentEntity?.order_id;
+      // Razorpay does not copy order notes onto the payment, so fall back to
+      // the provider order id. Without this the webhook could never fulfil a
+      // purchase whose buyer closed the tab before client verification.
+      const orderId =
+        paymentEntity?.notes?.orderId ||
+        (rzpOrderId
+          ? (
+              await this.prisma.order.findFirst({
+                where: { paymentProvider: PaymentProvider.RAZORPAY, providerOrderId: rzpOrderId },
+                select: { id: true },
+              })
+            )?.id
+          : undefined);
 
       if (orderId && paymentId) {
         await this.paymentsService.fulfillOrder({
@@ -169,6 +192,20 @@ export class WebhooksController {
           provider: PaymentProvider.RAZORPAY,
           providerPaymentId: paymentId,
           providerOrderId: rzpOrderId,
+        });
+      }
+    }
+
+    if (eventType === 'refund.processed') {
+      const refund = body.payload?.refund?.entity;
+      const payment = body.payload?.payment?.entity;
+      const paymentId = refund?.payment_id || payment?.id;
+      if (paymentId) {
+        await this.paymentsService.refundOrder({
+          provider: PaymentProvider.RAZORPAY,
+          providerPaymentId: paymentId,
+          // amount_refunded is cumulative; a lone refund entity covers only itself.
+          refundedMinorUnits: Number(payment?.amount_refunded ?? refund?.amount) || 0,
         });
       }
     }
@@ -190,6 +227,7 @@ export class WebhooksController {
             fromUnix(subscription.current_end) || new Date(Date.now() + 31 * 86_400_000),
           cancelAtPeriodEnd: Boolean(subscription.cancel_at_cycle_end),
           eventType,
+          planId: subscription.notes?.planId || undefined,
         });
       }
     }
@@ -222,6 +260,7 @@ export class WebhooksController {
         fromUnix(subscription.current_period_end) || new Date(Date.now() + 31 * 86_400_000),
       cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
       eventType,
+      planId: metadata.planId || undefined,
     });
   }
 }

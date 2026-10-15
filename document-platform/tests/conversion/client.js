@@ -69,29 +69,39 @@ class ConversionClient {
   }
 
   async waitForCompletion(conversionId, timeoutMs = 60000) {
-    const start = Date.now();
-
-    while (Date.now() - start < timeoutMs) {
-      const response = await fetch(`${API_URL}/conversions/${conversionId}`, {
-        headers: { Authorization: `Bearer ${this.token}` },
-      });
-
-      const data = await response.json();
-      const status = data.data.status;
-
-      if (status === 'COMPLETED') {
-        return;
-      }
-
-      if (['FAILED', 'CANCELLED', 'EXPIRED'].includes(status)) {
-        throw new Error(`Conversion failed: ${data.data.errorMessage || 'unknown error'}`);
-      }
-
-      // Wait 1s before polling again
-      await new Promise((r) => setTimeout(r, 1000));
+    const response = await fetch(`${API_URL}/conversions/${conversionId}/events`, {
+      headers: {
+        Accept: 'text/event-stream',
+        Authorization: `Bearer ${this.token}`,
+        Origin: ORIGIN,
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok || !response.body) {
+      throw new Error(`Failed to open conversion progress stream: HTTP ${response.status}`);
     }
 
-    throw new Error(`Conversion timed out after ${timeoutMs}ms`);
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for await (const chunk of response.body) {
+      buffer += decoder.decode(chunk, { stream: true });
+      const events = buffer.split(/\r?\n\r?\n/);
+      buffer = events.pop() || '';
+      for (const event of events) {
+        const payload = event
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).trimStart())
+          .join('\n');
+        if (!payload) continue;
+        const job = JSON.parse(payload);
+        if (job.status === 'COMPLETED') return;
+        if (['FAILED', 'CANCELLED', 'EXPIRED'].includes(job.status)) {
+          throw new Error(`Conversion failed: ${job.errorMessage || 'unknown error'}`);
+        }
+      }
+    }
+    throw new Error('Conversion progress stream closed before a terminal status was delivered.');
   }
 
   async downloadResult(conversionId) {

@@ -43,7 +43,7 @@ export default function LoginPage() {
           <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center mx-auto shadow-md shadow-indigo-500/20">
             <Sparkles className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Welcome Back</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Welcome back</h1>
           <p className="text-xs text-slate-500">
             Sign in to access your workspace and purchased software
           </p>
@@ -59,7 +59,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-              Email Address
+              Email address
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -101,14 +101,14 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Sign In</span>}
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Sign in</span>}
           </button>
         </form>
 
         <div className="text-center pt-2 text-xs text-slate-500">
           Don't have an account?{' '}
           <Link href="/register" className="font-semibold text-indigo-600 hover:underline">
-            Create Free Account
+            Create free account
           </Link>
         </div>
       </div>

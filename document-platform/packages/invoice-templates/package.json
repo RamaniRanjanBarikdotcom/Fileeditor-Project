@@ -1,0 +1,21 @@
+{
+  "name": "@docconv/invoice-templates",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Invoice HTML rendering: templates, language packs, number/date formatting, amount in words and payment QR codes. One renderer for the browser preview and the server PDF.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@docconv/invoice-engine": "workspace:*",
+    "qrcode": "1.5.4"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc && node --test test/*.test.cjs",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/qrcode": "1.5.5"
+  }
+}

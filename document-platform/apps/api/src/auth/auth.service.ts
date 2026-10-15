@@ -4,15 +4,24 @@ import {
   ConflictException,
   BadRequestException,
   NotFoundException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../common/prisma.service';
+import { RedisService } from '../common/redis.service';
 import { PlatformRole, SubscriptionStatus, UserStatus } from '@prisma/client';
 import { TransactionalEmailService } from './transactional-email.service';
 import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+
+const LOGIN_FAILURE_LIMIT = 10;
+const LOGIN_LOCKOUT_SECONDS = 15 * 60;
+// Compared against when the account does not exist so that response timing
+// does not reveal which email addresses are registered.
+const TIMING_EQUALIZER_HASH = bcrypt.hashSync('timing-equalizer-not-a-password', 12);
 
 // ─── DTOs ────────────────────────────────────────────────────
 
@@ -100,6 +109,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
     private readonly email: TransactionalEmailService,
+    private readonly redis: RedisService,
   ) {}
 
   /**
@@ -161,24 +171,40 @@ export class AuthService {
     dto: LoginDto,
     meta?: { ipAddress?: string; userAgent?: string },
   ): Promise<AuthTokens> {
+    const normalizedEmail = dto.email.toLowerCase().trim();
+    const failureKey = `auth:login-failures:${crypto
+      .createHash('sha256')
+      .update(normalizedEmail)
+      .digest('hex')}`;
+    const failures = Number((await this.redis.get(failureKey).catch(() => null)) || 0);
+    if (failures >= LOGIN_FAILURE_LIMIT) {
+      throw new HttpException(
+        'Too many failed sign-in attempts. Try again in 15 minutes or reset your password.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const user = await this.prisma.user.findUnique({
-      where: { email: dto.email.toLowerCase().trim() },
+      where: { email: normalizedEmail },
       include: {
         memberships: {
+          // Deterministic default workspace: the oldest membership.
+          orderBy: { createdAt: 'asc' },
           take: 1,
           select: { organizationId: true },
         },
       },
     });
 
-    if (!user || user.status !== UserStatus.ACTIVE) {
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      user?.passwordHash || TIMING_EQUALIZER_HASH,
+    );
+    if (!user || user.status !== UserStatus.ACTIVE || !isPasswordValid) {
+      await this.redis.incrWithTtl(failureKey, LOGIN_LOCKOUT_SECONDS).catch(() => undefined);
       throw new UnauthorizedException('Invalid email or password.');
     }
-
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid email or password.');
-    }
+    await this.redis.del(failureKey).catch(() => undefined);
 
     const orgId = user.memberships[0]?.organizationId;
     return this.createAuthSession(user, orgId, meta);
@@ -204,6 +230,7 @@ export class AuthService {
           user: {
             include: {
               memberships: {
+                orderBy: { createdAt: 'asc' },
                 take: 1,
                 select: { organizationId: true },
               },

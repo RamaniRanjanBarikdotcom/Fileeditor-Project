@@ -63,6 +63,29 @@ export class GotenbergAdapter {
   }
 
   /**
+   * Convert a PDF to an archival PDF/A file (ISO 19005) with Gotenberg's PDF engines.
+   */
+  async convertPdfToPdfA(
+    fileStream: Readable,
+    level: 'PDF/A-1b' | 'PDF/A-2b' | 'PDF/A-3b',
+    signal?: AbortSignal,
+  ): Promise<Readable> {
+    const input = await this.toBuffer(fileStream);
+    const response = await postWithRetry(
+      `${this.apiUrl}/forms/pdfengines/convert`,
+      () => {
+        const form = new FormData();
+        form.append('files', input, { filename: 'document.pdf' });
+        form.append('pdfa', level);
+        return form;
+      },
+      this.timeout,
+      signal,
+    );
+    return Readable.from(Buffer.from(response.data));
+  }
+
+  /**
    * Convert Office documents (DOCX, XLSX) to PDF using LibreOffice engine
    */
   async convertOfficeToPdf(

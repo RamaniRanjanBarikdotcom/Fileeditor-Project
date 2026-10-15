@@ -108,7 +108,7 @@ export default function BlogStudioProductsPage() {
         </div>
       )}
 
-      <section className="rounded-2xl border border-slate-200 bg-[#0f172a] p-6 dark:border-slate-800 dark:bg-slate-900 shadow-sm text-white">
+      <section className="rounded-2xl border border-slate-200 bg-slate-900 p-6 dark:border-slate-800 dark:bg-slate-900 shadow-sm text-white">
         <div className="grid gap-6 md:grid-cols-[2fr_1fr]">
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-300">Store URL</label>

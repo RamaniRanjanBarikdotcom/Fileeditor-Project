@@ -5,17 +5,18 @@ import Link from 'next/link';
 import { ArrowRight, Search, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import { listStaticToolDtos } from '../../../lib/tool-dtos';
 import { getToolPresentation } from '../../../lib/tools-registry';
+import { TOOL_GROUPS, groupIdForSlug, groupTools } from '../../../lib/tool-groups';
+import { toolGroupIcon } from '../../../lib/tool-group-icons';
 
 const tools = listStaticToolDtos().filter((tool) => tool.isPublished);
-const categories = ['All', ...Array.from(new Set(tools.map((tool) => tool.category)))];
 
 export default function WorkspaceToolsPage() {
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('All');
+  const [group, setGroup] = useState('all');
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return tools.filter((tool) => {
-      const matchesCategory = category === 'All' || tool.category === category;
+      const matchesGroup = group === 'all' || groupIdForSlug(tool.slug) === group;
       const searchable = [
         tool.name,
         tool.category,
@@ -26,9 +27,10 @@ export default function WorkspaceToolsPage() {
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
-      return matchesCategory && (!normalized || searchable.includes(normalized));
+      return matchesGroup && (!normalized || searchable.includes(normalized));
     });
-  }, [category, query]);
+  }, [group, query]);
+  const sections = useMemo(() => groupTools(filtered), [filtered]);
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-7">
@@ -69,18 +71,19 @@ export default function WorkspaceToolsPage() {
             />
           </label>
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {categories.map((item) => (
+            {[{ id: 'all', shortTitle: 'All tools' }, ...TOOL_GROUPS].map((item) => (
               <button
-                key={item}
+                key={item.id}
                 type="button"
-                onClick={() => setCategory(item)}
+                aria-pressed={group === item.id}
+                onClick={() => setGroup(item.id)}
                 className={`shrink-0 rounded-full px-3.5 py-2 text-xs font-bold transition ${
-                  category === item
+                  group === item.id
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : 'border border-slate-200 bg-slate-50 text-slate-600 hover:border-indigo-300 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300'
                 }`}
               >
-                {item}
+                {item.shortTitle}
               </button>
             ))}
           </div>
@@ -104,47 +107,72 @@ export default function WorkspaceToolsPage() {
             View job history
           </Link>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((tool) => {
-            const presentation = getToolPresentation(tool.slug);
-            const Icon = presentation.icon;
-            const isLocal = Boolean(tool.capability?.browser.supported);
+        <div className="space-y-10">
+          {sections.map(({ group: toolGroup, tools: groupTools }) => {
+            const GroupIcon = toolGroupIcon(toolGroup.id);
             return (
-              <Link
-                key={tool.slug}
-                href={`/tools/${tool.slug}`}
-                className="group flex min-h-56 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-indigo-300 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-700"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <span
-                    className="flex h-11 w-11 items-center justify-center rounded-xl"
-                    style={{
-                      backgroundColor: `${presentation.accentColor}16`,
-                      color: presentation.accentColor,
-                    }}
-                  >
-                    <Icon className="h-5 w-5" />
+              <div key={toolGroup.id}>
+                <div className="mb-4 flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-300">
+                    <GroupIcon className="h-5 w-5" />
                   </span>
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider ${isLocal ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300'}`}
-                  >
-                    {isLocal ? 'Private browser' : 'Secure worker'}
-                  </span>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-950 dark:text-white">
+                      {toolGroup.title}{' '}
+                      <span className="ml-1 rounded-full border border-slate-200 px-2 py-0.5 text-xs font-bold text-slate-400 dark:border-slate-700">
+                        {groupTools.length}
+                      </span>
+                    </h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {toolGroup.description}
+                    </p>
+                  </div>
                 </div>
-                <h3 className="mt-5 text-lg font-black text-slate-950 dark:text-white">
-                  {presentation.name}
-                </h3>
-                <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                  {tool.seoMetadata?.description || presentation.features[0]}
-                </p>
-                <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">
-                  <span className="text-xs font-semibold text-slate-400">
-                    {tool.acceptedFormats.join(', ').toUpperCase()} →{' '}
-                    {tool.outputFormats.join(', ').toUpperCase()}
-                  </span>
-                  <ArrowRight className="h-4 w-4 text-indigo-600 transition group-hover:translate-x-1" />
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {groupTools.map((tool) => {
+                    const presentation = getToolPresentation(tool.slug);
+                    const Icon = presentation.icon;
+                    const isLocal = Boolean(tool.capability?.browser.supported);
+                    return (
+                      <Link
+                        key={tool.slug}
+                        href={`/tools/${tool.slug}`}
+                        className="group flex min-h-56 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-indigo-300 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-700"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <span
+                            className="flex h-11 w-11 items-center justify-center rounded-xl"
+                            style={{
+                              backgroundColor: `${presentation.accentColor}16`,
+                              color: presentation.accentColor,
+                            }}
+                          >
+                            <Icon className="h-5 w-5" />
+                          </span>
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider ${isLocal ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300'}`}
+                          >
+                            {isLocal ? 'Private browser' : 'Secure worker'}
+                          </span>
+                        </div>
+                        <h3 className="mt-5 text-lg font-black text-slate-950 dark:text-white">
+                          {presentation.name}
+                        </h3>
+                        <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                          {tool.seoMetadata?.description || presentation.features[0]}
+                        </p>
+                        <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">
+                          <span className="text-xs font-semibold text-slate-400">
+                            {tool.acceptedFormats.join(', ').toUpperCase()} →{' '}
+                            {tool.outputFormats.join(', ').toUpperCase()}
+                          </span>
+                          <ArrowRight className="h-4 w-4 text-indigo-600 transition group-hover:translate-x-1" />
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
-              </Link>
+              </div>
             );
           })}
         </div>

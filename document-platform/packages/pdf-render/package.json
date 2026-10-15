@@ -1,0 +1,14 @@
+{
+  "name": "@docconv/pdf-render",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal Gotenberg client: HTML to PDF (Chromium) and PDF to PDF/A, shared by the API and worker.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc && node --test test/*.test.cjs",
+    "clean": "rm -rf dist"
+  }
+}

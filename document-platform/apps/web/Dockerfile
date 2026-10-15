@@ -12,9 +12,9 @@ RUN --mount=type=cache,id=toolsuite-pnpm-store,target=/root/.local/share/pnpm/st
 COPY apps/web ./apps/web
 ARG INTERNAL_API_URL=http://api:4201
 ENV INTERNAL_API_URL=${INTERNAL_API_URL}
-RUN corepack pnpm --filter @docconv/shared-types run build \
-    && corepack pnpm --filter @docconv/tool-registry run build \
-    && corepack pnpm --filter @docconv/processing-core run build \
+# Build every workspace package the web app depends on (in dependency order),
+# then the app itself, so a new shared package needs no Dockerfile change.
+RUN corepack pnpm --filter "web^..." run build \
     && corepack pnpm --filter web run build
 
 EXPOSE 5173

@@ -11,7 +11,9 @@ const { getBlogModelCatalogUpgrade } = require('../dist/blog-studio/blog-setting
 const {
   detectStorePlatform,
   extractStoreProductsFromHtml,
+  isProtectedStorefrontHtml,
   normalizeSourceType,
+  storefrontAccessError,
 } = require('../dist/blog-studio/blog-products.service');
 
 test('product context recognizes JTL, React and custom-coded storefronts', () => {
@@ -20,6 +22,36 @@ test('product context recognizes JTL, React and custom-coded storefronts', () =>
   assert.equal(normalizeSourceType('Custom coded'), 'custom');
   assert.equal(detectStorePlatform('<script id="__NEXT_DATA__"></script>'), 'react');
   assert.equal(detectStorePlatform('<div class="artbox"></div><!-- JTL-Shop -->'), 'jtl');
+});
+
+test('product context identifies protected storefront challenges without bypassing them', () => {
+  assert.equal(
+    isProtectedStorefrontHtml('<div class="g-recaptcha">Verify you are human</div>'),
+    true,
+  );
+  assert.equal(isProtectedStorefrontHtml('<main><article>Public catalog</article></main>'), false);
+  assert.equal(
+    isProtectedStorefrontHtml(
+      '<title>Just a moment...</title><script src="/cdn-cgi/challenge-platform/h/b"></script>',
+    ),
+    true,
+  );
+  // Ordinary storefronts commonly embed CAPTCHA widgets on forms or mention
+  // "access denied" in copy; neither is a challenge interstitial.
+  assert.equal(
+    isProtectedStorefrontHtml(
+      '<main><div class="product-card">Desk</div><form><div class="g-recaptcha"></div></form><p>Access denied orders are refunded.</p></main>',
+    ),
+    false,
+  );
+});
+
+test('product context maps storefront refusals to actionable errors', () => {
+  assert.match(storefrontAccessError(403).message, /requires authentication or blocks/);
+  assert.match(storefrontAccessError(401).message, /requires authentication or blocks/);
+  assert.match(storefrontAccessError(429).message, /rate-limiting/);
+  assert.equal(storefrontAccessError(200), null);
+  assert.equal(storefrontAccessError(undefined), null);
 });
 
 test('custom product CSS mappings extract normalized product records', () => {

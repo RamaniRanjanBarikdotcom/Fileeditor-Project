@@ -300,6 +300,8 @@ model User {
   platformRole    PlatformRole @default(CUSTOMER) @map("platform_role")
   status          UserStatus   @default(ACTIVE)
   emailVerifiedAt DateTime?    @map("email_verified_at")
+  // Saved Blog Studio colour theme (see BLOG_STUDIO_THEMES); null = not chosen yet.
+  blogStudioTheme String?      @map("blog_studio_theme") @db.VarChar(32)
   createdAt       DateTime     @default(now()) @map("created_at")
   updatedAt       DateTime     @updatedAt @map("updated_at")
 
@@ -453,6 +455,13 @@ model Organization {
   saasUsageWindows        SaasUsageWindow[]
   saasReservations        SaasUsageReservation[]
   saasUsageRecords        SaasUsageRecord[]
+  saasUsageCounters       SaasUsageCounter[]
+  invBusinesses           InvBusiness[]
+  invContacts             InvContact[]
+  invItems                InvItem[]
+  invDocuments            InvDocument[]
+  invWarehouses           InvWarehouse[]
+  invRecurringProfiles    InvRecurringProfile[]
 
   @@map("organizations")
 }
@@ -586,6 +595,8 @@ model Product {
   licenses          LicenseKey[]
   saasSubscriptions SaasSubscription[]
   saasUsageWindows  SaasUsageWindow[]
+  saasPlans         SaasPlan[]
+  saasUsageCounters SaasUsageCounter[]
 
   @@index([isPublished, type])
   @@map("products")
@@ -997,14 +1008,14 @@ model BlogCsvImport {
 // ─── Blog Studio Product Context ─────────────────────────────
 
 model BlogProductCollection {
-  id             String   @id @default(uuid())
-  organizationId String   @map("organization_id")
-  name           String
-  sourceUrl      String?  @map("source_url")
-  sourceType     String?  @map("source_type") // auto | shopify | woocommerce | magento | prestashop | bigcommerce | jtl | react | custom
-  scrapeConfigJson Json?  @map("scrape_config_json")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id               String   @id @default(uuid())
+  organizationId   String   @map("organization_id")
+  name             String
+  sourceUrl        String?  @map("source_url")
+  sourceType       String?  @map("source_type") // auto | shopify | woocommerce | magento | prestashop | bigcommerce | jtl | react | custom
+  scrapeConfigJson Json?    @map("scrape_config_json")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   products     BlogProduct[]
@@ -1091,12 +1102,78 @@ model SaasSubscription {
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")
 
+  // Plan bought (generic SaaS plans). Null for legacy single-price add-ons.
+  planId String? @map("plan_id")
+
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   product      Product      @relation(fields: [productId], references: [id])
+  plan         SaasPlan?    @relation(fields: [planId], references: [id])
 
   @@unique([organizationId, productId])
   @@index([organizationId, status])
   @@map("saas_subscriptions")
+}
+
+// ─── Generic SaaS plans (shared by every SaaS app) ─────────────
+
+/// A tier of a SaaS product (e.g. free / pro / business). Limits are data so
+/// plans can change without code: { "invoicesPerMonth": 20, "items": 100 }.
+/// A limit of -1 means unlimited; a missing metric means not included (0).
+model SaasPlan {
+  id           String   @id @default(uuid())
+  productId    String   @map("product_id")
+  key          String   @db.VarChar(40)
+  name         String
+  description  String?
+  sortOrder    Int      @default(0) @map("sort_order")
+  isPublic     Boolean  @default(true) @map("is_public")
+  isFree       Boolean  @default(false) @map("is_free")
+  limitsJson   Json     @map("limits_json")
+  featuresJson Json     @default("[]") @map("features_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  product       Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  prices        SaasPlanPrice[]
+  subscriptions SaasSubscription[]
+
+  @@unique([productId, key])
+  @@map("saas_plans")
+}
+
+model SaasPlanPrice {
+  id               String          @id @default(uuid())
+  planId           String          @map("plan_id")
+  currency         CurrencyCode
+  interval         BillingInterval
+  amountMinorUnits Int             @map("amount_minor_units")
+  provider         PaymentProvider
+  /// Razorpay plan id (created on first checkout). Stripe uses inline prices.
+  providerPriceId  String?         @map("provider_price_id")
+  isActive         Boolean         @default(true) @map("is_active")
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  plan SaasPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, currency, interval])
+  @@map("saas_plan_prices")
+}
+
+/// Metered usage per organization, product, metric and UTC month.
+model SaasUsageCounter {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  productId      String   @map("product_id")
+  metric         String   @db.VarChar(60)
+  windowStart    DateTime @map("window_start")
+  used           Int      @default(0)
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, productId, metric, windowStart])
+  @@map("saas_usage_counters")
 }
 
 model SaasUsageWindow {
@@ -1696,4 +1773,418 @@ model AiSessionSummary {
   @@index([organizationId, projectId, createdAt])
   @@index([conversationId, updatedAt])
   @@map("ai_session_summaries")
+}
+
+// ─── Invoice Studio + Inventory ────────────────────────────────
+// Money and quantities are Decimal; maths lives in @docconv/invoice-engine.
+// User ids are stored without foreign keys on purpose: issued invoices are
+// legal records and must outlive the account that created them.
+
+/// A selling entity (company or branch with its own tax registration).
+model InvBusiness {
+  id                  String    @id @default(uuid())
+  organizationId      String    @map("organization_id")
+  name                String
+  legalName           String?   @map("legal_name")
+  country             String    @db.VarChar(2)
+  /// India: two-digit GST state code.
+  stateCode           String?   @map("state_code") @db.VarChar(2)
+  addressJson         Json      @default("{}") @map("address_json")
+  email               String?
+  phone               String?
+  website             String?
+  /// IN_GST | EU_VAT | GENERIC | NONE
+  taxRegime           String    @map("tax_regime") @db.VarChar(16)
+  taxId               String?   @map("tax_id")
+  gstComposition      Boolean   @default(false) @map("gst_composition")
+  currency            String    @db.VarChar(3)
+  language            String    @default("en") @db.VarChar(35)
+  secondaryLanguage   String?   @map("secondary_language") @db.VarChar(35)
+  template            String    @default("classic") @db.VarChar(40)
+  accentColor         String?   @map("accent_color") @db.VarChar(7)
+  logoStorageKey      String?   @map("logo_storage_key")
+  signatureStorageKey String?   @map("signature_storage_key")
+  bankJson            Json      @default("{}") @map("bank_json")
+  /// none | upi | sepa
+  paymentQr           String    @default("none") @map("payment_qr") @db.VarChar(8)
+  pricesIncludeTax    Boolean   @default(false) @map("prices_include_tax")
+  roundOffTotal       Boolean   @default(false) @map("round_off_total")
+  /// BLOCK | WARN | ALLOW
+  negativeStockPolicy String    @default("BLOCK") @map("negative_stock_policy") @db.VarChar(8)
+  fyStartMonth        Int       @default(1) @map("fy_start_month")
+  /// { "TAX_INVOICE": "INV/{FY}/{SEQ:4}", … }
+  numberingJson       Json      @default("{}") @map("numbering_json")
+  labelOverridesJson  Json      @default("{}") @map("label_overrides_json")
+  defaultNotes        String?   @map("default_notes")
+  defaultTerms        String?   @map("default_terms")
+  defaultDueDays      Int       @default(15) @map("default_due_days")
+  /// Days after the due date on which payment reminders are emailed, e.g. [3, 10].
+  reminderDaysJson    Json      @default("[3, 10]") @map("reminder_days_json")
+  lowStockAlerts      Boolean   @default(true) @map("low_stock_alerts")
+  lowStockAlertedOn   DateTime? @map("low_stock_alerted_on") @db.Date
+  archivedAt          DateTime? @map("archived_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  series       InvSeries[]
+  documents    InvDocument[]
+  warehouses   InvWarehouse[]
+
+  @@index([organizationId])
+  @@map("inv_businesses")
+}
+
+/// Number counter per business, document type and period (financial year…).
+model InvSeries {
+  id             String @id @default(uuid())
+  organizationId String @map("organization_id")
+  businessId     String @map("business_id")
+  documentType   String @map("document_type") @db.VarChar(40)
+  periodKey      String @map("period_key") @db.VarChar(20)
+  nextNumber     Int    @default(1) @map("next_number")
+
+  business InvBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, documentType, periodKey])
+  @@map("inv_series")
+}
+
+/// Customer and/or supplier.
+model InvContact {
+  id                  String    @id @default(uuid())
+  organizationId      String    @map("organization_id")
+  isCustomer          Boolean   @default(true) @map("is_customer")
+  isSupplier          Boolean   @default(false) @map("is_supplier")
+  name                String
+  legalName           String?   @map("legal_name")
+  email               String?
+  phone               String?
+  country             String    @db.VarChar(2)
+  stateCode           String?   @map("state_code") @db.VarChar(2)
+  billingAddressJson  Json      @default("{}") @map("billing_address_json")
+  shippingAddressJson Json?     @map("shipping_address_json")
+  taxId               String?   @map("tax_id")
+  isBusiness          Boolean   @default(true) @map("is_business")
+  isSez               Boolean   @default(false) @map("is_sez")
+  currency            String?   @db.VarChar(3)
+  language            String?   @db.VarChar(35)
+  paymentTermsDays    Int?      @map("payment_terms_days")
+  notes               String?
+  archivedAt          DateTime? @map("archived_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documents    InvDocument[]
+
+  @@index([organizationId, name])
+  @@map("inv_contacts")
+}
+
+/// Product (goods) or service.
+model InvItem {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  /// GOODS | SERVICES
+  kind           String    @default("GOODS") @db.VarChar(10)
+  name           String
+  description    String?
+  sku            String?   @db.VarChar(64)
+  barcode        String?   @db.VarChar(64)
+  unit           String    @default("pcs") @db.VarChar(16)
+  hsnSac         String?   @map("hsn_sac") @db.VarChar(12)
+  taxRate        Decimal   @default(0) @map("tax_rate") @db.Decimal(7, 4)
+  cessRate       Decimal   @default(0) @map("cess_rate") @db.Decimal(7, 4)
+  /// STANDARD | ZERO | EXEMPT | NON_TAXABLE
+  taxCategory    String    @default("STANDARD") @map("tax_category") @db.VarChar(16)
+  salePrice      Decimal   @default(0) @map("sale_price") @db.Decimal(18, 4)
+  purchasePrice  Decimal   @default(0) @map("purchase_price") @db.Decimal(18, 4)
+  trackInventory Boolean   @default(false) @map("track_inventory")
+  reorderLevel   Decimal?  @map("reorder_level") @db.Decimal(18, 4)
+  /// Weighted-average cost across warehouses (inventory valuation).
+  averageCost    Decimal   @default(0) @map("average_cost") @db.Decimal(18, 4)
+  archivedAt     DateTime? @map("archived_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stockLevels  InvStockLevel[]
+  movements    InvStockMovement[]
+
+  @@unique([organizationId, sku])
+  @@index([organizationId, name])
+  @@index([organizationId, barcode])
+  @@map("inv_items")
+}
+
+/// Every sales and purchase document (type from the invoice-engine registry).
+model InvDocument {
+  id                   String    @id @default(uuid())
+  organizationId       String    @map("organization_id")
+  businessId           String    @map("business_id")
+  documentType         String    @map("document_type") @db.VarChar(40)
+  /// DRAFT | ISSUED | PARTIALLY_PAID | PAID | VOID (+ PARTIALLY_RECEIVED | RECEIVED for purchase orders)
+  status               String    @default("DRAFT") @db.VarChar(20)
+  number               String?   @db.VarChar(40)
+  issueDate            DateTime  @map("issue_date") @db.Date
+  dueDate              DateTime? @map("due_date") @db.Date
+  supplyDate           DateTime? @map("supply_date") @db.Date
+  contactId            String?   @map("contact_id")
+  /// Party details as printed. Re-snapshotted on every draft save; frozen at issue.
+  sellerJson           Json      @default("{}") @map("seller_json")
+  buyerJson            Json      @default("{}") @map("buyer_json")
+  shipToJson           Json?     @map("ship_to_json")
+  placeOfSupplyCountry String?   @map("place_of_supply_country") @db.VarChar(2)
+  placeOfSupplyState   String?   @map("place_of_supply_state") @db.VarChar(2)
+  currency             String    @db.VarChar(3)
+  language             String    @db.VarChar(35)
+  secondaryLanguage    String?   @map("secondary_language") @db.VarChar(35)
+  template             String    @db.VarChar(40)
+  pricesIncludeTax     Boolean   @default(false) @map("prices_include_tax")
+  reverseCharge        Boolean   @default(false) @map("reverse_charge")
+  exportWithPayment    Boolean   @default(false) @map("export_with_payment")
+  euOss                Boolean   @default(false) @map("eu_oss")
+  roundOffTotal        Boolean   @default(false) @map("round_off_total")
+  reference            String?   @db.VarChar(80)
+  notes                String?
+  terms                String?
+  referenceDocumentId  String?   @map("reference_document_id")
+  /// Credit notes: return the goods to stock.
+  returnToStock        Boolean   @default(false) @map("return_to_stock")
+  /// Default warehouse for stock movements of this document.
+  warehouseId          String?   @map("warehouse_id")
+  /// Stock was moved by this document (so voiding reverses it).
+  stockPosted          Boolean   @default(false) @map("stock_posted")
+  calculationJson      Json      @default("{}") @map("calculation_json")
+  taxableTotal         Decimal   @default(0) @map("taxable_total") @db.Decimal(18, 4)
+  taxTotal             Decimal   @default(0) @map("tax_total") @db.Decimal(18, 4)
+  grandTotal           Decimal   @default(0) @map("grand_total") @db.Decimal(18, 4)
+  amountPaid           Decimal   @default(0) @map("amount_paid") @db.Decimal(18, 4)
+  pdfStorageKey        String?   @map("pdf_storage_key")
+  pdfSha256            String?   @map("pdf_sha256") @db.VarChar(64)
+  issuedAt             DateTime? @map("issued_at")
+  issuedByUserId       String?   @map("issued_by_user_id")
+  issueIdempotencyKey  String?   @unique @map("issue_idempotency_key") @db.VarChar(80)
+  voidedAt             DateTime? @map("voided_at")
+  voidReason           String?   @map("void_reason")
+  reminderCount        Int       @default(0) @map("reminder_count")
+  lastReminderAt       DateTime? @map("last_reminder_at")
+  createdByUserId      String    @map("created_by_user_id")
+  version              Int       @default(1)
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  business          InvBusiness        @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  contact           InvContact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  referenceDocument InvDocument?       @relation("InvDocumentReference", fields: [referenceDocumentId], references: [id], onDelete: Restrict)
+  referencedBy      InvDocument[]      @relation("InvDocumentReference")
+  lines             InvDocumentLine[]
+  payments          InvPayment[]
+  shareLinks        InvShareLink[]
+  movements         InvStockMovement[]
+  receipts          InvGoodsReceipt[]
+
+  @@unique([businessId, documentType, number])
+  @@index([organizationId, documentType, status])
+  @@index([organizationId, contactId])
+  @@index([organizationId, issueDate])
+  @@map("inv_documents")
+}
+
+model InvDocumentLine {
+  id               String   @id @default(uuid())
+  documentId       String   @map("document_id")
+  position         Int
+  itemId           String?  @map("item_id")
+  description      String
+  details          String?
+  hsnSac           String?  @map("hsn_sac") @db.VarChar(12)
+  quantity         Decimal  @db.Decimal(18, 4)
+  unit             String?  @db.VarChar(16)
+  unitPrice        Decimal  @map("unit_price") @db.Decimal(18, 4)
+  /// PERCENT | AMOUNT
+  discountType     String?  @map("discount_type") @db.VarChar(8)
+  discountValue    Decimal? @map("discount_value") @db.Decimal(18, 4)
+  taxRate          Decimal  @default(0) @map("tax_rate") @db.Decimal(7, 4)
+  cessRate         Decimal  @default(0) @map("cess_rate") @db.Decimal(7, 4)
+  taxCategory      String   @default("STANDARD") @map("tax_category") @db.VarChar(16)
+  supplyKind       String   @default("GOODS") @map("supply_kind") @db.VarChar(10)
+  warehouseId      String?  @map("warehouse_id")
+  /// Purchase orders: quantity received so far.
+  receivedQuantity Decimal  @default(0) @map("received_quantity") @db.Decimal(18, 4)
+  taxable          Decimal  @default(0) @db.Decimal(18, 4)
+  taxesJson        Json     @default("[]") @map("taxes_json")
+  total            Decimal  @default(0) @db.Decimal(18, 4)
+
+  document InvDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, position])
+  @@index([itemId])
+  @@map("inv_document_lines")
+}
+
+/// Payment recorded against a document (manual in release 1).
+model InvPayment {
+  id              String   @id @default(uuid())
+  organizationId  String   @map("organization_id")
+  documentId      String   @map("document_id")
+  paidOn          DateTime @map("paid_on") @db.Date
+  amount          Decimal  @db.Decimal(18, 4)
+  /// CASH | BANK | UPI | CARD | CHEQUE | OTHER
+  method          String   @db.VarChar(10)
+  reference       String?  @db.VarChar(80)
+  notes           String?
+  createdByUserId String   @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  document InvDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, paidOn])
+  @@index([documentId])
+  @@map("inv_payments")
+}
+
+/// Public, expiring, revocable link to view and download an issued document.
+model InvShareLink {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  documentId     String    @map("document_id")
+  tokenHash      String    @unique @map("token_hash") @db.VarChar(64)
+  expiresAt      DateTime  @map("expires_at")
+  revokedAt      DateTime? @map("revoked_at")
+  viewCount      Int       @default(0) @map("view_count")
+  lastViewedAt   DateTime? @map("last_viewed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  document InvDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("inv_share_links")
+}
+
+model InvWarehouse {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  businessId     String?   @map("business_id")
+  name           String
+  code           String?   @db.VarChar(20)
+  addressJson    Json      @default("{}") @map("address_json")
+  isDefault      Boolean   @default(false) @map("is_default")
+  archivedAt     DateTime? @map("archived_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  business     InvBusiness?       @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  stockLevels  InvStockLevel[]
+  movements    InvStockMovement[]
+  receipts     InvGoodsReceipt[]
+
+  @@index([organizationId])
+  @@map("inv_warehouses")
+}
+
+/// Current quantity per item and warehouse. Always equal to the sum of the
+/// item's movements in that warehouse (checked by a reconciliation test).
+model InvStockLevel {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  itemId         String   @map("item_id")
+  warehouseId    String   @map("warehouse_id")
+  onHand         Decimal  @default(0) @map("on_hand") @db.Decimal(18, 4)
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  item      InvItem      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  warehouse InvWarehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, warehouseId])
+  @@index([organizationId])
+  @@map("inv_stock_levels")
+}
+
+/// Append-only stock ledger.
+model InvStockMovement {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  itemId         String   @map("item_id")
+  warehouseId    String   @map("warehouse_id")
+  /// OPENING | SALE | SALE_RETURN | PURCHASE | PURCHASE_RETURN | ADJUSTMENT | TRANSFER_IN | TRANSFER_OUT | REVERSAL
+  type           String   @db.VarChar(20)
+  /// Signed: positive adds stock, negative removes it.
+  quantity       Decimal  @db.Decimal(18, 4)
+  unitCost       Decimal? @map("unit_cost") @db.Decimal(18, 4)
+  balanceAfter   Decimal  @map("balance_after") @db.Decimal(18, 4)
+  documentId     String?  @map("document_id")
+  receiptId      String?  @map("receipt_id")
+  transferGroup  String?  @map("transfer_group")
+  reason         String?
+  userId         String   @map("user_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  item      InvItem          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  warehouse InvWarehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  document  InvDocument?     @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  receipt   InvGoodsReceipt? @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@index([itemId, warehouseId, createdAt])
+  @@index([documentId])
+  @@map("inv_stock_movements")
+}
+
+/// Goods received into a warehouse, usually against a purchase order.
+model InvGoodsReceipt {
+  id              String    @id @default(uuid())
+  organizationId  String    @map("organization_id")
+  purchaseOrderId String?   @map("purchase_order_id")
+  warehouseId     String    @map("warehouse_id")
+  receivedOn      DateTime  @map("received_on") @db.Date
+  supplierRef     String?   @map("supplier_ref") @db.VarChar(80)
+  notes           String?
+  /// POSTED | CANCELLED
+  status          String    @default("POSTED") @db.VarChar(10)
+  linesJson       Json      @map("lines_json")
+  createdByUserId String    @map("created_by_user_id")
+  cancelledAt     DateTime? @map("cancelled_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  purchaseOrder InvDocument?       @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  warehouse     InvWarehouse       @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  movements     InvStockMovement[]
+
+  @@index([organizationId, receivedOn])
+  @@index([purchaseOrderId])
+  @@map("inv_goods_receipts")
+}
+
+/// Repeats an invoice on a schedule (copied from a source document).
+model InvRecurringProfile {
+  id               String    @id @default(uuid())
+  organizationId   String    @map("organization_id")
+  businessId       String    @map("business_id")
+  sourceDocumentId String    @map("source_document_id")
+  /// WEEKLY | MONTHLY | QUARTERLY | YEARLY
+  frequency        String    @db.VarChar(10)
+  /// Schedule anchor: run N happens at startOn + N periods (no month-end drift).
+  startOn          DateTime  @map("start_on") @db.Date
+  nextRunOn        DateTime  @map("next_run_on") @db.Date
+  endOn            DateTime? @map("end_on") @db.Date
+  autoIssue        Boolean   @default(false) @map("auto_issue")
+  emailTo          String?   @map("email_to")
+  active           Boolean   @default(true)
+  runCount         Int       @default(0) @map("run_count")
+  lastRunAt        DateTime? @map("last_run_at")
+  lastDocumentId   String?   @map("last_document_id")
+  lastError        String?   @map("last_error")
+  createdByUserId  String    @map("created_by_user_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([active, nextRunOn])
+  @@index([organizationId])
+  @@map("inv_recurring_profiles")
 }

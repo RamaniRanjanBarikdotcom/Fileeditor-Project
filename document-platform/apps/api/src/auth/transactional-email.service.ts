@@ -31,11 +31,37 @@ export class TransactionalEmailService {
     );
   }
 
-  private webUrl() {
+  isConfigured() {
+    return Boolean(this.config.get<string>('RESEND_API_KEY'));
+  }
+
+  /** Plain business notification (reminders, alerts). */
+  async sendText(to: string, subject: string, text: string) {
+    await this.send(to, subject.slice(0, 200), text);
+  }
+
+  /** Business email with one file attached (e.g. an invoice PDF). */
+  async sendWithAttachment(
+    to: string,
+    subject: string,
+    text: string,
+    attachment: { filename: string; content: Buffer },
+  ) {
+    await this.send(to, subject.slice(0, 200), text, [
+      { filename: attachment.filename, content: attachment.content.toString('base64') },
+    ]);
+  }
+
+  webUrl() {
     return this.config.get<string>('PUBLIC_WEB_URL', 'http://localhost:5173').replace(/\/$/, '');
   }
 
-  private async send(to: string, subject: string, text: string) {
+  private async send(
+    to: string,
+    subject: string,
+    text: string,
+    attachments?: Array<{ filename: string; content: string }>,
+  ) {
     this.assertConfigured();
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -48,6 +74,7 @@ export class TransactionalEmailService {
         to: [to],
         subject,
         text,
+        ...(attachments ? { attachments } : {}),
       }),
     });
     if (!response.ok) {

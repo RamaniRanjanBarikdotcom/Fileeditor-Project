@@ -6,7 +6,8 @@ origin="${ORIGIN:-http://localhost:5173}"
 test_url="${TEST_URL:-https://example.com}"
 cookie_file="$(mktemp /tmp/toolsuite-anon-cookie.XXXXXX)"
 output_file="$(mktemp /tmp/toolsuite-url-output.XXXXXX.pdf)"
-trap 'rm -f "$cookie_file" "$output_file"' EXIT
+events_file="$(mktemp /tmp/toolsuite-url-events.XXXXXX)"
+trap 'rm -f "$cookie_file" "$output_file" "$events_file"' EXIT
 
 execute_response="$(
   curl -fsS -c "$cookie_file" -b "$cookie_file" \
@@ -17,22 +18,19 @@ execute_response="$(
 )"
 job_id="$(printf '%s' "$execute_response" | jq -er '.data.id')"
 
-status="QUEUED"
-attempt=0
-while [ "$attempt" -lt 90 ]; do
-  status_response="$(curl -fsS -c "$cookie_file" -b "$cookie_file" "$api_url/tools/jobs/$job_id")"
-  status="$(printf '%s' "$status_response" | jq -er '.data.status')"
-  [ "$status" = "COMPLETED" ] && break
-  if [ "$status" = "FAILED" ]; then
-    printf 'URL conversion failed: %s\n' "$(printf '%s' "$status_response" | jq -r '.data.errorMessage // "unknown error"')" >&2
-    exit 1
-  fi
-  attempt=$((attempt + 1))
-  sleep 1
-done
+curl -fsS -N --max-time 120 -c "$cookie_file" -b "$cookie_file" \
+  "$api_url/tools/jobs/$job_id/events" \
+  -H "Origin: $origin" \
+  -H 'Accept: text/event-stream' \
+  -o "$events_file"
+
+status_response="$(awk '/^data:/{sub(/^data:[[:space:]]*/, ""); latest=$0} END{print latest}' "$events_file")"
+status="$(printf '%s' "$status_response" | jq -er '.status')"
 
 [ "$status" = "COMPLETED" ] || {
-  printf 'URL conversion timed out with status %s\n' "$status" >&2
+  printf 'URL conversion failed with status %s: %s\n' \
+    "$status" \
+    "$(printf '%s' "$status_response" | jq -r '.errorMessage // "unknown error"')" >&2
   exit 1
 }
 

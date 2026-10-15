@@ -3,6 +3,47 @@ import { CanonicalToolDefinition } from '@docconv/shared-types';
 const TEN_MINUTES = 600;
 const MB = 1024 * 1024;
 
+type ToolBasics = Pick<
+  CanonicalToolDefinition,
+  'slug' | 'operation' | 'category' | 'title' | 'description' | 'inputTypes' | 'outputTypes'
+>;
+
+/** A tool that runs entirely in the browser (no upload, no server quota). */
+function browserTool(tool: ToolBasics, maxBytes = 100 * MB, maxFiles = 1): CanonicalToolDefinition {
+  return {
+    ...tool,
+    id: tool.operation,
+    availability: 'AVAILABLE_LOCAL',
+    capability: {
+      operation: tool.operation,
+      browser: { supported: true, maxBytes, maxFiles },
+      node: { supported: false },
+      native: { supported: false },
+      preferred: 'BROWSER',
+    },
+    privacy: { browserPreferred: true, serverRetentionSeconds: TEN_MINUTES },
+    featureFlag: `tool.${tool.operation}`,
+  };
+}
+
+/** A tool processed by the conversion worker; files expire within ten minutes. */
+function serverTool(tool: ToolBasics, maxBytes = 50 * MB): CanonicalToolDefinition {
+  return {
+    ...tool,
+    id: tool.operation,
+    availability: 'AVAILABLE_SERVER',
+    capability: {
+      operation: tool.operation,
+      browser: { supported: false },
+      node: { supported: false },
+      native: { supported: true, maxBytes, maxFiles: 1 },
+      preferred: 'NATIVE',
+    },
+    privacy: { browserPreferred: false, serverRetentionSeconds: TEN_MINUTES },
+    featureFlag: `tool.${tool.operation}`,
+  };
+}
+
 export const TOOL_REGISTRY = {
   'merge-pdf': {
     id: 'pdf.merge',
@@ -512,7 +553,7 @@ export const TOOL_REGISTRY = {
     category: 'Image',
     title: 'Image to PDF Converter',
     description: 'Convert images into PDF pages.',
-    inputTypes: ['png', 'jpg', 'jpeg'],
+    inputTypes: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'],
     outputTypes: ['pdf'],
     availability: 'AVAILABLE_BOTH',
     capability: {
@@ -566,6 +607,211 @@ export const TOOL_REGISTRY = {
     privacy: { browserPreferred: true, serverRetentionSeconds: TEN_MINUTES },
     featureFlag: 'tool.pdfEditor',
   },
+  // ── Phase 2: browser tools ──────────────────────────────────
+  'split-pdf-by-bookmarks': browserTool({
+    slug: 'split-pdf-by-bookmarks',
+    operation: 'pdf.splitByBookmarks',
+    category: 'PDF',
+    title: 'Split PDF by Bookmarks',
+    description: 'Create one PDF per chapter using the document outline.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }),
+  'split-pdf-in-half': browserTool({
+    slug: 'split-pdf-in-half',
+    operation: 'pdf.splitHalf',
+    category: 'PDF',
+    title: 'Split PDF Pages in Half',
+    description: 'Cut scanned two-page spreads into separate left and right pages.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }),
+  'split-pdf-by-size': browserTool({
+    slug: 'split-pdf-by-size',
+    operation: 'pdf.splitBySize',
+    category: 'PDF',
+    title: 'Split PDF by File Size',
+    description: 'Break a large PDF into parts below an email-friendly size limit.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }, 250 * MB),
+  'split-pdf-by-text': browserTool({
+    slug: 'split-pdf-by-text',
+    operation: 'pdf.splitByText',
+    category: 'PDF',
+    title: 'Split PDF by Text',
+    description: 'Start a new PDF at every page that contains a word or phrase.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }),
+  'remove-pdf-annotations': browserTool({
+    slug: 'remove-pdf-annotations',
+    operation: 'pdf.removeAnnotations',
+    category: 'PDF',
+    title: 'Remove PDF Annotations',
+    description: 'Delete comments, highlights, stamps and drawings from a PDF.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }),
+  'flip-pdf': browserTool({
+    slug: 'flip-pdf',
+    operation: 'pdf.flip',
+    category: 'PDF',
+    title: 'Flip PDF Pages',
+    description: 'Mirror pages horizontally or vertically.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }),
+  'pdf-bookmarks': browserTool({
+    slug: 'pdf-bookmarks',
+    operation: 'pdf.addBookmarks',
+    category: 'PDF',
+    title: 'Add PDF Bookmarks',
+    description: 'Create a clickable table of contents in the PDF outline.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }),
+  'pdf-to-text': browserTool({
+    slug: 'pdf-to-text',
+    operation: 'pdf.toText',
+    category: 'Document',
+    title: 'PDF to Text',
+    description: 'Extract the text of a digital PDF into a plain text file.',
+    inputTypes: ['pdf'],
+    outputTypes: ['txt'],
+  }),
+  'scan-to-pdf': browserTool(
+    {
+      slug: 'scan-to-pdf',
+      operation: 'image.scanToPdf',
+      category: 'Image',
+      title: 'Scan to PDF',
+      description: 'Photograph paper documents with your phone camera and save them as one PDF.',
+      inputTypes: ['jpg', 'jpeg', 'png', 'webp'],
+      outputTypes: ['pdf'],
+    },
+    30 * MB,
+    50,
+  ),
+
+  // ── Phase 2: worker tools ───────────────────────────────────
+  'compress-pdf': serverTool({
+    slug: 'compress-pdf',
+    operation: 'pdf.compress',
+    category: 'PDF',
+    title: 'Compress PDF',
+    description: 'Reduce PDF file size by optimizing images, fonts and structure.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }, 100 * MB),
+  'protect-pdf': serverTool({
+    slug: 'protect-pdf',
+    operation: 'pdf.protect',
+    category: 'PDF',
+    title: 'Protect PDF',
+    description: 'Encrypt a PDF with a password using AES-256.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }),
+  'unlock-pdf': serverTool({
+    slug: 'unlock-pdf',
+    operation: 'pdf.unlock',
+    category: 'PDF',
+    title: 'Unlock PDF',
+    description: 'Remove the password from a PDF you are allowed to open.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }),
+  'repair-pdf': serverTool({
+    slug: 'repair-pdf',
+    operation: 'pdf.repair',
+    category: 'PDF',
+    title: 'Repair PDF',
+    description: 'Rebuild damaged PDFs and recover readable pages.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }),
+  'grayscale-pdf': serverTool({
+    slug: 'grayscale-pdf',
+    operation: 'pdf.grayscale',
+    category: 'PDF',
+    title: 'Grayscale PDF',
+    description: 'Convert text, images and graphics to black and white for printing.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }),
+  'ocr-pdf': serverTool({
+    slug: 'ocr-pdf',
+    operation: 'pdf.ocrSearchable',
+    category: 'PDF',
+    title: 'OCR PDF — Searchable PDF',
+    description: 'Make scanned PDFs searchable and selectable while keeping their look.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }, 30 * MB),
+  'redact-pdf': serverTool({
+    slug: 'redact-pdf',
+    operation: 'pdf.redact',
+    category: 'PDF',
+    title: 'Redact PDF',
+    description: 'Permanently remove words, emails, phone and card numbers from a PDF.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }),
+  'extract-images-from-pdf': serverTool({
+    slug: 'extract-images-from-pdf',
+    operation: 'pdf.extractImages',
+    category: 'Image',
+    title: 'Extract Images from PDF',
+    description: 'Save every embedded picture from a PDF in its original quality.',
+    inputTypes: ['pdf'],
+    outputTypes: ['zip'],
+  }),
+  'pdf-to-excel': serverTool({
+    slug: 'pdf-to-excel',
+    operation: 'pdf.toExcel',
+    category: 'Document',
+    title: 'PDF to Excel',
+    description: 'Pull tables out of PDFs into an editable Excel workbook.',
+    inputTypes: ['pdf'],
+    outputTypes: ['xlsx'],
+  }),
+  'pdf-to-powerpoint': serverTool({
+    slug: 'pdf-to-powerpoint',
+    operation: 'pdf.toPptx',
+    category: 'Document',
+    title: 'PDF to PowerPoint',
+    description: 'Turn PDF pages into editable PowerPoint slides.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pptx'],
+  }),
+  'pdf-to-pdfa': serverTool({
+    slug: 'pdf-to-pdfa',
+    operation: 'pdf.toPdfA',
+    category: 'PDF',
+    title: 'PDF to PDF/A',
+    description: 'Convert to the ISO archival PDF/A format for long-term storage.',
+    inputTypes: ['pdf'],
+    outputTypes: ['pdf'],
+  }),
+  'powerpoint-to-pdf': serverTool({
+    slug: 'powerpoint-to-pdf',
+    operation: 'pptx.toPdf',
+    category: 'Document',
+    title: 'PowerPoint to PDF',
+    description: 'Convert PPTX presentations to PDF with LibreOffice.',
+    inputTypes: ['pptx'],
+    outputTypes: ['pdf'],
+  }),
+  'excel-to-pdf': serverTool({
+    slug: 'excel-to-pdf',
+    operation: 'xlsx.toPdf',
+    category: 'Document',
+    title: 'Excel to PDF',
+    description: 'Convert XLSX spreadsheets to PDF with LibreOffice.',
+    inputTypes: ['xlsx'],
+    outputTypes: ['pdf'],
+  }),
 } satisfies Record<string, CanonicalToolDefinition>;
 
 export type ToolSlug = keyof typeof TOOL_REGISTRY;

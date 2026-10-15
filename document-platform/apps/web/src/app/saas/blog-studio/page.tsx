@@ -31,7 +31,7 @@ export default function BlogStudioLandingPage() {
   return (
     <div className="min-h-screen bg-[var(--bg)]">
       <section className="relative overflow-hidden border-b border-[var(--border)] px-5 py-24 sm:py-32">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(99,102,241,.18),transparent_35%),radial-gradient(circle_at_80%_10%,rgba(236,72,153,.13),transparent_30%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(62, 99, 221,.18),transparent_35%),radial-gradient(circle_at_80%_10%,rgba(6, 182, 212,.13),transparent_30%)]" />
         <div className="container-custom relative grid items-center gap-14 lg:grid-cols-[1.05fr_.95fr]">
           <div className="max-w-3xl">
             <span className="badge badge-brand mb-6 inline-flex items-center gap-2">

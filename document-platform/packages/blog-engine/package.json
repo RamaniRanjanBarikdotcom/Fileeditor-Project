@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/*.test.cjs",
+    "test": "tsc && node --test test/*.test.cjs",
     "clean": "rm -rf dist"
   }
 }

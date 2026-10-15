@@ -463,3 +463,13 @@ export class CreateBlogProductDto {
   @IsObject()
   fieldsJson?: Record<string, unknown>;
 }
+
+export class PublishBlogDto {
+  @IsString()
+  @MaxLength(100)
+  destinationId!: string;
+
+  @IsOptional()
+  @IsIn(['draft', 'live'])
+  publishedAs?: 'draft' | 'live';
+}

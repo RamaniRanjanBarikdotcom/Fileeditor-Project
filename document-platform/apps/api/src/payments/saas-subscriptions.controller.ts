@@ -18,6 +18,12 @@ class BlogStudioCheckoutDto {
   cancelUrl!: string;
 }
 
+class BillingPortalDto {
+  @IsString()
+  @MaxLength(2_000)
+  returnUrl!: string;
+}
+
 @Controller('blog-studio/subscription')
 @UseGuards(JwtAuthGuard)
 export class SaasSubscriptionsController {
@@ -29,6 +35,33 @@ export class SaasSubscriptionsController {
     return {
       success: true,
       data: await this.subscriptions.createBlogStudioCheckout(req.user.userId, req.user.orgId, dto),
+    };
+  }
+
+  @Post('cancel')
+  @RequireFeatures('blogStudio', 'blogStudioCheckout')
+  async cancel(@Request() req: any) {
+    return {
+      success: true,
+      data: await this.subscriptions.setCancelAtPeriodEnd(req.user.userId, req.user.orgId, true),
+    };
+  }
+
+  @Post('resume')
+  @RequireFeatures('blogStudio', 'blogStudioCheckout')
+  async resume(@Request() req: any) {
+    return {
+      success: true,
+      data: await this.subscriptions.setCancelAtPeriodEnd(req.user.userId, req.user.orgId, false),
+    };
+  }
+
+  @Post('portal')
+  @RequireFeatures('blogStudio', 'blogStudioCheckout')
+  async portal(@Request() req: any, @Body() dto: BillingPortalDto) {
+    return {
+      success: true,
+      data: await this.subscriptions.createBillingPortal(req.user.userId, req.user.orgId, dto.returnUrl),
     };
   }
 

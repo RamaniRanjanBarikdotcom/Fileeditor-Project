@@ -1,4 +1,10 @@
-import { BadGatewayException, BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  BadRequestException,
+  HttpException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
@@ -55,8 +61,10 @@ type PlatformKey =
 
 const PLATFORM_SELECTORS: Record<PlatformKey, Required<ProductScrapeConfig>> = {
   shopify: {
-    productCard: '[data-product-id], .product-card, .grid-product, .product-item, [class*="product-card"]',
-    title: '.product-card__title, .grid-product__title, [class*="product"] [class*="title"], h2, h3',
+    productCard:
+      '[data-product-id], .product-card, .grid-product, .product-item, [class*="product-card"]',
+    title:
+      '.product-card__title, .grid-product__title, [class*="product"] [class*="title"], h2, h3',
     description: '[class*="description"], [itemprop="description"]',
     price: '[class*="price"], [data-price]',
     link: 'a[href]',
@@ -100,7 +108,8 @@ const PLATFORM_SELECTORS: Record<PlatformKey, Required<ProductScrapeConfig>> = {
     sku: '[data-product-sku], [itemprop="sku"]',
   },
   react: {
-    productCard: '[data-product], [data-product-id], [class*="product-card"], [class*="ProductCard"], [class*="product_item"]',
+    productCard:
+      '[data-product], [data-product-id], [class*="product-card"], [class*="ProductCard"], [class*="product_item"]',
     title: 'h2, h3, [class*="title"], [data-title]',
     description: '[class*="description"], [data-description]',
     price: '[class*="price"], [data-price]',
@@ -109,7 +118,8 @@ const PLATFORM_SELECTORS: Record<PlatformKey, Required<ProductScrapeConfig>> = {
     sku: '[data-sku], [itemprop="sku"]',
   },
   generic: {
-    productCard: '[itemtype*="schema.org/Product"], [data-product], [data-product-id], .product-card, .product-item, article[class*="product"]',
+    productCard:
+      '[itemtype*="schema.org/Product"], [data-product], [data-product-id], .product-card, .product-item, article[class*="product"]',
     title: '[itemprop="name"], .product-title, .product-name, h2, h3, [class*="title"]',
     description: '[itemprop="description"], .product-description, [class*="description"]',
     price: '[itemprop="price"], [class*="price"], [data-price]',
@@ -120,8 +130,7 @@ const PLATFORM_SELECTORS: Record<PlatformKey, Required<ProductScrapeConfig>> = {
   jtl: {
     productCard:
       '.product, .product-wrapper article, .product-item, .product-wrapper, .col-product, .artbox, .thumbnail, [itemtype*="Product"]',
-    title:
-      '.product-title, .product-name, .arttitle, h2[itemprop="name"], h3, [itemprop="name"]',
+    title: '.product-title, .product-name, .arttitle, h2[itemprop="name"], h3, [itemprop="name"]',
     description: '.product-description, .shortdesc, [itemprop="description"]',
     price:
       '.price, .product-price, .price-large, .pprice, .price [itemprop="price"], [itemprop="price"], [data-price]',
@@ -153,7 +162,9 @@ export class BlogProductsService {
   }
 
   async getCollection(organizationId: string, collectionId: string) {
-    const collection = await this.prisma.blogProductCollection.findUnique({ where: { id: collectionId } });
+    const collection = await this.prisma.blogProductCollection.findUnique({
+      where: { id: collectionId },
+    });
     if (!collection || collection.organizationId !== organizationId) {
       throw new NotFoundException('Product collection not found');
     }
@@ -230,12 +241,12 @@ export class BlogProductsService {
     const requestedType = normalizeSourceType(collection.sourceType);
     const scrapeConfig = sanitizeScrapeConfig(collection.scrapeConfigJson);
     let detectedType: PlatformKey = requestedType;
-    
+
     // First try standard APIs
     if (requestedType === 'shopify') {
       try {
         products = await this.fetchShopify(url);
-    } catch {
+      } catch {
         products = [];
       }
     } else if (requestedType === 'woocommerce') {
@@ -248,9 +259,10 @@ export class BlogProductsService {
       try {
         const structured = await this.fetchJsonLd(url);
         products = structured.products;
-        detectedType = requestedType === 'auto' || requestedType === 'generic'
-          ? structured.detectedType
-          : requestedType;
+        detectedType =
+          requestedType === 'auto' || requestedType === 'generic'
+            ? structured.detectedType
+            : requestedType;
       } catch {
         products = [];
       }
@@ -318,70 +330,81 @@ export class BlogProductsService {
     let html = '';
     let browser: Browser | undefined;
     let page: Page | undefined;
-    
-    if (puppeteer) {
-      try {
-        browser = await puppeteer.launch({ 
-          headless: true, 
-          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-background-networking',
-          ],
-        });
-        page = await browser.newPage();
-        await this.protectBrowserPage(page);
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppToolkitLab/1.0');
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-        await autoScroll(page);
-        html = await page.content();
-      } catch (error) {
-        console.warn('Puppeteer failed, falling back to axios:', error);
-      }
-    }
-    
-    // If puppeteer failed or is not installed, fallback to axios
-    if (!html) {
-      try {
-        html = await this.getText(url);
-      } catch {
-        if (browser) await browser.close();
-        return { products: [], detectedType: sourceType };
-      }
-    }
+    const releaseBrowserSlot = puppeteer ? await acquireBrowserSlot() : () => undefined;
 
-    const detectedType = sourceType === 'auto' || sourceType === 'generic'
-      ? detectStorePlatform(html)
-      : sourceType;
-    const selectors = mergeSelectors(detectedType, customConfig);
-    let products = extractStoreProductsFromHtml(html, url, detectedType, customConfig);
-
-    // A custom/SPA home or category page may expose only product links after
-    // hydration. Follow a small, same-origin set and parse each detail page.
-    if (products.length < 2) {
-      const links = discoverProductLinks(html, url, selectors).slice(0, 12);
-      for (const productUrl of links) {
+    try {
+      if (puppeteer) {
         try {
-          let detailHtml: string;
-          if (page) {
-            await page.goto(productUrl, { waitUntil: 'networkidle2', timeout: 15_000 });
-            await autoScroll(page);
-            detailHtml = await page.content();
-          } else {
-            detailHtml = await this.getText(productUrl);
-          }
-          products.push(...extractProductDetail(detailHtml, productUrl, selectors));
-        } catch {
-          // One protected, removed or malformed product page must not discard
-          // successfully extracted products from the rest of the storefront.
+          browser = await puppeteer.launch({
+            headless: true,
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+            args: [
+              '--no-sandbox',
+              '--disable-setuid-sandbox',
+              '--disable-dev-shm-usage',
+              '--disable-background-networking',
+            ],
+          });
+          page = await browser.newPage();
+          await this.protectBrowserPage(page);
+          await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppToolkitLab/1.0');
+          const navigation = await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+          const accessError = storefrontAccessError(navigation?.status());
+          if (accessError) throw accessError;
+          await autoScroll(page);
+          html = await page.content();
+        } catch (error) {
+          // An explicit storefront refusal is the answer; retrying the same
+          // URL without a browser would only replace it with a vaguer error.
+          if (error instanceof HttpException) throw error;
+          console.warn('Puppeteer failed, falling back to axios:', error);
+          page = undefined;
         }
       }
-    }
 
-    if (browser) await browser.close();
-    return { products: dedupeProducts(products), detectedType };
+      // If puppeteer failed or is not installed, fall back to a plain request.
+      if (!html) html = await this.getText(url);
+
+      const detectedType =
+        sourceType === 'auto' || sourceType === 'generic' ? detectStorePlatform(html) : sourceType;
+      const selectors = mergeSelectors(detectedType, customConfig);
+      let products = extractStoreProductsFromHtml(html, url, detectedType, customConfig);
+
+      // A custom/SPA home or category page may expose only product links after
+      // hydration. Follow a small, same-origin set and parse each detail page.
+      if (products.length < 2) {
+        const links = discoverProductLinks(html, url, selectors).slice(0, 12);
+        for (const productUrl of links) {
+          try {
+            let detailHtml: string;
+            if (page) {
+              await page.goto(productUrl, { waitUntil: 'networkidle2', timeout: 15_000 });
+              await autoScroll(page);
+              detailHtml = await page.content();
+            } else {
+              detailHtml = await this.getText(productUrl);
+            }
+            products.push(...extractProductDetail(detailHtml, productUrl, selectors));
+          } catch {
+            // One protected, removed or malformed product page must not discard
+            // successfully extracted products from the rest of the storefront.
+          }
+        }
+      }
+
+      products = dedupeProducts(products);
+      // Only report a challenge when it actually prevented extraction; many
+      // public storefronts embed CAPTCHA widgets on newsletter/contact forms.
+      if (!products.length && isProtectedStorefrontHtml(html)) {
+        throw new BadGatewayException(
+          'This storefront is protected by a CAPTCHA or browser challenge. AppToolkitLab does not bypass access controls; use a public catalog feed or import products manually.',
+        );
+      }
+      return { products, detectedType };
+    } finally {
+      await browser?.close().catch(() => undefined);
+      releaseBrowserSlot();
+    }
   }
 
   private async protectBrowserPage(page: Page) {
@@ -405,10 +428,7 @@ export class BlogProductsService {
     });
   }
 
-  private async safeScrapedUrl(
-    candidate: string | undefined,
-    originCache: Map<string, boolean>,
-  ) {
+  private async safeScrapedUrl(candidate: string | undefined, originCache: Map<string, boolean>) {
     if (!candidate) return undefined;
     try {
       const parsed = new URL(candidate);
@@ -505,6 +525,8 @@ export class BlogProductsService {
         currentUrl = new URL(response.headers.location, currentUrl).toString();
         continue;
       }
+      const accessError = storefrontAccessError(response.status);
+      if (accessError) throw accessError;
       if (response.status < 200 || response.status >= 300) {
         throw new BadGatewayException(`Storefront returned HTTP ${response.status}.`);
       }
@@ -515,7 +537,10 @@ export class BlogProductsService {
 }
 
 export function normalizeSourceType(value?: string | null): PlatformKey {
-  const normalized = String(value || 'auto').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const normalized = String(value || 'auto')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
   const aliases: Record<string, PlatformKey> = {
     auto: 'auto',
     autodetect: 'auto',
@@ -580,14 +605,69 @@ export function detectStorePlatform(html: string): PlatformKey {
     source.includes('jtl_token') ||
     source.includes('class="artbox') ||
     source.includes('class="opc-')
-  ) return 'jtl';
+  )
+    return 'jtl';
   if (
     source.includes('__next_data__') ||
     source.includes('data-reactroot') ||
     source.includes('/_next/static/') ||
     source.includes('id="root"')
-  ) return 'react';
+  )
+    return 'react';
   return 'generic';
+}
+
+export function isProtectedStorefrontHtml(html: string) {
+  const source = html.toLowerCase();
+  // Markers of interstitial challenge pages only. Generic CAPTCHA widget
+  // classes (g-recaptcha, h-captcha) and phrases such as "access denied" also
+  // appear on ordinary storefront forms and copy, so they are not used.
+  return [
+    'cf-chl-',
+    '/cdn-cgi/challenge-platform/',
+    '<title>just a moment...</title>',
+    'attention required! | cloudflare',
+    'checking your browser before accessing',
+    'verify you are human',
+    'captcha-delivery.com',
+    'px-captcha',
+    '<title>access denied</title>',
+  ].some((marker) => source.includes(marker));
+}
+
+export function storefrontAccessError(status: number | undefined): BadGatewayException | null {
+  if (status === 401 || status === 403) {
+    return new BadGatewayException(
+      'This storefront requires authentication or blocks automated access. Use a public catalog feed or import products manually.',
+    );
+  }
+  if (status === 429) {
+    return new BadGatewayException(
+      'This storefront is rate-limiting catalog requests. Wait and retry, or use a public catalog feed.',
+    );
+  }
+  return null;
+}
+
+// Chromium is launched inside the API process, so bound concurrent scrapes.
+// A released slot is handed directly to the next waiter to avoid overshoot.
+let activeBrowsers = 0;
+const browserWaiters: Array<() => void> = [];
+async function acquireBrowserSlot(): Promise<() => void> {
+  const limit = Math.max(1, Number(process.env.BLOG_SCRAPER_MAX_BROWSERS || 2));
+  if (activeBrowsers < limit) {
+    activeBrowsers += 1;
+  } else {
+    await new Promise<void>((resolve) => browserWaiters.push(resolve));
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const next = browserWaiters.shift();
+    if (next) next();
+    else activeBrowsers -= 1;
+  };
 }
 
 function mergeSelectors(
@@ -600,9 +680,7 @@ function mergeSelectors(
 
 export function extractJsonLdProducts(html: string, sourceUrl: string): ScrapedProduct[] {
   const blocks = [
-    ...html.matchAll(
-      /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
-    ),
+    ...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi),
   ];
   const found: any[] = [];
   for (const block of blocks) {
@@ -614,23 +692,25 @@ export function extractJsonLdProducts(html: string, sourceUrl: string): ScrapedP
       // through the remaining structured data instead of failing the scrape.
     }
   }
-  return found.map((product) => {
-    const offer = Array.isArray(product.offers) ? product.offers[0] : product.offers || {};
-    const brand = typeof product.brand === 'string' ? product.brand : product.brand?.name;
-    const image = Array.isArray(product.image) ? product.image[0] : product.image;
-    return {
-      externalId: String(product.sku || product.productID || product.url || product.name || ''),
-      title: String(product.name || '').trim(),
-      description: stripHtml(String(product.description || '')),
-      price: offer.price !== undefined ? String(offer.price) : undefined,
-      currency: offer.priceCurrency,
-      imageUrl: resolveHttpUrl(typeof image === 'string' ? image : image?.url, sourceUrl),
-      productUrl: resolveHttpUrl(product.url, sourceUrl) || sourceUrl,
-      category: typeof product.category === 'string' ? product.category : undefined,
-      brand,
-      fieldsJson: { sku: product.sku, availability: offer.availability },
-    };
-  }).filter((product) => product.title);
+  return found
+    .map((product) => {
+      const offer = Array.isArray(product.offers) ? product.offers[0] : product.offers || {};
+      const brand = typeof product.brand === 'string' ? product.brand : product.brand?.name;
+      const image = Array.isArray(product.image) ? product.image[0] : product.image;
+      return {
+        externalId: String(product.sku || product.productID || product.url || product.name || ''),
+        title: String(product.name || '').trim(),
+        description: stripHtml(String(product.description || '')),
+        price: offer.price !== undefined ? String(offer.price) : undefined,
+        currency: offer.priceCurrency,
+        imageUrl: resolveHttpUrl(typeof image === 'string' ? image : image?.url, sourceUrl),
+        productUrl: resolveHttpUrl(product.url, sourceUrl) || sourceUrl,
+        category: typeof product.category === 'string' ? product.category : undefined,
+        brand,
+        fieldsJson: { sku: product.sku, availability: offer.availability },
+      };
+    })
+    .filter((product) => product.title);
 }
 
 export function extractProductsFromHtml(
@@ -645,7 +725,11 @@ export function extractProductsFromHtml(
     const title = card.find(selectors.title).first().text().replace(/\s+/g, ' ').trim();
     if (!title) return;
     const priceNode = card.find(selectors.price).first();
-    const priceText = priceNode.attr('content') || priceNode.attr('data-price-amount') || priceNode.attr('data-price') || priceNode.text();
+    const priceText =
+      priceNode.attr('content') ||
+      priceNode.attr('data-price-amount') ||
+      priceNode.attr('data-price') ||
+      priceNode.text();
     const link = card.find(selectors.link).first().attr('href');
     const image = card.find(selectors.image).first();
     const imageValue =
@@ -659,7 +743,8 @@ export function extractProductsFromHtml(
     products.push({
       externalId: externalId || undefined,
       title,
-      description: card.find(selectors.description).first().text().replace(/\s+/g, ' ').trim() || undefined,
+      description:
+        card.find(selectors.description).first().text().replace(/\s+/g, ' ').trim() || undefined,
       price: amount === null ? undefined : String(amount),
       currency: currency || undefined,
       productUrl: resolveHttpUrl(link, sourceUrl),
@@ -676,9 +761,10 @@ export function extractStoreProductsFromHtml(
   config: unknown = {},
 ) {
   const normalizedType = normalizeSourceType(sourceType);
-  const detectedType = normalizedType === 'auto' || normalizedType === 'generic'
-    ? detectStorePlatform(html)
-    : normalizedType;
+  const detectedType =
+    normalizedType === 'auto' || normalizedType === 'generic'
+      ? detectStorePlatform(html)
+      : normalizedType;
   const selectors = mergeSelectors(detectedType, sanitizeScrapeConfig(config));
   return dedupeProducts([
     ...extractJsonLdProducts(html, sourceUrl),
@@ -699,7 +785,9 @@ function extractProductDetail(
     $('[itemprop="name"]').first().text() ||
     $('h1').first().text() ||
     $(selectors.title).first().text();
-  const priceNode = $('[itemprop="price"], meta[property="product:price:amount"], [data-price], [class*="price"]').first();
+  const priceNode = $(
+    '[itemprop="price"], meta[property="product:price:amount"], [data-price], [class*="price"]',
+  ).first();
   const priceText = priceNode.attr('content') || priceNode.attr('data-price') || priceNode.text();
   const { amount, currency: parsedCurrency } = parsePrice(String(priceText || ''));
   const currency =
@@ -708,23 +796,26 @@ function extractProductDetail(
     parsedCurrency;
   if (!title.trim() || amount === null) return [];
   const skuNode = $('[itemprop="sku"], [data-sku], .sku').first();
-  return [{
-    externalId: skuNode.attr('content') || skuNode.attr('data-sku') || skuNode.text().trim() || sourceUrl,
-    title: title.replace(/\s+/g, ' ').trim(),
-    description: stripHtml(
-      $('meta[name="description"]').attr('content') ||
-      $('[itemprop="description"]').first().text() ||
-      $(selectors.description).first().text() ||
-      '',
-    ),
-    price: String(amount),
-    currency: currency || undefined,
-    imageUrl: resolveHttpUrl(
-      $('meta[property="og:image"]').attr('content') || $(selectors.image).first().attr('src'),
-      sourceUrl,
-    ),
-    productUrl: sourceUrl,
-  }];
+  return [
+    {
+      externalId:
+        skuNode.attr('content') || skuNode.attr('data-sku') || skuNode.text().trim() || sourceUrl,
+      title: title.replace(/\s+/g, ' ').trim(),
+      description: stripHtml(
+        $('meta[name="description"]').attr('content') ||
+          $('[itemprop="description"]').first().text() ||
+          $(selectors.description).first().text() ||
+          '',
+      ),
+      price: String(amount),
+      currency: currency || undefined,
+      imageUrl: resolveHttpUrl(
+        $('meta[property="og:image"]').attr('content') || $(selectors.image).first().attr('src'),
+        sourceUrl,
+      ),
+      productUrl: sourceUrl,
+    },
+  ];
 }
 
 function discoverProductLinks(
@@ -743,11 +834,15 @@ function discoverProductLinks(
     parsed.hash = '';
     found.add(parsed.toString());
   };
-  $(selectors.productCard).find(selectors.link).each((_index, anchor) => add($(anchor).attr('href')));
+  $(selectors.productCard)
+    .find(selectors.link)
+    .each((_index, anchor) => add($(anchor).attr('href')));
   $('a[href]').each((_index, anchor) => {
     const href = $(anchor).attr('href') || '';
     const path = href.toLowerCase();
-    const likelyPath = /\/(products?|produkt|artikel|item|shop|p)\//.test(path) || /[-?&](product|artikel|sku)[=_-]/.test(path);
+    const likelyPath =
+      /\/(products?|produkt|artikel|item|shop|p)\//.test(path) ||
+      /[-?&](product|artikel|sku)[=_-]/.test(path);
     const pricedAncestor = $(anchor).closest('article, li, div').find(selectors.price).length > 0;
     if (likelyPath || pricedAncestor) add(href);
   });
@@ -758,9 +853,9 @@ export function dedupeProducts(products: ScrapedProduct[]) {
   const unique = new Map<string, ScrapedProduct>();
   for (const product of products) {
     if (!product.title?.trim()) continue;
-    const key = String(
-      product.externalId || product.productUrl || slugify(product.title),
-    ).trim().toLowerCase();
+    const key = String(product.externalId || product.productUrl || slugify(product.title))
+      .trim()
+      .toLowerCase();
     const existing = unique.get(key);
     unique.set(key, existing ? mergeProduct(existing, product) : product);
   }
@@ -779,7 +874,7 @@ function mergeProduct(first: ScrapedProduct, second: ScrapedProduct): ScrapedPro
     currency: second.currency || first.currency,
     imageUrl: second.imageUrl || first.imageUrl,
     productUrl: second.productUrl || first.productUrl,
-    fieldsJson: { ...(first.fieldsJson || {}), ...(second.fieldsJson || {}) },
+    fieldsJson: { ...first.fieldsJson, ...second.fieldsJson },
   };
 }
 
@@ -845,9 +940,16 @@ function collectProducts(value: any, output: any[]) {
 }
 
 function stripHtml(value: string) {
-  return value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return value
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function slugify(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 150);
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 150);
 }

@@ -22,6 +22,7 @@ import {
   WandSparkles,
   Workflow,
   Zap,
+  ReceiptText,
 } from 'lucide-react';
 
 export const metadata: Metadata = {
@@ -300,6 +301,24 @@ export default function SaasPlatformPage() {
             </span>
             <span className="inline-flex items-center gap-2 text-sm font-bold text-indigo-500">
               Open Blog Studio <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+            </span>
+          </Link>
+          <Link
+            href="/saas/invoice-inventory"
+            className="group mt-5 grid gap-6 rounded-3xl border border-emerald-500/20 bg-[var(--bg-card)] p-7 shadow-lg shadow-emerald-500/5 transition hover:-translate-y-1 hover:border-emerald-500/40 md:grid-cols-[auto_1fr_auto] md:items-center"
+          >
+            <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-emerald-600 to-cyan-500 text-white shadow-lg shadow-emerald-500/20">
+              <ReceiptText className="h-6 w-6" />
+            </span>
+            <span>
+              <span className="text-xs font-black uppercase tracking-[.16em] text-emerald-600">New native SaaS</span>
+              <strong className="mt-1 block text-2xl text-[var(--text-primary)]">Invoice Studio</strong>
+              <span className="mt-2 block max-w-3xl text-sm leading-6 text-[var(--text-secondary)]">
+                GST and VAT invoices in any language, quotations and credit notes, with stock, purchase orders and goods receipts kept in sync.
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-2 text-sm font-bold text-emerald-600">
+              Explore Invoice Studio <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
             </span>
           </Link>
         </div>

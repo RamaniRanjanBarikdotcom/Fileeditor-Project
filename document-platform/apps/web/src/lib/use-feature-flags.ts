@@ -24,6 +24,9 @@ export type PublicFeatureFlags = {
   blogStudioByok: boolean;
   blogStudioSync: boolean;
   blogStudioAnalytics: boolean;
+  invoicing: boolean;
+  inventory: boolean;
+  invoicingCheckout: boolean;
 };
 
 const SAFE_DEFAULTS: PublicFeatureFlags = {
@@ -47,6 +50,9 @@ const SAFE_DEFAULTS: PublicFeatureFlags = {
   blogStudioByok: false,
   blogStudioSync: false,
   blogStudioAnalytics: false,
+  invoicing: false,
+  inventory: false,
+  invoicingCheckout: false,
 };
 
 export function useFeatureFlags(): PublicFeatureFlags {

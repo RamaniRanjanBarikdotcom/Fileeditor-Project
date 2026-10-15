@@ -178,9 +178,9 @@ export default function BlogStudioSchedulerPage() {
           placeholder="Search schedules by topic, keyword, destination..." 
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          className="flex-1 min-w-[300px] rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-[#0f172a] dark:text-white"
+          className="flex-1 min-w-[300px] rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
         />
-        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-[#0f172a] dark:text-white">
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white">
           <option value="ALL">All status</option>
           {['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED'].map((status) => <option key={status} value={status}>{status}</option>)}
         </select>
@@ -206,7 +206,7 @@ export default function BlogStudioSchedulerPage() {
         </div>
       </div>
 
-      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-[#0f172a] shadow-sm text-white overflow-hidden">
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900 shadow-sm text-white overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-800 p-4">
           <div className="flex gap-2">
             <button

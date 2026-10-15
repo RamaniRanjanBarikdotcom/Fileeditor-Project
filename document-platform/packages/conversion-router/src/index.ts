@@ -116,6 +116,13 @@ export const CONVERSION_MATRIX: ConversionMatrixEntry[] = [
     description: 'LibreOffice via Gotenberg',
   },
   {
+    input: InputFormat.PPTX,
+    output: OutputFormat.PDF,
+    engine: ConversionEngine.LIBREOFFICE,
+    quality: ConversionQuality.A,
+    description: 'LibreOffice via Gotenberg',
+  },
+  {
     input: InputFormat.CSV,
     output: OutputFormat.XLSX,
     engine: ConversionEngine.SHEETJS,
@@ -296,6 +303,7 @@ export class ConversionRouter {
       case ConversionEngine.IMAGE_WORKER:
         return QUEUE_NAMES.IMAGE;
       case ConversionEngine.PDF_EXTRACTOR:
+      case ConversionEngine.PDF_OPS:
         return QUEUE_NAMES.PDF;
       default:
         return QUEUE_NAMES.HTML;

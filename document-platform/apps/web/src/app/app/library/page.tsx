@@ -51,6 +51,27 @@ export default function CustomerLibraryPage() {
     setDownloadingId(null);
   };
 
+  // Frees a seat; that machine stops working at its next online license check.
+  const handleDeactivate = async (activationId: string) => {
+    if (!window.confirm('Deactivate this device? It will need the license key again to run.')) return;
+    const res = await fetchApi(`/licenses/activations/${activationId}`, { method: 'DELETE' });
+    if (!res.success) return;
+    setLibrary((items) =>
+      items.map((item) =>
+        item.license?.devices?.some((device: any) => device.id === activationId)
+          ? {
+              ...item,
+              license: {
+                ...item.license,
+                activationsUsed: item.license.activationsUsed - 1,
+                devices: item.license.devices.filter((device: any) => device.id !== activationId),
+              },
+            }
+          : item,
+      ),
+    );
+  };
+
   const handleCopyKey = (key: string, id: string) => {
     navigator.clipboard.writeText(key);
     setCopiedKeyId(id);
@@ -188,6 +209,27 @@ export default function CustomerLibraryPage() {
                     </div>
                   </div>
                 </div>
+              )}
+              {item.license?.devices?.length > 0 && (
+                <ul className="mt-3 space-y-2 text-xs">
+                  {item.license.devices.map((device: any) => (
+                    <li
+                      key={device.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-800"
+                    >
+                      <span className="text-slate-600 dark:text-slate-300">
+                        {device.deviceInfo || 'Device'} · last seen{' '}
+                        {new Date(device.lastSeenAt).toLocaleDateString()}
+                      </span>
+                      <button
+                        onClick={() => void handleDeactivate(device.id)}
+                        className="font-bold text-rose-600 hover:underline"
+                      >
+                        Deactivate
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           ))}

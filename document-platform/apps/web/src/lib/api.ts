@@ -1,6 +1,8 @@
 import { ApiResponse } from '@docconv/shared-types';
 
 const ACCESS_TOKEN_KEY = 'atk';
+/** First-paint hint of the signed-in user's Blog Studio theme (cleared on sign-out). */
+export const BLOG_STUDIO_THEME_CACHE_KEY = 'apptoolkitlab-blog-studio-theme';
 
 let inMemoryAccessToken: string | null = null;
 let restorePromise: Promise<string | null> | null = null;
@@ -15,6 +17,8 @@ export function setAccessToken(token: string | null) {
       sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
     } else {
       sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+      // The next person on this browser must not inherit this user's theme.
+      localStorage.removeItem(BLOG_STUDIO_THEME_CACHE_KEY);
     }
   } catch {
     // sessionStorage may be unavailable in some private-browsing modes.

@@ -1,9 +1,22 @@
-import { Controller, Post, Get, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Request,
+  Sse,
+  MessageEvent,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ConversionsService } from './conversions.service';
 import { ConversionOptions, CreateConversionRequest, OutputFormat } from '@docconv/shared-types';
 import { IsEnum, IsObject, IsOptional, IsUUID } from 'class-validator';
+import { Observable } from 'rxjs';
+import { jobStatusStream } from './job-status-stream';
 
 class CreateConversionDto implements CreateConversionRequest {
   @IsUUID()
@@ -56,6 +69,12 @@ export class ConversionsController {
   async getStatus(@Request() req: any, @Param('id') id: string) {
     const job = await this.conversionsService.getJobStatus(id, req.user.orgId, req.user.userId);
     return { success: true, data: job };
+  }
+
+  @Sse(':id/events')
+  @ApiOperation({ summary: 'Stream conversion progress' })
+  events(@Request() req: any, @Param('id') id: string): Observable<MessageEvent> {
+    return jobStatusStream(() => this.conversionsService.getJobStatus(id, req.user.orgId, req.user.userId));
   }
 
   @Post(':id/download-url')

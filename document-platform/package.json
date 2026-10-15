@@ -49,6 +49,7 @@
     "db:migrate:dev": "corepack pnpm --filter @docconv/api exec prisma migrate dev",
     "db:adopt": "node scripts/adopt-migrations.mjs",
     "db:seed": "corepack pnpm --filter @docconv/api exec prisma db seed",
+    "release:publish": "corepack pnpm --filter @docconv/api run release:publish",
     "db:studio": "corepack pnpm --filter @docconv/api exec prisma studio",
     "blog-studio:upstream:check": "node scripts/check-blog-studio-upstream.mjs",
     "blog-studio:verify": "corepack pnpm --filter @docconv/blog-engine test && corepack pnpm --filter @docconv/api test && corepack pnpm --filter web test && corepack pnpm --filter web build"

@@ -27,6 +27,8 @@ import { CapabilitiesModule } from './capabilities/capabilities.module';
 import { AiMemoryModule } from './ai-memory/ai-memory.module';
 import { FeatureFlagsGuard } from './feature-flags/feature-flags.guard';
 import { BlogStudioModule } from './blog-studio/blog-studio.module';
+import { SaasPlansModule } from './saas-plans/saas-plans.module';
+import { InvoicingModule } from './invoicing/invoicing.module';
 
 const redisQueuesEnabled = process.env.REDIS_ENABLED !== 'false';
 
@@ -92,6 +94,8 @@ const redisQueuesEnabled = process.env.REDIS_ENABLED !== 'false';
     EventsModule,
     AiMemoryModule,
     BlogStudioModule,
+    SaasPlansModule,
+    InvoicingModule,
   ],
   providers: [
     {

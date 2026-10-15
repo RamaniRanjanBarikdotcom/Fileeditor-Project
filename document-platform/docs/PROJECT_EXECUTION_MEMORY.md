@@ -107,7 +107,7 @@ Only `VERIFIED` means completed.
 | Node/hybrid deployment  | Supported and smoke-tested                                               |
 | Managed Node deployment | Web + API supported without Docker/Redis; browser tools remain available |
 | Fully native deployment | Documented but requires external infrastructure                          |
-| Public tools            | Twenty-six canonical tools, including the dedicated browser PDF editor   |
+| Public tools            | Twenty-eight canonical tools, including the document and PDF editors     |
 | Tool execution          | Capability-routed browser or queued server workflow                      |
 
 The existence of an adapter does not prove that its output quality is production-ready.
@@ -1388,3 +1388,306 @@ externally blocked; they are not silently represented as completed.
 - “Any site” means publicly reachable product pages with structured data, recognizable markup or
   user-supplied CSS mappings. Login-only catalogs, CAPTCHAs, explicit anti-bot blocks and pages whose
   terms prohibit automated access are intentionally not bypassed.
+
+## Release-gap completion and live verification — 2026-10-02 Asia/Kolkata
+
+### Completed
+
+- Replaced conversion-status polling with authenticated, ownership-checked server-sent events for
+  public tools, the workspace converter and document-editor exports. The authenticated and anonymous
+  smoke clients now exercise the same SSE transport used by the browser.
+- Updated README model examples to the current managed defaults and corrected the documented
+  canonical registry count to 28 tools, including both editors.
+- Replaced the misleading pricing label “Paid plan coming soon” with deployment-specific billing
+  availability. Checkout remains hidden unless its feature flag and provider configuration are
+  explicitly enabled.
+- Added explicit storefront responses for HTTP authentication blocks, rate limits and CAPTCHA or
+  browser challenges. Product Context continues to support public JTL, React/Next.js and custom
+  sites, but it does not bypass access controls.
+- Added Stripe and Razorpay webhook regression tests covering invalid signatures, idempotent Stripe
+  fulfillment and Razorpay subscription synchronization.
+
+### Verified in this pass
+
+- Rebuilt and restarted the complete Docker platform. PostgreSQL, Redis, MinIO, Gotenberg, ClamAV,
+  database initialization, API, worker and web all completed their readiness checks.
+- The full unit suite passed 79/79 with no skips. TypeScript, lint, the NestJS build, the 47-route
+  Next.js production build and `git diff --check` passed.
+- Live API and Blog Studio integration passed 26/26; live AI-memory behavior passed 8/8; the
+  queue-disabled failure test passed; all ran without skips.
+- Live SSE conversion baselines passed for HTML to PDF, Markdown to PDF, PDF to DOCX and CSV to XLSX.
+  Authenticated HTML-to-PDF and anonymous URL-to-PDF SSE smoke tests produced valid downloadable
+  PDFs.
+- Poppler visual regression passed multilingual, subset-font, transparent, rotated and scanned PDF
+  fixtures. Fresh and adopted PostgreSQL migration chains both passed.
+
+### External release gates retained intentionally
+
+- Managed AI generation still requires a valid provider credential. The no-provider path is tested
+  and does not reserve or consume usage.
+- Stripe and Razorpay production or sandbox checkout cannot be enabled without provider keys, price
+  or plan IDs, webhook secrets and successful provider-side sandbox runs. Signature and idempotency
+  behavior is covered locally; browser redirects alone never grant entitlement.
+- Marketplace and Blog Studio Desktop products remain unpublished until their artifacts exist,
+  installer and update packages are code-signed, fulfillment is configured and a clean Windows VM
+  smoke test passes. Offline certificate verification remains covered by unit tests.
+- Authenticated or CAPTCHA-protected third-party storefronts require an authorized catalog feed or
+  manual import. Universal CAPTCHA bypass is neither reliable nor an acceptable product promise.
+
+## Reliability and security audit repairs — 2026-10-07 Asia/Kolkata
+
+### Completed
+
+- **Conversion retries:** the worker now returns a retriable failure to `QUEUED` (with a
+  `CONVERSION_RETRYING` event) and publishes `FAILED` and releases quota only on the final BullMQ
+  attempt. Deterministic failures (unsupported, invalid output, encrypted input) throw
+  `UnrecoverableError` and are not retried. Previously SSE clients saw `FAILED` on the first
+  attempt while a retry could still succeed.
+- **Quota concurrency:** conversion creation takes a per-organization PostgreSQL advisory
+  transaction lock before the monthly-allowance check. Cancellation is compare-and-set and can no
+  longer overwrite a job that completed or failed concurrently.
+- **Anonymous IP quota:** IPv6 addresses were truncated to their last group, so unrelated networks
+  shared one bucket. IPv4-mapped addresses now unwrap to IPv4 and native IPv6 is grouped by /64.
+- **Authentication abuse controls:** per-IP throttles on register, login, password and email
+  verification endpoints (`AUTH_THROTTLE_PER_MINUTE`, default 10), a 15-minute per-account
+  lockout after 10 failed logins, constant-time behaviour for unknown emails, and a deterministic
+  (oldest-membership) default organization at login and refresh.
+- **Subscription webhooks:** out-of-order events can no longer reactivate a canceled provider
+  subscription or let a superseded subscription overwrite the current active one; ignored events
+  are audit-logged.
+- **Product scraper:** storefront 401/403/429 responses now surface their actionable messages on
+  both the Chromium and HTTP paths (they were swallowed by the Chromium fallback). Challenge
+  detection uses interstitial-only markers and runs only when extraction found no products, so
+  ordinary stores with reCAPTCHA forms are no longer rejected. Chromium is closed in `finally` and
+  concurrent launches are capped (`BLOG_SCRAPER_MAX_BROWSERS`, default 2).
+- **SSE clients:** a shared `followJobEvents` helper reconnects dropped streams, refreshes an
+  expired access token once, and is used by the public converter, workspace converter and
+  document-editor export. A failed download-link request after completion no longer leaves the UI
+  stuck in "converting". The API's duplicated RxJS stream is now `jobStatusStream`.
+- **Configuration:** `apps/api/src/load-env.ts` loads the repository `.env` before any module reads
+  `process.env`, so `REDIS_ENABLED=false` in `.env` alone is honoured consistently. Gotenberg is
+  bound to `127.0.0.1` in Compose.
+- **Tooling:** package test scripts now build before testing so tests never run against stale
+  `dist/`; the API lint script uses oxlint.
+
+### Verified in this pass
+
+- Unit suite 87/87 passed with no skips (new: IPv6 bucketing, subscription ordering, storefront
+  refusal mapping and challenge false positives, SSE parsing).
+- API, worker and web TypeScript checks, oxlint and the Next.js production build passed;
+  `docker compose config` validates.
+
+### Not verified in this pass
+
+- Docker was not running, so live API/E2E suites, SSE through the Next.js `:5173` proxy, and the
+  advisory-lock path against a live PostgreSQL were not executed. Run `corepack pnpm start`, then
+  `corepack pnpm test:live:e2e` and a converter job through `http://localhost:5173`.
+- Deliberately unchanged: in-memory multipart buffering (needs a streaming upload pipeline),
+  `script-src 'unsafe-inline'` (needs nonce-based CSP, which forces dynamic rendering), and
+  `sessionStorage` access tokens (memory-only tokens would trigger refresh-token replay
+  revocation across tabs).
+
+## Vendored upstream source removal — 2026-10-07 Asia/Kolkata
+
+- Owner-approved cleanup: removed the committed reference copies `Blog-generator-main/` and
+  `aibloggenerator-copy-4-main/` (421 tracked files, ~25 MB). Neither was part of the pnpm
+  workspace, build, tests, CI or documentation links.
+- Upstream parity tracking is unaffected: `blog-studio-upstream.lock.json` pins
+  `tanmay-sahoo/Blog-generator@d5663bbfd26ceaad55bc664ced140ae4947768f1`, and
+  `corepack pnpm blog-studio:upstream:check` compares against GitHub directly. The removed files
+  remain recoverable from git history before this change.
+
+## Visual redesign — 2026-10-07 Asia/Kolkata
+
+### Completed
+
+- **Design system:** replaced the indigo/violet/pink gradient palette with a cobalt + sky brand
+  family, refined light and dark surface/text/shadow tokens, and solid primary buttons. A Tailwind
+  `@theme` block remaps the `indigo`, `violet`, `purple`, `fuchsia` and `pink` utility scales so
+  every workspace and Blog Studio page adopts the brand without per-file edits.
+- **Theme bug:** Tailwind v4 `dark:` utilities previously followed the operating-system preference
+  rather than the site toggle; `@custom-variant dark` now binds them to the `.dark` class.
+- **Theme default:** the site follows the visitor's system preference instead of forcing dark. An
+  inline bootstrap script applies the saved or system theme before first paint; only an explicit
+  toggle is persisted.
+- **Tool colour:** tools are coloured by category (PDF, Document, Image, Web, Developer, Studio)
+  via `CATEGORY_ACCENTS` instead of 28 arbitrary per-tool colours; links use the brand accent.
+- **Homepage:** rebuilt with a two-column hero and product preview, registry-derived stats, a mixed
+  popular-tools grid, how-it-works, trust principles, pricing consistent with `/pricing`, and one
+  closing CTA. Corrected the stale "17 tools" copy.
+- **Pages:** removed the duplicated footer CTA band from every page; unified tool-detail and
+  tools-directory upgrade banners; tool action buttons use the tool name for PDF-to-PDF tools;
+  sentence-case headings; customer-facing pricing copy no longer mentions database seeds;
+  anonymous allowance copy corrected to 5 server jobs a day.
+- **Fixes:** development CSP now allows React's dev-only `eval` (the "1 issue" overlay on every
+  page); production CSP is unchanged. Replaced the leftover Vite template favicon with a brand mark
+  and declared it in metadata (fixes `/favicon.ico` 404); added light/dark `theme-color`.
+  Unsized `.btn` elements now have default padding.
+
+### Verified in this pass
+
+- Headless Chromium screenshots of home, tools, tool detail, pricing, software, SaaS, automations,
+  about, login and PDF editor in light, dark and 390 px mobile layouts.
+- Web TypeScript check, oxlint, web tests 18/18 and the 47-route Next.js production build passed;
+  production response headers keep `script-src` without `unsafe-eval` and serve `/favicon.svg`.
+
+### Not verified in this pass
+
+- Authenticated workspace and Blog Studio screens were not visually reviewed because the API was
+  not running (they redirect to sign-in). They inherit the remapped palette and corrected `dark:`
+  variant; review them with `corepack pnpm start`.
+
+## API startup crash repair and live verification — 2026-10-08 Asia/Kolkata
+
+- **Root cause:** the login-lockout change placed `TIMING_EQUALIZER_HASH = bcrypt.hashSync(...)`
+  above the `bcrypt` import in `auth.service.ts`. TypeScript emits CommonJS `require` calls in
+  source order, so the API threw `Cannot access 'bcrypt' before initialization` on every start and
+  Docker marked `docconv-api` unhealthy. The constants now follow all imports.
+- **Regression guard:** `apps/api/test/module-load.test.cjs` loads the compiled `AppModule` (and
+  therefore every API module) during `corepack pnpm test`, so import-time crashes fail the unit
+  suite instead of only a live deployment.
+- **Verified live:** `npm run docker:up` reports every service healthy. `test:live:e2e` passed
+  26/26 API and Blog Studio, 7/7 conversion and visual regression, 8/8 AI memory and 1/1
+  queue-disabled checks. HTML-to-PDF and URL-to-PDF smoke tests passed directly against the API
+  and through the Next.js `:5173` proxy, confirming SSE progress streaming end to end. The signed-in
+  workspace and Blog Studio were visually checked in light and dark themes.
+
+## Task-based tool organisation — 2026-10-08 Asia/Kolkata
+
+### Completed
+
+- Added `apps/web/src/lib/tool-groups.ts`, the single task-based structure for all 28 tools:
+  Organize PDF (7), Edit & enhance PDF (9), Convert to PDF (3), Convert from PDF (3), Image tools
+  (2), Web capture (2) and Editors (2). Unknown future tools fall into "More tools" instead of
+  disappearing.
+- `/tools` shows grouped sections with headings, descriptions and counts, plus a sticky single-row
+  filter (All tools + one chip per group). The selected group lives in the URL
+  (`/tools?group=image`) so filtered views are shareable; the prerendered fallback is the complete
+  directory, so the initial HTML still contains every tool.
+- The navbar Tools item opens a task-grouped dropdown (hover/focus, Escape to close); the mobile
+  menu lists the groups; the homepage has a "Browse by task" section; the workspace toolbox uses
+  the same groups.
+- Bug: the API's internal quota-accounting tool (`document-conversion`) was created published and
+  appeared in the public directory as a 29th tool. It is now created unpublished, the seed
+  unpublishes existing rows, and the public directory lists only canonical registry tools.
+
+### Verified
+
+- `test/tool-groups.test.mjs` proves every registry tool belongs to exactly one group. Full unit
+  suite 90/90, oxlint and the 47-route production build passed; the production `/tools` HTML
+  contains 28 tool links in 7 group sections. Light/dark screenshots of the directory, the group
+  filter and the navigation dropdown were reviewed.
+
+## Sejda / iLovePDF tool parity, Phases 1–2 — 2026-10-08 Asia/Kolkata
+
+Plan, competitor catalogue, per-tool status and engine choices: `docs/PDF_TOOLS_ROADMAP.md`.
+
+### Completed
+
+- **Audit fixes (existing tools):** watermark and header/footer no longer crash on non-Latin text
+  (canvas-rendered fallback, `lib/pdf-stamp.ts`); watermark is truly centred, fits the page and has
+  opacity/size/colour/angle/position/page options; rotate honours page selection; split adds
+  ranges and every-N; page numbers add position/format/start/size/colour; 2-up N-up uses a
+  landscape sheet (68% instead of 47%); Image to PDF accepts WebP/GIF/BMP; encrypted input gives an
+  "Unlock PDF first" message; OCR no-text errors are customer-readable and not retried; URL
+  captures are named after the site; stamps are placed correctly on rotated pages.
+- **22 new tools (catalogue 28 → 50):** browser — split by bookmarks/size/text/in half, remove
+  annotations, flip, add bookmarks, PDF to text, scan to PDF; worker — compress, protect, unlock,
+  repair, grayscale, searchable OCR (10 languages), true redaction, extract images, PDF to Excel,
+  PDF to PowerPoint, PDF to PDF/A, PowerPoint to PDF, Excel to PDF.
+- **Architecture:** declarative tool settings (`lib/tool-options.ts` + `ToolOptionsForm`);
+  operation-routed server jobs (`SERVER_PDF_OPERATIONS`, `ConversionEngine.PDF_OPS`,
+  `PdfOpsAdapter`, `scripts/pdf_ops.py`); passwords delivered via Redis only; seed derives
+  missing tools from the registry; ten task groups (Organize, Split, Optimize, Edit, To PDF,
+  From PDF, Security, Image, Web, Editors).
+- **Worker image:** Tesseract language packs (hin, deu, fra, spa, ita, por, ara, chi_sim) and
+  LibreOffice Impress/Draw.
+- **Hydration bug:** a raw inline theme `<script>` in `<head>` caused React #418 on 25% of
+  multi-page sessions in production builds and reset the theme; replaced with
+  `next/script` `beforeInteractive` (0/24 errors, theme still applied before first paint).
+
+### Verified
+
+- Unit suite 102/102, oxlint clean, 47-route production build; live PDF-tools E2E 6/6; real-Chrome
+  UI run 11/11; password persistence checks (see roadmap §7).
+
+### Planned (not started)
+
+- Phase 3: Sign PDF, fill & create forms, compare PDFs, Edit PDF extensions (images, shapes,
+  links, whiteout). Phase 4: AI summarizer/translation (needs `AI_API_KEY`), deskew.
+- Owner decision: PyMuPDF AGPL licensing review (roadmap §6).
+
+## 2026-10-14 — Codebase re-review
+
+### Fixed
+
+- **Operation swap (security):** `/tools/:slug/execute` trusted the client's `pdfOperation`, so
+  any tool could run another tool's server operation (e.g. OCR through an anonymous tool) under
+  the wrong tier, size and anonymous checks. The registry operation for the slug now decides
+  (`toolSettings` in `anonymous-tools.service.ts`).
+- **Quota billing:** server PDF operations are all PDF → PDF, so jobs were charged to whichever
+  PDF tool cost most. `createConversion` now bills the executed tool (or the operation's tool).
+- **Redaction miss:** the phone pattern matched across line breaks, merging a number with the
+  next line; the merged string was not found on the page and stayed unredacted.
+- **PDF to Excel data:** "1,234" became 1.234 and "007" became 7; only unambiguous numbers are
+  converted now (`spreadsheetValue`).
+- Password left in Redis when job creation failed; expired passwords gave a misleading message;
+  usage records logged server operations as `pdf.to.pdf`; unlock of a damaged file gave a raw
+  error.
+
+### Verified
+
+- Unit suite 106/106 (new `tool-operations` and `pdf-ops` tests), oxlint and typecheck clean; live
+  PDF-tools E2E 6/6; operation-swap request ran `pdf.compress` and billed `compress-pdf`.
+
+## 2026-10-14 — SaaS subscription and desktop licence review
+
+Upstream `tanmay-sahoo/Blog-generator` has no billing or licensing (still at `d5663bb`); all
+commerce is our own. Full findings and the upgrade plan: `docs/BLOG_STUDIO_SAAS_PLAN.md`.
+
+### Fixed
+
+- Desktop activation always failed (public key read from an env var customers never have); key
+  now embedded at packaging and required by `package:win`.
+- Desktop edition was unsellable (no way to create a `ProductRelease`); added
+  `pnpm release:publish`.
+- Ephemeral licence signing key in production; refunds ignored (now revoke entitlements/keys);
+  deactivated machines kept working (new `POST /licenses/validate` + 12-hourly desktop re-check);
+  Razorpay webhook could not find one-time orders; no subscription cancel/resume/portal; checkout
+  accepted recurring/SaaS prices and repeat purchases; Stripe fallback to success URL; cart
+  currency display; `.zip` installer names; seed unpublished the desktop product; library device
+  deactivation.
+
+### Verified
+
+- API unit suite 45/45 (new `commerce.test.cjs`), desktop tests, lint and typechecks clean; live
+  API suites 24/24 after rebuilding API and web.
+
+### Open decisions
+
+- PRO/BUSINESS platform plans are advertised but cannot be bought; sell them or remove the CTAs.
+- Multi-tier Blog Studio plans need the `prices` unique constraint changed (plan §3 Phase 1).
+
+## 2026-10-15 — Saved Blog Studio themes
+
+- Four themes (Cobalt default, Forest, Sunset, Midnight), stored per user in
+  `users.blog_studio_theme` (migration `20261015000000_user_blog_studio_theme`), with a
+  first-run picker, sidebar button and Settings → Appearance. Details: `docs/BLOG_STUDIO_SAAS_PLAN.md` §5.
+- **Security:** `PATCH /users/profile` allowed any user to set `platformRole: ADMIN` (body was a
+  plain type, so validation was skipped, and it went straight to Prisma). Fixed with DTOs and
+  explicit field copying; `publishBlog` also given a DTO. Verified live (400 for privileged fields).
+- Verified: 116 unit tests (new `users-preferences` and `blog-studio-themes` tests), real-browser
+  run 16/16 (first-run picker, persistence across reload and new-device login, per-user isolation,
+  Settings tab).
+
+## 2026-10-16 — Invoice Studio + Inventory (release 1)
+
+- Plan: `docs/INVOICE_INVENTORY_PLAN.md` (status section at the end). New packages:
+  `invoice-engine`, `invoice-templates`, `pdf-render`. API modules: `saas-plans`, `invoicing`,
+  `inventory`. Migrations `20261016000000_generic_saas_plans`,
+  `20261016010000_invoice_studio_inventory`, `20261016020000_invoice_automation`.
+- Bugs found and fixed during the build: concurrent "create if missing" upserts raced on first use
+  (numbering series, usage counters, stock levels) → `INSERT … ON CONFLICT DO NOTHING`;
+  `apps/api/.env` sets a stale `API_URL=http://localhost:3000` that Prisma loads, so live tests use
+  `E2E_API_URL`; the web Dockerfile built a fixed package list → now builds all web dependencies.
+- Verified: 157 unit tests, 45 live integration tests, 20 browser checks, lint and typechecks clean.

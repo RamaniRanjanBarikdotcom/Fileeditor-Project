@@ -4,7 +4,14 @@ import { StripeService } from '../payments/stripe.service';
 import { RazorpayService } from '../payments/razorpay.service';
 import { PaymentsService } from '../payments/payments.service';
 import { CartService } from './cart.service';
-import { CurrencyCode, OrderStatus, PaymentProvider } from '@prisma/client';
+import {
+  BillingType,
+  CurrencyCode,
+  EntitlementType,
+  OrderStatus,
+  PaymentProvider,
+  ProductType,
+} from '@prisma/client';
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 
@@ -89,18 +96,33 @@ export class OrdersService {
       quantity: number;
     }[] = [];
 
+    // One-time orders only use one-time prices; subscriptions have their own
+    // checkout. Products the buyer already owns are never charged twice.
+    const priceWhere = { currency: dto.currency, isActive: true, billingType: BillingType.ONE_TIME };
+    const owned = new Set(
+      (
+        await this.prisma.entitlement.findMany({
+          where: { userId, isActive: true, type: EntitlementType.LIFETIME_DOWNLOAD },
+          select: { productId: true },
+        })
+      ).map((entitlement) => entitlement.productId),
+    );
+
     if (dto.productId) {
       // Direct Single-Product Checkout
       const product = await this.prisma.product.findUnique({
         where: { id: dto.productId },
         include: {
-          prices: { where: { currency: dto.currency, isActive: true } },
+          prices: { where: priceWhere },
           releases: { where: { isCurrent: true }, take: 1 },
         },
       });
 
-      if (!product || !product.isPublished) {
+      if (!product || !product.isPublished || product.type === ProductType.SAAS) {
         throw new NotFoundException('Product not found or unavailable.');
+      }
+      if (owned.has(product.id)) {
+        throw new BadRequestException('You already own this product. Find it in your library.');
       }
 
       if (product.releases.length === 0) {
@@ -133,12 +155,18 @@ export class OrdersService {
         const product = await this.prisma.product.findUnique({
           where: { id: it.productId },
           include: {
-            prices: { where: { currency: dto.currency, isActive: true } },
+            prices: { where: priceWhere },
             releases: { where: { isCurrent: true }, take: 1 },
           },
         });
         const price = product?.prices[0];
-        if (price && product?.isPublished && product.releases.length > 0) {
+        if (
+          price &&
+          product?.isPublished &&
+          product.type !== ProductType.SAAS &&
+          !owned.has(product.id) &&
+          product.releases.length > 0
+        ) {
           orderItems.push({
             productId: it.productId,
             priceId: price.id,

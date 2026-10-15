@@ -22,6 +22,9 @@ export interface FeatureFlags {
   blogStudioByok: boolean;
   blogStudioSync: boolean;
   blogStudioAnalytics: boolean;
+  invoicing: boolean;
+  inventory: boolean;
+  invoicingCheckout: boolean;
 }
 
 @Injectable()
@@ -34,6 +37,7 @@ export class FeatureFlagsService {
     // operator explicitly enables the provider-dependent surfaces.
     const development = this.config.get<string>('NODE_ENV') !== 'production';
     const fullSuite = this.parseFlag('FEATURE_BLOG_STUDIO_FULL_SUITE', development);
+    const invoicing = this.parseFlag('FEATURE_INVOICING', development);
     return {
       publicTools: this.parseFlag('FEATURE_PUBLIC_TOOLS', true),
       storeCheckout: this.parseFlag('FEATURE_STORE_CHECKOUT', false),
@@ -66,6 +70,10 @@ export class FeatureFlagsService {
       blogStudioSync: fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_SYNC', development),
       blogStudioAnalytics:
         fullSuite && this.parseFlag('FEATURE_BLOG_STUDIO_ANALYTICS', development),
+      // Invoice Studio + Inventory: on in development, off in production until enabled.
+      invoicing,
+      inventory: invoicing && this.parseFlag('FEATURE_INVENTORY', development),
+      invoicingCheckout: invoicing && this.parseFlag('FEATURE_INVOICING_CHECKOUT', false),
     };
   }
 

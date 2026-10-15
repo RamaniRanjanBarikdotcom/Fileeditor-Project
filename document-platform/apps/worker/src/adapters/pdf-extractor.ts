@@ -133,8 +133,7 @@ export class PdfExtractorAdapter {
 
       if (extractedText.trim().length === 0) {
         throw new Error(
-          'No readable text could be extracted from this PDF. ' +
-            'If it is a scanned document, please install poppler-utils and tesseract-ocr on the server.',
+          'No readable text was found in this PDF, including after OCR of scanned pages.',
         );
       }
 

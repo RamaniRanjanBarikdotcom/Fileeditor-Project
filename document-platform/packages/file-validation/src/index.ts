@@ -225,7 +225,7 @@ export function validateFileSignature(buffer: Buffer, declaredExtension: string)
 
   // For ZIP-based formats, check DOCX vs XLSX
   const declared = declaredExtension.toLowerCase();
-  const strictFormats = new Set(['pdf', 'docx', 'xlsx', 'png', 'jpg', 'jpeg']);
+  const strictFormats = new Set(['pdf', 'docx', 'xlsx', 'pptx', 'png', 'jpg', 'jpeg']);
   if (strictFormats.has(declared)) {
     const detectedExtension = detected.extension === 'jpeg' ? 'jpg' : detected.extension;
     const declaredEquivalent = declared === 'jpeg' ? 'jpg' : declared;
@@ -426,6 +426,12 @@ function detectZipSubType(buffer: Buffer): { extension: string; mimeType: string
     return {
       extension: 'docx',
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    };
+  }
+  if (content.includes('ppt/presentation.xml') || content.includes('ppt/slides/')) {
+    return {
+      extension: 'pptx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     };
   }
   if (content.includes('xl/workbook.xml') || content.includes('xl/worksheets')) {

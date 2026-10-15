@@ -4,13 +4,9 @@ import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import {
-  Download,
-  Type,
-  Code,
-  FileDown,
-} from 'lucide-react';
+import { Download, Type, Code, FileDown } from 'lucide-react';
 import { fetchWithAuth } from '../../../lib/api';
+import { followJobEvents, JobEventsError } from '../../../lib/job-events';
 import { useTheme } from '../../../lib/ThemeContext';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
@@ -81,31 +77,30 @@ export default function WorkspaceEditorPage() {
 
       const jobId = convData.data.id;
 
-      // Poll
-      const poll = setInterval(async () => {
-        const res = await fetchWithAuth(`/api/v1/conversions/${jobId}`);
-        const data = await res.json();
-        if (data.success && data.data) {
-          if (data.data.status === 'COMPLETED') {
-            clearInterval(poll);
-            const downloadRes = await fetchWithAuth(`/api/v1/conversions/${jobId}/download-url`, {
-              method: 'POST',
-            });
-            const downloadData = await downloadRes.json();
-            if (!downloadData.success || !downloadData.data?.url) {
-              setStatus('error');
-              setError('Export completed, but the download link could not be created.');
-              return;
-            }
-            setDownloadUrl(downloadData.data.url);
-            setStatus('complete');
-          } else if (data.data.status === 'FAILED') {
-            clearInterval(poll);
-            setStatus('error');
-            setError('Export conversion failed.');
-          }
+      let terminal;
+      try {
+        terminal = await followJobEvents(`/api/v1/conversions/${jobId}/events`, {
+          signal: AbortSignal.timeout(240_000),
+        });
+      } catch (streamError) {
+        if (streamError instanceof JobEventsError) throw streamError;
+        if ((streamError as Error)?.name === 'TimeoutError') {
+          throw new Error('The export did not finish within four minutes. Please try again.');
         }
-      }, 1500);
+        throw new Error('The export status could not be retrieved. Please try again.');
+      }
+      if (terminal.status !== 'COMPLETED') {
+        throw new Error(terminal.errorMessage || 'Export conversion failed.');
+      }
+      const downloadRes = await fetchWithAuth(`/api/v1/conversions/${jobId}/download-url`, {
+        method: 'POST',
+      });
+      const downloadData = await downloadRes.json();
+      if (!downloadData.success || !downloadData.data?.url) {
+        throw new Error('Export completed, but the download link could not be created.');
+      }
+      setDownloadUrl(downloadData.data.url);
+      setStatus('complete');
     } catch (err: any) {
       setStatus('error');
       setError(err.message || 'An error occurred during export.');

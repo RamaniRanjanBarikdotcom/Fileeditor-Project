@@ -148,7 +148,7 @@ export default function PDFEditorContent() {
   const [selected, setSelected] = useState<Selection>(null);
   const [editing, setEditing] = useState<Selection>(null);
   const [zoom, setZoom] = useState(1.1);
-  const [ink, setInk] = useState('#6d5dfc');
+  const [ink, setInk] = useState('#3e63dd');
   const [fontSize, setFontSize] = useState(16);
   const [lineWidth, setLineWidth] = useState(3);
   const [gesture, setGesture] = useState<Gesture | null>(null);

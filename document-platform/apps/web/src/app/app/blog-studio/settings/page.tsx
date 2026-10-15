@@ -10,6 +10,7 @@ import PublishingTab from './tabs/PublishingTab';
 import PromptsTab from './tabs/PromptsTab';
 import UsageTab from './tabs/UsageTab';
 import UpdatesTab from './tabs/UpdatesTab';
+import AppearanceTab from './tabs/AppearanceTab';
 
 export default function BlogStudioSettingsPage() {
   const flags = useFeatureFlags();
@@ -21,6 +22,7 @@ export default function BlogStudioSettingsPage() {
     ...(flags.blogStudioPublishing ? ['Publishing'] : []),
     'Prompts',
     'Usage',
+    'Appearance',
     'Updates',
   ];
 
@@ -57,13 +59,14 @@ export default function BlogStudioSettingsPage() {
         </div>
       </div>
 
-      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-[#0f172a] shadow-sm text-white p-8 min-h-[400px]">
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900 shadow-sm text-white p-8 min-h-[400px]">
         {activeTab === 'AI' && <AiTab />}
         {activeTab === 'Research' && <ResearchTab />}
         {activeTab === 'API Keys' && <ApiKeysTab />}
         {activeTab === 'Publishing' && <PublishingTab />}
         {activeTab === 'Prompts' && <PromptsTab />}
         {activeTab === 'Usage' && <UsageTab />}
+        {activeTab === 'Appearance' && <AppearanceTab />}
         {activeTab === 'Updates' && <UpdatesTab />}
       </section>
     </div>

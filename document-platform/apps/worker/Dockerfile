@@ -9,8 +9,10 @@ ENV PUPPETEER_SKIP_DOWNLOAD=true
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-      openssl pandoc poppler-utils tesseract-ocr python3 python3-venv \
-      libreoffice-core libreoffice-writer libreoffice-calc \
+      openssl pandoc poppler-utils python3 python3-venv \
+      tesseract-ocr tesseract-ocr-hin tesseract-ocr-deu tesseract-ocr-fra tesseract-ocr-spa \
+      tesseract-ocr-ita tesseract-ocr-por tesseract-ocr-ara tesseract-ocr-chi-sim \
+      libreoffice-core libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-draw \
       fontconfig fonts-dejavu-core fonts-liberation2 fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji \
     && fc-cache -f \
     && python3 -m venv /opt/pdf2docx \

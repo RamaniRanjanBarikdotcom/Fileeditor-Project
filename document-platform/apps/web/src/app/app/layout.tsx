@@ -15,6 +15,7 @@ import {
   Bot,
   BrainCircuit,
   PenTool,
+  ReceiptText,
   CreditCard,
 } from 'lucide-react';
 import { fetchApi, setAccessToken, restoreAccessToken } from '../../lib/api';
@@ -58,6 +59,13 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
       icon: PenTool,
       description: 'Research, write, optimize & export',
       enabled: featureFlags.blogStudio,
+    },
+    {
+      name: 'Invoice Studio',
+      path: '/app/invoices',
+      icon: ReceiptText,
+      description: 'Invoices, purchases & stock',
+      enabled: featureFlags.invoicing,
     },
     {
       name: 'AI Assistant',

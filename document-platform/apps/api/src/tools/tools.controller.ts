@@ -10,6 +10,8 @@ import {
   UseInterceptors,
   UploadedFile,
   UseGuards,
+  Sse,
+  MessageEvent,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
@@ -20,6 +22,8 @@ import { Request, Response } from 'express';
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { ConversionsService } from '../conversions/conversions.service';
+import { Observable } from 'rxjs';
+import { jobStatusStream } from '../conversions/job-status-stream';
 
 const ANON_COOKIE_NAME = 'apptoolkitlab_anon_id';
 const TRANSPORT_UPLOAD_LIMIT = Number(
@@ -46,6 +50,12 @@ class AnonymousToolExecutionDto {
   @IsOptional()
   @IsString()
   settings?: string;
+
+  /** For Protect/Unlock PDF. Held in Redis for the job only; never stored. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  password?: string;
 }
 
 @ApiTags('tools')
@@ -95,6 +105,7 @@ export class ToolsController {
           url: body.url,
           targetFormat: body.targetFormat,
           settings,
+          password: body.password,
           file,
         })
       : await this.anonymousToolsService.execute({
@@ -104,6 +115,7 @@ export class ToolsController {
           url: body.url,
           targetFormat: body.targetFormat,
           settings,
+          password: body.password,
           file,
         });
     return { success: true, data: conversion };
@@ -129,6 +141,29 @@ export class ToolsController {
           this.ensureAnonymousIdentity(req, res).anonId,
         );
     return { success: true, data: status };
+  }
+
+  @Sse('jobs/:jobId/events')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Stream anonymous or authenticated conversion progress' })
+  streamJobEvents(
+    @Param('jobId') jobId: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Observable<MessageEvent> {
+    const authenticated = (req as any).user;
+    const status = authenticated
+      ? () =>
+          this.anonymousToolsService.getAuthenticatedStatus(
+            jobId,
+            authenticated.userId,
+            authenticated.orgId,
+          )
+      : (() => {
+          const { anonId } = this.ensureAnonymousIdentity(req, res);
+          return () => this.anonymousToolsService.getStatus(jobId, anonId);
+        })();
+    return jobStatusStream(status);
   }
 
   @Post('jobs/:jobId/download-url')

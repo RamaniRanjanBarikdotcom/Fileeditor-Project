@@ -65,6 +65,9 @@ class BlogDatabase {
       )
       .run(key, value);
   }
+  deleteSetting(key) {
+    this.db.prepare('DELETE FROM settings WHERE key=?').run(key);
+  }
   getSetting(key) {
     return this.db.prepare('SELECT value FROM settings WHERE key=?').get(key)?.value || null;
   }

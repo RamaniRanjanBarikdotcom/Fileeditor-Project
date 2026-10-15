@@ -21,8 +21,22 @@ import {
 } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { Request as ExpressRequest, Response as ExpressResponse } from 'express';
+import { Throttle } from '@nestjs/throttler';
 
 const REFRESH_COOKIE_NAME = 'toolsuite_refresh';
+
+// Per-IP limits for credential and token endpoints, on top of the global
+// throttler. Login additionally has a per-account lockout in AuthService.
+// AUTH_THROTTLE_PER_MINUTE may be raised for automated end-to-end suites.
+const authPerMinute = () => Math.max(1, Number(process.env.AUTH_THROTTLE_PER_MINUTE || 10));
+const CREDENTIAL_THROTTLE = {
+  short: { limit: authPerMinute, ttl: 60_000 },
+  medium: { limit: () => authPerMinute() * 4, ttl: 15 * 60_000 },
+};
+const TOKEN_THROTTLE = {
+  short: { limit: () => authPerMinute() * 2, ttl: 60_000 },
+  medium: { limit: () => authPerMinute() * 8, ttl: 15 * 60_000 },
+};
 
 @ApiTags('auth')
 @Controller('auth')
@@ -30,6 +44,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @Throttle(CREDENTIAL_THROTTLE)
   @ApiOperation({ summary: 'Register a new account' })
   async register(
     @Body() dto: RegisterDto,
@@ -54,6 +69,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle(CREDENTIAL_THROTTLE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Sign in with email and password' })
   async login(
@@ -118,6 +134,7 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @Throttle(CREDENTIAL_THROTTLE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request password reset' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
@@ -125,6 +142,7 @@ export class AuthController {
   }
 
   @Post('reset-password')
+  @Throttle(TOKEN_THROTTLE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password using token' })
   async resetPassword(@Body() dto: ResetPasswordDto) {
@@ -132,6 +150,7 @@ export class AuthController {
   }
 
   @Post('verify-email/request')
+  @Throttle(CREDENTIAL_THROTTLE)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
@@ -141,6 +160,7 @@ export class AuthController {
   }
 
   @Post('verify-email/confirm')
+  @Throttle(TOKEN_THROTTLE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Confirm email verification' })
   async confirmEmailVerification(@Body() dto: VerifyEmailDto) {

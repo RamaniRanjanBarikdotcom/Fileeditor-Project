@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { fetchWithAuth } from '../../lib/api';
+import { followJobEvents, JobEventsError, JobStatusEvent } from '../../lib/job-events';
 import {
   UploadCloud,
   CheckCircle,
@@ -52,8 +53,8 @@ const ALL_FORMATS: Record<string, FormatOption> = {
     value: 'csv',
     label: 'CSV Data',
     ext: '.csv',
-    color: '#8b5cf6',
-    bg: 'rgba(139,92,246,0.1)',
+    color: '#0ea5e9',
+    bg: 'rgba(14, 165, 233,0.1)',
   },
   md: {
     value: 'markdown',
@@ -117,7 +118,7 @@ export default function WorkspaceConverterPage() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
 
   const availableFormats = useMemo(() => getAvailableFormats(inputType, file), [inputType, file]);
   const effectiveTargetFormat = availableFormats.some((format) => format.value === targetFormat)
@@ -137,55 +138,64 @@ export default function WorkspaceConverterPage() {
     localStorage.removeItem('active_job_time_workspace');
   }, []);
 
-  const startPolling = useCallback((id: string, startTime: number) => {
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-
-    // TODO (SSE): Replace polling with Server-Sent Events for push-based updates.
-    pollIntervalRef.current = setInterval(async () => {
-      try {
-        const res = await fetchWithAuth(`/api/v1/conversions/${id}`);
-        const data = await res.json();
-
-        if (data.success && data.data) {
-          setProgress(Math.max(50, data.data.progress || 60));
-
-          if (data.data.status === 'COMPLETED') {
-            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-            clearStoredJob();
-            setProgress(100);
-
-            const downloadRes = await fetchWithAuth(`/api/v1/conversions/${id}/download-url`, {
-              method: 'POST',
-            });
-            const downloadData = await downloadRes.json();
-
-            if (!downloadData.success || !downloadData.data?.url) {
-              setStatus('error');
-              setError('Conversion completed, but the download link could not be created.');
-              return;
-            }
-
-            setDownloadUrl(downloadData.data.url);
-            setStatus('success');
-          } else if (['FAILED', 'CANCELLED', 'EXPIRED'].includes(data.data.status)) {
-            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-            clearStoredJob();
-            setStatus('error');
-            setError('Conversion failed. Please try a different document format.');
-          }
-        }
-
-        if (Date.now() - startTime > 240000) {
-          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+  const startStatusStream = useCallback(
+    (id: string, startTime: number) => {
+      streamAbortRef.current?.abort();
+      const controller = new AbortController();
+      streamAbortRef.current = controller;
+      const deadline = window.setTimeout(
+        () => {
+          controller.abort();
           clearStoredJob();
           setStatus('error');
           setError('Conversion timed out. Please try again.');
+        },
+        Math.max(1_000, 240_000 - (Date.now() - startTime)),
+      );
+
+      const fail = (message: string) => {
+        clearStoredJob();
+        setStatus('error');
+        setError(message);
+      };
+
+      const finish = async (job: JobStatusEvent) => {
+        if (job.status !== 'COMPLETED') {
+          fail(job.errorMessage || 'Conversion failed. Please try a different document format.');
+          return;
         }
-      } catch {
-        // ignore errors to keep polling
-      }
-    }, 1500);
-  }, [clearStoredJob]);
+        clearStoredJob();
+        setProgress(100);
+        const downloadRes = await fetchWithAuth(`/api/v1/conversions/${id}/download-url`, {
+          method: 'POST',
+        });
+        const downloadData = await downloadRes.json().catch(() => null);
+        if (!downloadData?.success || !downloadData.data?.url) {
+          fail('Conversion completed, but the download link could not be created.');
+          return;
+        }
+        setDownloadUrl(downloadData.data.url);
+        setStatus('success');
+      };
+
+      void followJobEvents(`/api/v1/conversions/${id}/events`, {
+        signal: controller.signal,
+        onStatus: (job) => setProgress(Math.max(50, job.progress || 60)),
+      })
+        .then(finish)
+        .catch((error) => {
+          // Aborts come from cancel, unmount or the deadline, which own the UI state.
+          if (controller.signal.aborted) return;
+          fail(
+            error instanceof JobEventsError
+              ? error.message
+              : 'The conversion status could not be retrieved. Please try again.',
+          );
+        })
+        .finally(() => window.clearTimeout(deadline));
+    },
+    [clearStoredJob],
+  );
 
   useEffect(() => {
     const activeJobId = localStorage.getItem('active_job_workspace');
@@ -196,13 +206,13 @@ export default function WorkspaceConverterPage() {
       setJobId(activeJobId);
       setStatus('converting');
       setProgress(60);
-      startPolling(activeJobId, parseInt(activeJobStartTime, 10));
+      startStatusStream(activeJobId, parseInt(activeJobStartTime, 10));
     }
 
     return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      streamAbortRef.current?.abort();
     };
-  }, [startPolling]);
+  }, [startStatusStream]);
 
   const handleCancel = async () => {
     if (jobId) {
@@ -212,7 +222,7 @@ export default function WorkspaceConverterPage() {
         // The local state is still cleared; the server may already be unreachable.
       }
     }
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    streamAbortRef.current?.abort();
     clearStoredJob();
     setFile(null);
     setUrl('');
@@ -277,11 +287,10 @@ export default function WorkspaceConverterPage() {
       const id = convData.data.id;
       setJobId(id);
 
-      // Poll job
       const startTime = Date.now();
       localStorage.setItem('active_job_workspace', id);
       localStorage.setItem('active_job_time_workspace', startTime.toString());
-      startPolling(id, startTime);
+      startStatusStream(id, startTime);
     } catch (err: any) {
       setStatus('error');
       setError(err.message || 'An error occurred during conversion.');
@@ -289,7 +298,7 @@ export default function WorkspaceConverterPage() {
   };
 
   const handleReset = () => {
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    streamAbortRef.current?.abort();
     clearStoredJob();
     setFile(null);
     setUrl('');

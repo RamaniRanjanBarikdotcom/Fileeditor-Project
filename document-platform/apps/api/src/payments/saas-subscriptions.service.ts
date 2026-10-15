@@ -1,10 +1,12 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import {
+  BillingInterval,
   BillingType,
   CurrencyCode,
   PaymentProvider,
@@ -112,6 +114,182 @@ export class SaasSubscriptionsService {
     });
   }
 
+  /**
+   * Cancel at period end (or resume a pending cancellation). Access continues
+   * until the paid period ends; the provider webhook confirms the change.
+   */
+  async setCancelAtPeriodEnd(
+    userId: string,
+    organizationId: string,
+    cancel: boolean,
+    productSlug = BLOG_STUDIO_ADDON_SLUG,
+  ) {
+    await this.assertBillingManager(userId, organizationId);
+    const subscription = await this.activeSubscription(organizationId, productSlug);
+    if (subscription.provider === PaymentProvider.STRIPE) {
+      await this.stripe.setCancelAtPeriodEnd(subscription.providerSubId, cancel);
+    } else if (cancel) {
+      await this.razorpay.cancelSubscriptionAtCycleEnd(subscription.providerSubId);
+    } else {
+      // Razorpay cannot undo a scheduled cancellation; the customer re-subscribes.
+      throw new ConflictException(
+        'This Razorpay subscription cannot be resumed. Subscribe again after the current period ends.',
+      );
+    }
+    const updated = await this.prisma.saasSubscription.update({
+      where: { id: subscription.id },
+      data: { cancelAtPeriodEnd: cancel },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        userId,
+        action: cancel ? 'SAAS_SUBSCRIPTION_CANCEL_REQUESTED' : 'SAAS_SUBSCRIPTION_RESUMED',
+        resourceType: 'SaasSubscription',
+        resourceId: subscription.id,
+      },
+    });
+    return updated;
+  }
+
+  async createBillingPortal(
+    userId: string,
+    organizationId: string,
+    returnUrl: string,
+    productSlug = BLOG_STUDIO_ADDON_SLUG,
+  ) {
+    await this.assertBillingManager(userId, organizationId);
+    const subscription = await this.activeSubscription(organizationId, productSlug);
+    if (subscription.provider !== PaymentProvider.STRIPE) {
+      throw new ConflictException('Razorpay subscriptions are managed from the Razorpay payment link.');
+    }
+    return this.stripe.createBillingPortalSession(
+      subscription.providerSubId,
+      this.validateReturnUrl(returnUrl),
+    );
+  }
+
+  private async activeSubscription(organizationId: string, productSlug: string) {
+    const subscription = await this.prisma.saasSubscription.findFirst({
+      where: {
+        organizationId,
+        product: { slug: productSlug },
+        status: { in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE] },
+      },
+    });
+    if (!subscription) throw new NotFoundException('This workspace has no active subscription for this product.');
+    return subscription;
+  }
+
+  /**
+   * Checkout for a plan of any SaaS product (generic plans). Stripe uses an
+   * inline recurring price; Razorpay needs a plan object, created once per
+   * price and remembered.
+   */
+  async createPlanCheckout(
+    userId: string,
+    organizationId: string,
+    input: {
+      productSlug: string;
+      planKey: string;
+      interval: BillingInterval;
+      currency: CurrencyCode;
+      successUrl: string;
+      cancelUrl: string;
+    },
+  ) {
+    await this.assertBillingManager(userId, organizationId);
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+    if (!user) throw new NotFoundException('User was not found.');
+    const plan = await this.prisma.saasPlan.findFirst({
+      where: { key: input.planKey, isPublic: true, product: { slug: input.productSlug, isPublished: true } },
+      include: {
+        product: true,
+        prices: { where: { currency: input.currency, interval: input.interval, isActive: true } },
+      },
+    });
+    if (!plan || plan.isFree) throw new NotFoundException('This plan is not available for purchase.');
+    const price = plan.prices[0];
+    if (!price) {
+      throw new ConflictException(`This plan is not sold in ${input.currency} per ${input.interval.toLowerCase()}.`);
+    }
+    const existing = await this.prisma.saasSubscription.findUnique({
+      where: { organizationId_productId: { organizationId, productId: plan.productId } },
+    });
+    if (existing?.status === SubscriptionStatus.ACTIVE && existing.currentPeriodEnd > new Date()) {
+      throw new ConflictException(
+        existing.planId === plan.id
+          ? 'This workspace is already on this plan.'
+          : 'This workspace already has an active plan. Change plans from the billing portal, or cancel first.',
+      );
+    }
+
+    const successUrl = this.validateReturnUrl(input.successUrl);
+    const cancelUrl = this.validateReturnUrl(input.cancelUrl);
+    const provider = subscriptionProviderForCurrency(input.currency);
+    const placeholderEnd = new Date(Date.now() + 10 * 60_000);
+    const name = `${plan.product.name} ${plan.name}`;
+    if (provider === PaymentProvider.STRIPE) {
+      const checkout = await this.stripe.createPlanSubscriptionCheckout({
+        organizationId,
+        productId: plan.productId,
+        productSlug: plan.product.slug,
+        planId: plan.id,
+        userEmail: user.email,
+        name,
+        currency: input.currency,
+        amountMinorUnits: price.amountMinorUnits,
+        interval: input.interval,
+        successUrl,
+        cancelUrl,
+      });
+      await this.storeIncomplete(organizationId, plan.productId, provider, checkout.sessionId, input.currency, placeholderEnd, userId, plan.id);
+      return { provider, checkoutUrl: checkout.checkoutUrl, sessionId: checkout.sessionId };
+    }
+
+    let providerPlanId = price.providerPriceId;
+    if (!providerPlanId) {
+      providerPlanId = await this.razorpay.createPlan({
+        name,
+        amountMinorUnits: price.amountMinorUnits,
+        interval: input.interval,
+      });
+      await this.prisma.saasPlanPrice.update({ where: { id: price.id }, data: { providerPriceId: providerPlanId } });
+    }
+    const checkout = await this.razorpay.createSubscription({
+      organizationId,
+      productId: plan.productId,
+      productSlug: plan.product.slug,
+      planId: plan.id,
+      providerPlanId,
+    });
+    await this.storeIncomplete(organizationId, plan.productId, provider, checkout.subscriptionId, input.currency, placeholderEnd, userId, plan.id);
+    return { provider, ...checkout };
+  }
+
+  /** Current subscription (with plan) of any SaaS product, for billing pages. */
+  async getSubscription(userId: string, organizationId: string, productSlug: string) {
+    await this.assertMembership(userId, organizationId);
+    return this.prisma.saasSubscription.findFirst({
+      where: { organizationId, product: { slug: productSlug } },
+      include: {
+        product: { select: { name: true, slug: true } },
+        plan: { select: { key: true, name: true } },
+      },
+    });
+  }
+
+  private async assertBillingManager(userId: string, organizationId: string) {
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId, userId } },
+      select: { role: true },
+    });
+    if (!membership) throw new NotFoundException('The requested workspace was not found.');
+    if (membership.role !== 'OWNER' && membership.role !== 'ADMIN') {
+      throw new ForbiddenException('Only workspace owners and admins can manage billing.');
+    }
+  }
+
   async syncProviderSubscription(input: {
     organizationId: string;
     productId: string;
@@ -123,9 +301,53 @@ export class SaasSubscriptionsService {
     currentPeriodEnd: Date;
     cancelAtPeriodEnd?: boolean;
     eventType: string;
+    /** Generic plan id from provider metadata; absent for legacy add-ons. */
+    planId?: string;
   }) {
     return this.prisma.$transaction(
       async (tx) => {
+        // Providers do not guarantee webhook ordering. Ignore events that
+        // would move a record backwards:
+        //  - a canceled provider subscription is terminal and is never
+        //    reactivated by a late "updated"/"activated" event;
+        //  - an event for a superseded provider subscription must not
+        //    overwrite the organization's current one unless it activates.
+        const existing = await tx.saasSubscription.findUnique({
+          where: {
+            organizationId_productId: {
+              organizationId: input.organizationId,
+              productId: input.productId,
+            },
+          },
+        });
+        const sameProviderSubscription = existing?.providerSubId === input.providerSubId;
+        const staleEvent =
+          !!existing &&
+          ((sameProviderSubscription &&
+            existing.status === SubscriptionStatus.CANCELED &&
+            input.status !== SubscriptionStatus.CANCELED) ||
+            (!sameProviderSubscription &&
+              !!existing.providerSubId &&
+              existing.status === SubscriptionStatus.ACTIVE &&
+              input.status !== SubscriptionStatus.ACTIVE));
+        if (staleEvent) {
+          await tx.auditLog.create({
+            data: {
+              organizationId: input.organizationId,
+              action: 'SAAS_SUBSCRIPTION_STALE_EVENT_IGNORED',
+              resourceType: 'SaasSubscription',
+              resourceId: existing!.id,
+              metadataJson: {
+                provider: input.provider,
+                eventType: input.eventType,
+                incomingStatus: input.status,
+                currentStatus: existing!.status,
+              },
+            },
+          });
+          return existing!;
+        }
+
         const subscription = await tx.saasSubscription.upsert({
           where: {
             organizationId_productId: {
@@ -141,6 +363,7 @@ export class SaasSubscriptionsService {
             currentPeriodStart: input.currentPeriodStart,
             currentPeriodEnd: input.currentPeriodEnd,
             cancelAtPeriodEnd: input.cancelAtPeriodEnd ?? false,
+            ...(input.planId ? { planId: input.planId } : {}),
           },
           create: {
             organizationId: input.organizationId,
@@ -152,6 +375,7 @@ export class SaasSubscriptionsService {
             currentPeriodStart: input.currentPeriodStart,
             currentPeriodEnd: input.currentPeriodEnd,
             cancelAtPeriodEnd: input.cancelAtPeriodEnd ?? false,
+            planId: input.planId,
           },
         });
         await tx.auditLog.create({
@@ -181,6 +405,7 @@ export class SaasSubscriptionsService {
     currency: CurrencyCode,
     currentPeriodEnd: Date,
     userId: string,
+    planId?: string,
   ) {
     await this.prisma.$transaction(async (tx) => {
       const subscription = await tx.saasSubscription.upsert({
@@ -192,6 +417,7 @@ export class SaasSubscriptionsService {
           status: SubscriptionStatus.INCOMPLETE,
           currentPeriodStart: new Date(),
           currentPeriodEnd,
+          ...(planId ? { planId } : {}),
         },
         create: {
           organizationId,
@@ -202,6 +428,7 @@ export class SaasSubscriptionsService {
           status: SubscriptionStatus.INCOMPLETE,
           currentPeriodStart: new Date(),
           currentPeriodEnd,
+          planId,
         },
       });
       await tx.auditLog.create({

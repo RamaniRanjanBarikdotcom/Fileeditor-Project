@@ -1,7 +1,19 @@
-import { Controller, Post, Get, Body, UseGuards, Req, Ip, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  UseGuards,
+  Req,
+  Ip,
+  Param,
+  Delete,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { LicensesService } from './licenses.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsUUID, Matches } from 'class-validator';
 import { RequireFeatures } from '../feature-flags/require-features.decorator';
 
 export class ActivateLicenseDto {
@@ -16,6 +28,15 @@ export class ActivateLicenseDto {
   @IsString()
   @IsOptional()
   deviceInfo?: string;
+}
+
+export class ValidateActivationDto {
+  @IsUUID()
+  activationId!: string;
+
+  @IsString()
+  @Matches(/^[a-f0-9]{64}$/)
+  machineHash!: string;
 }
 
 @Controller('licenses')
@@ -35,6 +56,13 @@ export class LicensesController {
       ipAddress: ip,
     });
     return { success: true, data };
+  }
+
+  /** Periodic online check from installed apps (no account login required). */
+  @Post('validate')
+  @HttpCode(HttpStatus.OK)
+  async validate(@Body() dto: ValidateActivationDto) {
+    return { success: true, data: await this.licensesService.validateActivation(dto) };
   }
 
   /**

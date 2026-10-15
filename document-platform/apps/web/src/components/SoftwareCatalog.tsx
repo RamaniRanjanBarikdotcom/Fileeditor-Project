@@ -146,7 +146,7 @@ export function SoftwareCatalog() {
           className="absolute inset-0 -z-10"
           style={{
             background:
-              'radial-gradient(ellipse 70% 60% at 50% 0%, rgba(139,92,246,.16), transparent 70%)',
+              'radial-gradient(ellipse 70% 60% at 50% 0%, rgba(14, 165, 233,.16), transparent 70%)',
           }}
         />
         <div className="container-custom relative z-10">
@@ -262,7 +262,7 @@ export function SoftwareCatalog() {
             <div className="software-product-grid">
               {products.map((product, index) => {
                 const Icon = index % 2 ? Code2 : Terminal;
-                const accent = index % 2 ? '#a855f7' : '#6366f1';
+                const accent = index % 2 ? '#0ea5e9' : '#3e63dd';
                 const price = product.prices.find((item) => item.currency === currency);
                 const providerEnabled =
                   currency === 'INR' ? featureFlags.razorpayEnabled : featureFlags.stripeEnabled;

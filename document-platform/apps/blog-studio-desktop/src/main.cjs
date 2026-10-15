@@ -41,6 +41,8 @@ app.whenReady().then(() => {
   database = new BlogDatabase(path.join(dataDirectory, 'blog-studio.sqlite'));
   registerIpc(dataDirectory);
   createWindow();
+  void revalidateLicenseOnline();
+  setInterval(() => void revalidateLicenseOnline(), 12 * 60 * 60 * 1000).unref();
 
   // Setup auto-updater
   autoUpdater.checkForUpdatesAndNotify().catch((err) => {
@@ -49,6 +51,34 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => app.quit());
+
+/**
+ * The certificate keeps the app usable offline. When the server is reachable
+ * and answers that this activation was deactivated, revoked or refunded, the
+ * certificate is removed. Network failures never remove it.
+ */
+async function revalidateLicenseOnline() {
+  const certificate = database?.getSetting('offlineLicenseCertificate');
+  if (!certificate) return;
+  const status = verifyOfflineCertificate(certificate, machineFingerprint());
+  if (!status.valid || !status.payload?.activationId) return;
+  try {
+    const response = await fetch(`${apiBaseUrl}/licenses/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'BlogStudioDesktop' },
+      body: JSON.stringify({
+        activationId: status.payload.activationId,
+        machineHash: machineFingerprint(),
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) return;
+    const payload = await response.json().catch(() => null);
+    if (payload?.data?.valid === false) database.deleteSetting('offlineLicenseCertificate');
+  } catch {
+    // Offline: keep working from the signed certificate.
+  }
+}
 
 function registerIpc(dataDirectory) {
   ipcMain.handle('settings:set-provider-key', async (_event, value) => {

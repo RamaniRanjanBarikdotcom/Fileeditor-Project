@@ -1,8 +1,17 @@
 import type { NextConfig } from 'next';
 
+// React's development build needs eval() to reconstruct call stacks; production
+// never does, so 'unsafe-eval' is added only outside production.
+const scriptSources = [
+  "'self'",
+  "'unsafe-inline'",
+  ...(process.env.NODE_ENV === 'production' ? [] : ["'unsafe-eval'"]),
+  'https://checkout.razorpay.com',
+];
+
 const contentSecurityPolicy = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://checkout.razorpay.com",
+  `script-src ${scriptSources.join(' ')}`,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",

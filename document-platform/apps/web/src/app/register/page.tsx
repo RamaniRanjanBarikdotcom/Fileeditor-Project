@@ -108,7 +108,7 @@ export default function RegisterPage() {
 
           <div className="space-y-1">
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-              Email Address
+              Email address
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -149,7 +149,7 @@ export default function RegisterPage() {
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <span>Create Free Account</span>
+              <span>Create free account</span>
             )}
           </button>
         </form>

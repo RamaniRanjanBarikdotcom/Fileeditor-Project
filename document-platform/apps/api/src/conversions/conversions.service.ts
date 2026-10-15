@@ -18,8 +18,20 @@ import {
   JobStatus,
   ConversionJobData,
   QUEUE_NAMES,
+  ConversionEngine,
+  SERVER_PDF_OPERATIONS,
   normalizeConversionOptions,
 } from '@docconv/shared-types';
+import { listToolDefinitions } from '@docconv/tool-registry';
+import { randomUUID } from 'crypto';
+
+/** Out-of-band secrets (never persisted in the database or outbox). */
+export interface ConversionSecrets {
+  password?: string;
+}
+
+export const CONVERSION_SECRET_TTL_SECONDS = 30 * 60;
+export const conversionSecretKey = (jobId: string) => `conversion:secret:${jobId}`;
 import {
   PlatformRole,
   ReservationStatus,
@@ -76,7 +88,13 @@ export class ConversionsService implements OnModuleInit {
     }
   }
 
-  async createConversion(userId: string, orgId: string, req: CreateConversionRequest) {
+  async createConversion(
+    userId: string,
+    orgId: string,
+    req: CreateConversionRequest,
+    secrets: ConversionSecrets = {},
+    toolSlug?: string,
+  ) {
     if (process.env.REDIS_ENABLED === 'false') {
       throw new ServiceUnavailableException(
         'Server conversion workers are disabled in this deployment. Use a browser-capable tool or enable Redis and the worker service.',
@@ -96,20 +114,60 @@ export class ConversionsService implements OnModuleInit {
       throw new BadRequestException(`Unsupported source format: ${sourceFile.extension}`);
     }
     const inputFormat = normalizedInput as InputFormat;
-    const normalizedTarget = conversionRouter.normalizeFormat(req.targetFormat);
-    if (!Object.values(OutputFormat).includes(normalizedTarget as OutputFormat)) {
-      throw new BadRequestException(`Unsupported target format: ${req.targetFormat}`);
+    const settings = normalizeConversionOptions(req.settings);
+    const operationSpec = settings.pdfOperation
+      ? SERVER_PDF_OPERATIONS[settings.pdfOperation]
+      : undefined;
+
+    let targetFormat: OutputFormat;
+    let adapter: { engine: ConversionEngine } | undefined;
+    if (operationSpec) {
+      // PDF→PDF operations cannot be routed by format; the operation decides
+      // both the engine and the output format.
+      if (inputFormat !== InputFormat.PDF) {
+        throw new BadRequestException('This tool only accepts PDF files.');
+      }
+      targetFormat = operationSpec.output as OutputFormat;
+      adapter = { engine: ConversionEngine.PDF_OPS };
+    } else {
+      const normalizedTarget = conversionRouter.normalizeFormat(req.targetFormat);
+      if (!Object.values(OutputFormat).includes(normalizedTarget as OutputFormat)) {
+        throw new BadRequestException(`Unsupported target format: ${req.targetFormat}`);
+      }
+      targetFormat = normalizedTarget as OutputFormat;
+      adapter = conversionRouter.findAdapter(inputFormat, targetFormat) ?? undefined;
     }
-    const targetFormat = normalizedTarget as OutputFormat;
-    const adapter = conversionRouter.findAdapter(inputFormat, targetFormat);
 
     if (!adapter) {
       throw new BadRequestException(
         `Conversion from ${inputFormat} to ${targetFormat} is not supported.`,
       );
     }
+    const resolvedAdapter = adapter;
+    // Quota and size limits belong to the tool actually used. Server PDF
+    // operations all map PDF → PDF, so matching by format alone would bill
+    // whichever PDF tool happens to cost most.
+    const accountingSlug =
+      toolSlug ??
+      (settings.pdfOperation
+        ? listToolDefinitions().find((tool) => tool.operation === settings.pdfOperation)?.slug
+        : undefined);
 
-    const settings = normalizeConversionOptions(req.settings);
+    const jobId = randomUUID();
+    const storesSecret = Boolean(operationSpec && 'secret' in operationSpec);
+    if (storesSecret) {
+      const password = String(secrets.password ?? '');
+      if (!password) throw new BadRequestException('Enter the PDF password.');
+      if (password.length > 40) {
+        throw new BadRequestException('PDF passwords can be at most 40 characters.');
+      }
+      // Stored before the job exists so the worker can never run without it.
+      await this.redis.set(
+        conversionSecretKey(jobId),
+        JSON.stringify({ password }),
+        CONVERSION_SECRET_TTL_SECONDS,
+      );
+    }
     const retentionSeconds = Math.min(
       600,
       Math.max(60, Number(process.env.TEMP_FILE_MAX_TTL_SECONDS || 600)),
@@ -117,23 +175,35 @@ export class ConversionsService implements OnModuleInit {
 
     // ─── Transactional Job Creation, Quota Reservation & Outbox Event ───
     const { job, outboxEvent } = await this.prisma.$transaction(async (tx) => {
-      let tool = await tx.tool.findFirst({
-        where: {
-          isPublished: true,
-          acceptedFormats: { has: inputFormat },
-          outputFormats: { has: targetFormat },
-        },
-        orderBy: { costUnits: 'desc' },
-      });
+      // Serialize quota checks per organization. Without this lock, concurrent
+      // READ COMMITTED transactions can each pass the aggregate check below and
+      // collectively exceed the monthly allowance.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`conversion-quota:${orgId}`}::text))`;
+
+      let tool =
+        (accountingSlug
+          ? await tx.tool.findFirst({ where: { slug: accountingSlug, isPublished: true } })
+          : null) ??
+        (await tx.tool.findFirst({
+          where: {
+            isPublished: true,
+            acceptedFormats: { has: inputFormat },
+            outputFormats: { has: targetFormat },
+          },
+          orderBy: { costUnits: 'desc' },
+        }));
       if (!tool) {
         tool = await tx.tool.upsert({
           where: { slug: 'document-conversion' },
-          update: {},
+          // Internal quota-accounting record for conversions that match no
+          // catalogue tool; it must never appear in the public tool list.
+          update: { isPublished: false },
           create: {
+            isPublished: false,
             slug: 'document-conversion',
             name: 'Document Conversion',
             category: 'CONVERSION',
-            engine: adapter.engine,
+            engine: resolvedAdapter.engine,
             acceptedFormats: [inputFormat],
             outputFormats: [targetFormat],
             anonymousEnabled: true,
@@ -205,12 +275,13 @@ export class ConversionsService implements OnModuleInit {
 
       const newJob = await tx.conversionJob.create({
         data: {
+          id: jobId,
           organizationId: orgId,
           userId,
           sourceFileId: sourceFile.id,
           sourceFormat: inputFormat,
           targetFormat,
-          engine: adapter.engine,
+          engine: resolvedAdapter.engine,
           settingsJson: settings as any,
           status: JobStatus.QUEUED,
           queuedAt: new Date(),
@@ -235,24 +306,24 @@ export class ConversionsService implements OnModuleInit {
         data: {
           conversionJobId: newJob.id,
           eventType: 'CONVERSION_REQUESTED',
-          message: `Conversion from ${inputFormat} to ${targetFormat} queued with engine ${adapter.engine}`,
+          message: `Conversion from ${inputFormat} to ${targetFormat} queued with engine ${resolvedAdapter.engine}`,
           metadataJson: {
             sourceFormat: inputFormat,
             targetFormat,
-            engine: adapter.engine,
+            engine: resolvedAdapter.engine,
             reservationId: newReservation.id,
           },
         },
       });
 
-      const queueName = conversionRouter.getQueueName(adapter.engine as any);
+      const queueName = conversionRouter.getQueueName(resolvedAdapter.engine as any);
       const jobData: ConversionJobData = {
         conversionId: newJob.id,
         sourceFileId: sourceFile.id,
         sourceStorageKey: sourceFile.storageKey,
         sourceFormat: inputFormat,
         targetFormat,
-        engine: adapter.engine,
+        engine: resolvedAdapter.engine,
         options: settings,
         attemptNumber: 1,
       };
@@ -266,6 +337,10 @@ export class ConversionsService implements OnModuleInit {
       });
 
       return { job: newJob, outboxEvent: newOutboxEvent };
+    }).catch(async (error) => {
+      // No job was created (quota, limits, ...): do not leave the password in Redis.
+      if (storesSecret) await this.redis.del(conversionSecretKey(jobId)).catch(() => undefined);
+      throw error;
     });
 
     // Best-effort immediate publish. Failure remains durable and the dispatcher
@@ -387,8 +462,13 @@ export class ConversionsService implements OnModuleInit {
     if (queuedJob) await queuedJob.remove().catch(() => undefined);
 
     const cancelled = await this.prisma.$transaction(async (tx) => {
-      const updatedJob = await tx.conversionJob.update({
-        where: { id: job.id },
+      // Compare-and-set: the worker may have finished between the read above
+      // and this write, and a completed or failed job must not be overwritten.
+      const claimed = await tx.conversionJob.updateMany({
+        where: {
+          id: job.id,
+          status: { notIn: [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.EXPIRED] },
+        },
         data: {
           status: JobStatus.CANCELLED,
           completedAt: new Date(),
@@ -396,6 +476,8 @@ export class ConversionsService implements OnModuleInit {
           errorMessage: 'The conversion was cancelled.',
         },
       });
+      const updatedJob = await tx.conversionJob.findUniqueOrThrow({ where: { id: job.id } });
+      if (claimed.count === 0) return updatedJob;
 
       await tx.quotaReservation.updateMany({
         where: { conversionJobId: job.id, status: ReservationStatus.RESERVED },

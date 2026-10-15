@@ -220,7 +220,7 @@ automatic extraction, embeddings and generated summaries require server-only `AI
 AI_PROVIDER=openai-compatible
 AI_BASE_URL=https://api.openai.com/v1
 AI_API_KEY=
-AI_CHAT_MODEL=gpt-5-mini
+AI_CHAT_MODEL=gpt-6-luna
 AI_EMBEDDING_MODEL=text-embedding-3-small
 ```
 
@@ -260,10 +260,10 @@ FEATURE_BLOG_STUDIO=true
 AI_PROVIDER=openai-compatible
 AI_BASE_URL=https://api.openai.com/v1
 AI_API_KEY=
-AI_CHAT_MODEL=gpt-5-mini
+AI_CHAT_MODEL=gpt-6-luna
 BLOG_STUDIO_ENCRYPTION_KEY=replace-with-an-independent-32-byte-secret
 TAVILY_API_KEY=
-BLOG_IMAGE_MODEL=gpt-image-1
+BLOG_IMAGE_MODEL=gpt-image-2.5-flare
 ```
 
 `TAVILY_API_KEY` is optional. When present (or when an organization owner adds a Tavily credential),

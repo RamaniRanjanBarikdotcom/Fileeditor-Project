@@ -1,4 +1,4 @@
-import { Worker, Job } from 'bullmq';
+import { Worker, Job, UnrecoverableError } from 'bullmq';
 import { PrismaClient, JobStatus, FileStatus, ReservationStatus } from '@prisma/client';
 import { StorageClient, createStorageConfig } from '@docconv/storage';
 import { workerLogger as logger } from '@docconv/logging';
@@ -7,6 +7,7 @@ import { PandocAdapter } from './adapters/pandoc';
 import { SheetJSAdapter } from './adapters/sheetjs';
 import { ImagePdfAdapter } from './adapters/image-pdf';
 import { PdfExtractorAdapter } from './adapters/pdf-extractor';
+import { PdfOpsAdapter, UserFacingConversionError } from './adapters/pdf-ops';
 import { WebContentAdapter } from './adapters/web-content';
 import { styleMarkdownHtml } from './markdown-document';
 import {
@@ -16,6 +17,8 @@ import {
   OutputFormat,
   ErrorCode,
   normalizeConversionOptions,
+  ServerPdfOperation,
+  SERVER_PDF_OPERATIONS,
 } from '@docconv/shared-types';
 import { streamToValidatedBuffer } from './output-validator';
 import IORedis from 'ioredis';
@@ -41,6 +44,7 @@ const pandoc = new PandocAdapter();
 const sheetjs = new SheetJSAdapter();
 const imagePdf = new ImagePdfAdapter();
 const pdfExtractor = new PdfExtractorAdapter();
+const pdfOps = new PdfOpsAdapter(gotenberg);
 const webContent = new WebContentAdapter();
 const urlSecurity = new UrlSecurityService();
 const redis = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
@@ -72,6 +76,8 @@ const processJob = async (job: Job) => {
   }
 
   const cancellationKey = `conversion:cancel:${jobId}`;
+  // Out-of-band password for Protect/Unlock (see ConversionsService).
+  const secretKey = `conversion:secret:${jobId}`;
   const cancellationController = new AbortController();
   let checkingCancellation = false;
   const checkCancellation = async () => {
@@ -222,6 +228,20 @@ const processJob = async (job: Job) => {
         options,
         cancellationController.signal,
       );
+    } else if (engine === ConversionEngine.PDF_OPS) {
+      if (!options.pdfOperation) throw new Error('Unsupported PDF operation job without an operation.');
+      const rawSecret = await redis.get(secretKey);
+      if (!rawSecret && 'secret' in SERVER_PDF_OPERATIONS[options.pdfOperation]) {
+        // The password is held for 30 minutes only and is never persisted.
+        throw new UserFacingConversionError('The password has expired. Please run the tool again.');
+      }
+      outputStream = await pdfOps.convert(
+        fileStream,
+        options.pdfOperation,
+        options.operationOptions ?? {},
+        rawSecret ? (JSON.parse(rawSecret) as { password?: string }) : null,
+        cancellationController.signal,
+      );
     } else {
       throw new Error(`Unsupported engine: ${engine} for ${sFmt} -> ${tFmt}`);
     }
@@ -245,8 +265,12 @@ const processJob = async (job: Job) => {
 
     // 5. Upload the validated output before creating its database record.
     const outputExtension = targetFmt === 'markdown' ? 'md' : targetFmt;
+    const operationSuffix = options.pdfOperation ? OPERATION_FILENAME_SUFFIX[options.pdfOperation] : '';
     const outputFilename =
-      conversionJob.sourceFile.originalFilename.replace(/\.[^/.]+$/, '') + '.' + outputExtension;
+      conversionJob.sourceFile.originalFilename.replace(/\.[^/.]+$/, '') +
+      (operationSuffix ? `-${operationSuffix}` : '') +
+      '.' +
+      outputExtension;
     const mimeType = MIME_TYPES[targetFmt] || 'application/octet-stream';
     const outputKey = storage.generateStorageKey(
       conversionJob.organizationId,
@@ -329,7 +353,8 @@ const processJob = async (job: Job) => {
           organizationId: conversionJob.organizationId,
           userId: conversionJob.userId,
           conversionJobId: jobId,
-          operation: `${conversionJob.sourceFormat}.to.${conversionJob.targetFormat}`,
+          operation:
+            options.pdfOperation ?? `${conversionJob.sourceFormat}.to.${conversionJob.targetFormat}`,
           inputBytes: conversionJob.sourceFile.sizeBytes,
           outputBytes: outputBuffer.length,
           processingMs: Date.now() - processingStartedAt,
@@ -338,6 +363,7 @@ const processJob = async (job: Job) => {
       }),
     ]);
 
+    await redis.del(secretKey).catch(() => undefined);
     logger.info({ jobId }, 'Job completed successfully');
     return { success: true, outputKey };
   } catch (error: any) {
@@ -345,7 +371,36 @@ const processJob = async (job: Job) => {
 
     const current = await prisma.conversionJob.findUnique({ where: { id: jobId }, select: { status: true } });
     if (current?.status === JobStatus.CANCELLED) return { success: false, cancelled: true };
-    const errorCode = classifyError(error);
+    // Errors written for customers (wrong password, nothing to redact, ...)
+    // are shown verbatim and never retried.
+    const userMessage = error instanceof UserFacingConversionError ? error.message : null;
+    const errorCode = userMessage ? ErrorCode.VALIDATION_ERROR : classifyError(error);
+    const failureMessage = userMessage ?? safeErrorMessage(errorCode, error);
+
+    // Only the final BullMQ attempt may publish a terminal FAILED state and
+    // release quota. Earlier attempts return the job to QUEUED so clients keep
+    // waiting instead of reporting a failure that a retry may still recover.
+    const retriable = !userMessage && RETRIABLE_ERROR_CODES.has(errorCode);
+    const maxAttempts = Math.max(1, Number(job.opts.attempts || 1));
+    if (retriable && job.attemptsMade + 1 < maxAttempts) {
+      await prisma.$transaction([
+        prisma.conversionJob.update({
+          where: { id: jobId },
+          data: { status: JobStatus.QUEUED, progress: 0 },
+        }),
+        prisma.conversionEvent.create({
+          data: {
+            conversionJobId: jobId,
+            eventType: 'CONVERSION_RETRYING',
+            message: safeErrorMessage(errorCode, error),
+            metadataJson: { errorCode, attempt: job.attemptsMade + 1, maxAttempts },
+          },
+        }),
+      ]);
+      throw error;
+    }
+
+    await redis.del(secretKey).catch(() => undefined);
     await prisma.$transaction([
       prisma.conversionJob.update({
         where: { id: jobId },
@@ -353,7 +408,7 @@ const processJob = async (job: Job) => {
           status: JobStatus.FAILED,
           completedAt: new Date(),
           errorCode,
-          errorMessage: safeErrorMessage(errorCode, error),
+          errorMessage: failureMessage,
         },
       }),
       prisma.quotaReservation.updateMany({
@@ -364,21 +419,44 @@ const processJob = async (job: Job) => {
         data: {
           conversionJobId: jobId,
           eventType: 'CONVERSION_FAILED',
-          message: safeErrorMessage(errorCode, error),
+          message: failureMessage,
           metadataJson: { errorCode },
         },
       }),
     ]);
 
-    throw error;
+    // Deterministic failures (unsupported input, invalid output, encrypted
+    // files) cannot succeed on retry, so stop BullMQ from re-running them.
+    throw retriable ? error : new UnrecoverableError(error?.message || String(error));
   } finally {
     clearInterval(cancellationInterval);
     await redis.del(cancellationKey).catch(() => undefined);
   }
 };
 
+const OPERATION_FILENAME_SUFFIX: Record<ServerPdfOperation, string> = {
+  'pdf.compress': 'compressed',
+  'pdf.protect': 'protected',
+  'pdf.unlock': 'unlocked',
+  'pdf.repair': 'repaired',
+  'pdf.grayscale': 'grayscale',
+  'pdf.ocrSearchable': 'searchable',
+  'pdf.redact': 'redacted',
+  'pdf.extractImages': 'images',
+  'pdf.toExcel': '',
+  'pdf.toPptx': '',
+  'pdf.toPdfA': 'pdfa',
+};
+
+const RETRIABLE_ERROR_CODES = new Set<ErrorCode>([
+  ErrorCode.CONVERSION_TIMEOUT,
+  ErrorCode.ENGINE_UNAVAILABLE,
+  ErrorCode.CONVERSION_ENGINE_FAILURE,
+]);
+
 function classifyError(error: unknown): ErrorCode {
   const message = error instanceof Error ? error.message.toLowerCase() : '';
+  if (message.includes('no readable text')) return ErrorCode.NO_TEXT_FOUND;
   if (message.includes('timeout') || message.includes('timed out')) return ErrorCode.CONVERSION_TIMEOUT;
   if (message.includes('password') || message.includes('encrypted')) return ErrorCode.PASSWORD_PROTECTED_FILE;
   if (message.includes('valid pdf') || message.includes('cannot be parsed') || message.includes('valid docx') || message.includes('valid xlsx')) return ErrorCode.OUTPUT_VALIDATION_FAILED;
@@ -390,7 +468,9 @@ function classifyError(error: unknown): ErrorCode {
 function safeErrorMessage(code: ErrorCode, error: unknown): string {
   const messages: Record<string, string> = {
     [ErrorCode.CONVERSION_TIMEOUT]: 'The conversion took too long. Try a smaller file or simpler page.',
-    [ErrorCode.PASSWORD_PROTECTED_FILE]: 'Password-protected PDFs are not supported by this tool.',
+    [ErrorCode.PASSWORD_PROTECTED_FILE]: 'This PDF is password-protected. Remove the password with Unlock PDF, then try again.',
+    [ErrorCode.NO_TEXT_FOUND]:
+      'No readable text was found in this PDF. Check that the scan is sharp and the text is printed, not handwritten.',
     [ErrorCode.OUTPUT_VALIDATION_FAILED]: 'The converter created an unusable file, so it was rejected.',
     [ErrorCode.ENGINE_UNAVAILABLE]: 'The required conversion engine is currently unavailable.',
     [ErrorCode.UNSUPPORTED_CONVERSION]: 'This input and output combination is not supported.',

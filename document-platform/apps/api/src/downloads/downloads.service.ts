@@ -54,12 +54,15 @@ export class DownloadsService {
       throw new NotFoundException('No active software release found for this product.');
     }
 
-    // 2. Generate Presigned URL (15 minutes TTL)
+    // 2. Generate Presigned URL (15 minutes TTL). Keep the real file type
+    // (an .exe installer must not download as .zip).
+    const extension = release.storageKey.match(/\.[A-Za-z0-9]{1,10}$/)?.[0] ?? '.zip';
+    const fileName = `${entitlement.product.slug}-${release.version}${extension}`;
     const signedUrl = await this.storage.getSignedDownloadUrl(
       'outputs',
       release.storageKey,
       900,
-      `${entitlement.product.slug}-${release.version}.zip`,
+      fileName,
     );
 
     // 3. Log download event
@@ -78,7 +81,7 @@ export class DownloadsService {
 
     return {
       downloadUrl: signedUrl,
-      fileName: `${entitlement.product.slug}-${release.version}.zip`,
+      fileName,
       version: release.version,
       fileSizeBytes: Number(release.fileSizeBytes),
       checksumSha256: release.fileSha256,
@@ -145,6 +148,12 @@ export class DownloadsService {
               status: license.status,
               activationsUsed: license.activations.length,
               maxActivations: license.maxActivations,
+              devices: license.activations.map((activation) => ({
+                id: activation.id,
+                deviceInfo: activation.deviceInfo,
+                activatedAt: activation.createdAt,
+                lastSeenAt: activation.lastPingAt,
+              })),
             }
           : null,
       };

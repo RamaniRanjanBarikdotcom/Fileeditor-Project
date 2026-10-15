@@ -19,6 +19,7 @@ import {
   Users,
   WalletCards,
   Zap,
+  ReceiptText,
 } from 'lucide-react';
 import { useFeatureFlags } from '../../lib/use-feature-flags';
 
@@ -134,7 +135,7 @@ const PLAN_FIT = [
     icon: Users,
     title: 'Building a team or integration?',
     plan: 'Review Business',
-    description: 'Business is the seeded tier with API eligibility and additional seats.',
+    description: 'Business adds API access and up to ten seats for teams and integrations.',
   },
 ];
 
@@ -152,7 +153,7 @@ const FAQS = [
   {
     question: 'Where do these limits come from?',
     answer:
-      'Operation, file-size, API, and seat values match the seeded plans. For privacy, temporary conversion files expire within 10 minutes on every tier.',
+      'Operation, file-size, API and seat values come from your plan. For privacy, temporary conversion files expire within 10 minutes on every tier.',
   },
   {
     question: 'What happens if I exceed my plan allowance?',
@@ -233,8 +234,8 @@ export default function PricingPage() {
             <p className="section-label">Plans and limits</p>
             <h2>Three tiers, one consistent workspace</h2>
             <p>
-              The plan cards below use the limits currently defined by the application database
-              seed.
+              Every plan includes the same tools and privacy protections. Choose the capacity you
+              need.
             </p>
           </div>
           <div className="pricing-page-plan-grid">
@@ -276,7 +277,7 @@ export default function PricingPage() {
                   </Link>
                 ) : (
                   <span className="btn btn-secondary btn-md cursor-not-allowed opacity-60">
-                    Paid plan coming soon
+                    Billing unavailable in this deployment
                   </span>
                 )}
               </article>
@@ -343,6 +344,36 @@ export default function PricingPage() {
               </Link>
             </div>
           </div>
+          <div className="mt-6 grid gap-7 rounded-3xl border border-emerald-500/20 bg-[var(--bg-card)] p-7 shadow-lg shadow-emerald-500/5 lg:grid-cols-[1fr_auto] lg:items-center lg:p-10">
+            <div>
+              <span className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[.16em] text-emerald-600">
+                <ReceiptText className="h-4 w-4" />
+                Invoice Studio
+              </span>
+              <h2 className="mt-3 text-3xl font-black text-[var(--text-primary)]">Invoicing and inventory</h2>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
+                GST and EU VAT invoices in any language with stock kept in sync. Start free with 20 invoices a
+                month; Pro and Business add unlimited invoices, purchasing, recurring billing and more locations.
+              </p>
+              <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[var(--text-secondary)]">
+                {['Free plan included', 'Monthly or yearly billing', 'USD and INR'].map((item) => (
+                  <li key={item} className="inline-flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="min-w-60 rounded-2xl border border-[var(--border)] bg-[var(--bg-muted)] p-6 text-center">
+              <strong className="block text-3xl text-[var(--text-primary)]">Free to start</strong>
+              <Link href="/app/invoices/settings?tab=plan" className="btn btn-primary btn-md mt-5 w-full justify-center">
+                Compare plans
+              </Link>
+              <Link href="/saas/invoice-inventory" className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-emerald-600">
+                View product details <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -350,9 +381,9 @@ export default function PricingPage() {
         <div className="container-custom">
           <div className="pricing-page-section-heading">
             <p className="section-label">Compare capabilities</p>
-            <h2>See every seeded plan difference</h2>
+            <h2>Compare every plan</h2>
             <p>
-              A focused comparison of the quota and access values the application currently stores.
+              Monthly allowances, file sizes, seats and access for each tier, side by side.
             </p>
           </div>
           <div className="pricing-table-shell">

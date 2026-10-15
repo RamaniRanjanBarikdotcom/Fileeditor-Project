@@ -3,8 +3,11 @@
 const crypto = require('node:crypto');
 const os = require('node:os');
 
-// Replaced by the signed release pipeline. A public key is not a secret.
-const LICENSE_PUBLIC_KEY = process.env.BLOG_STUDIO_LICENSE_PUBLIC_KEY || '';
+// Embedded at packaging time (a public key is not a secret). Customer machines
+// have no BLOG_STUDIO_LICENSE_PUBLIC_KEY variable, so an installer built
+// without the embedded key could never activate.
+const LICENSE_PUBLIC_KEY =
+  require('./license-public-key.cjs') || process.env.BLOG_STUDIO_LICENSE_PUBLIC_KEY || '';
 
 function machineFingerprint() {
   return crypto

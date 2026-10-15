@@ -70,10 +70,27 @@ export class RazorpayService {
     };
   }
 
+  /** Creates a Razorpay plan (INR) for a generic SaaS plan price; returns its id. */
+  async createPlan(params: {
+    name: string;
+    amountMinorUnits: number;
+    interval: 'MONTH' | 'YEAR';
+  }): Promise<string> {
+    if (!this.razorpay) throw new BadRequestException('Razorpay checkout is not configured.');
+    const plan = await (this.razorpay as any).plans.create({
+      period: params.interval === 'YEAR' ? 'yearly' : 'monthly',
+      interval: 1,
+      item: { name: params.name, amount: params.amountMinorUnits, currency: 'INR' },
+    });
+    return plan.id;
+  }
+
   async createSubscription(params: {
     organizationId: string;
     productId: string;
     providerPlanId: string;
+    productSlug?: string;
+    planId?: string;
   }): Promise<{ subscriptionId: string; keyId: string; checkoutUrl?: string }> {
     if (!this.razorpay) throw new BadRequestException('Razorpay checkout is not configured.');
     const subscription = await (this.razorpay as any).subscriptions.create({
@@ -83,7 +100,8 @@ export class RazorpayService {
       notes: {
         organizationId: params.organizationId,
         productId: params.productId,
-        productSlug: 'blog-studio-addon',
+        productSlug: params.productSlug ?? 'blog-studio-addon',
+        ...(params.planId ? { planId: params.planId } : {}),
       },
     });
     return {
@@ -91,6 +109,12 @@ export class RazorpayService {
       keyId: this.keyId,
       checkoutUrl: subscription.short_url || undefined,
     };
+  }
+
+  /** Cancels at the end of the current billing cycle (no mid-cycle cut-off). */
+  async cancelSubscriptionAtCycleEnd(subscriptionId: string) {
+    if (!this.razorpay) throw new BadRequestException('Razorpay checkout is not configured.');
+    return (this.razorpay as any).subscriptions.cancel(subscriptionId, true);
   }
 
   /**

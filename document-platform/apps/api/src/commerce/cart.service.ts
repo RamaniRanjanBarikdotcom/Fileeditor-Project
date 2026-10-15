@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
-import { CurrencyCode } from '@prisma/client';
+import { BillingType, CurrencyCode, ProductType } from '@prisma/client';
 
 @Injectable()
 export class CartService {
@@ -17,7 +17,7 @@ export class CartService {
           include: {
             product: {
               include: {
-                prices: { where: { currency, isActive: true } },
+                prices: { where: { currency, isActive: true, billingType: BillingType.ONE_TIME } },
               },
             },
             price: true,
@@ -36,7 +36,7 @@ export class CartService {
             include: {
               product: {
                 include: {
-                  prices: { where: { currency, isActive: true } },
+                  prices: { where: { currency, isActive: true, billingType: BillingType.ONE_TIME } },
                 },
               },
               price: true,
@@ -47,7 +47,8 @@ export class CartService {
     }
 
     const items = cart.items.map((item) => {
-      const price = item.price || item.product.prices[0];
+      // The stored price may be in another currency; show the selected one.
+      const price = item.product.prices[0];
       return {
         id: item.id,
         productId: item.productId,
@@ -76,11 +77,14 @@ export class CartService {
   async addItem(userId: string, productId: string, currency: CurrencyCode = CurrencyCode.USD) {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
-      include: { prices: { where: { currency, isActive: true } } },
+      include: { prices: { where: { currency, isActive: true, billingType: BillingType.ONE_TIME } } },
     });
 
     if (!product || !product.isPublished) {
       throw new NotFoundException('Product not found or unavailable.');
+    }
+    if (product.type === ProductType.SAAS) {
+      throw new BadRequestException('Subscriptions are started from the product page, not the cart.');
     }
 
     const price = product.prices[0];

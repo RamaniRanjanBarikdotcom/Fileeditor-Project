@@ -79,7 +79,8 @@ services:
     container_name: docconv-gotenberg
     restart: always
     ports:
-      - '3100:3000'
+      # Loopback only: Gotenberg is unauthenticated and fetches remote URLs.
+      - '127.0.0.1:3100:3000'
     command:
       - 'gotenberg'
       - '--chromium-disable-javascript=false'
@@ -200,6 +201,8 @@ services:
       MAX_UPLOAD_SIZE_BYTES: 262144000
       CORS_ORIGIN: http://localhost:5173,http://localhost:3000
       IP_HMAC_SECRET: local-anonymous-quota-secret-change-before-production
+      AUTH_THROTTLE_PER_MINUTE: ${AUTH_THROTTLE_PER_MINUTE:-10}
+      BLOG_SCRAPER_MAX_BROWSERS: ${BLOG_SCRAPER_MAX_BROWSERS:-2}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-AppToolkitLab <onboarding@resend.dev>}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}

@@ -1,7 +1,13 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { LicensesService } from '../licenses/licenses.service';
-import { OrderStatus, PaymentProvider, EntitlementType, Prisma } from '@prisma/client';
+import {
+  OrderStatus,
+  PaymentProvider,
+  EntitlementType,
+  LicenseStatus,
+  Prisma,
+} from '@prisma/client';
 
 @Injectable()
 export class PaymentsService {
@@ -122,5 +128,54 @@ export class PaymentsService {
 
     this.logger.log(`Order '${params.orderId}' fulfillment completed.`);
     return result;
+  }
+
+  /**
+   * Handle a provider refund. A full refund withdraws what the order granted:
+   * download entitlements are deactivated and its license keys revoked (the
+   * desktop app drops a revoked license at its next online check). Partial
+   * refunds are recorded only.
+   */
+  async refundOrder(params: {
+    provider: PaymentProvider;
+    providerPaymentId: string;
+    refundedMinorUnits: number;
+  }) {
+    const order = await this.prisma.order.findFirst({
+      where: { paymentProvider: params.provider, providerPaymentId: params.providerPaymentId },
+    });
+    if (!order) return { refunded: false, reason: 'ORDER_NOT_FOUND' as const };
+    const full = params.refundedMinorUnits >= order.totalAmountMinor;
+    if (!full || order.status === OrderStatus.REFUNDED) {
+      await this.prisma.auditLog.create({
+        data: {
+          userId: order.userId,
+          action: full ? 'ORDER_REFUND_DUPLICATE' : 'ORDER_PARTIALLY_REFUNDED',
+          resourceType: 'Order',
+          resourceId: order.id,
+          metadataJson: { refundedMinorUnits: params.refundedMinorUnits },
+        },
+      });
+      return { refunded: false, reason: full ? ('ALREADY_REFUNDED' as const) : ('PARTIAL' as const) };
+    }
+    await this.prisma.$transaction([
+      this.prisma.order.update({ where: { id: order.id }, data: { status: OrderStatus.REFUNDED } }),
+      this.prisma.entitlement.updateMany({ where: { orderId: order.id }, data: { isActive: false } }),
+      this.prisma.licenseKey.updateMany({
+        where: { orderId: order.id },
+        data: { status: LicenseStatus.REVOKED },
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          userId: order.userId,
+          action: 'ORDER_REFUNDED',
+          resourceType: 'Order',
+          resourceId: order.id,
+          metadataJson: { provider: params.provider, refundedMinorUnits: params.refundedMinorUnits },
+        },
+      }),
+    ]);
+    this.logger.log(`Order '${order.id}' refunded; entitlements and licenses revoked.`);
+    return { refunded: true, orderId: order.id };
   }
 }

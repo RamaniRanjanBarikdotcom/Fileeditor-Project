@@ -1,345 +1,471 @@
-'use client';
-
 import React from 'react';
 import Link from 'next/link';
 import {
-  ArrowRight, Sparkles, ShieldCheck, Zap, CheckCircle2,
-  ShoppingBag, Star, TrendingUp, Lock,
+  ArrowRight,
+  BadgeCheck,
+  CheckCircle2,
+  Clock3,
+  Download,
+  FileText,
+  MousePointerClick,
+  ScanSearch,
+  ShieldCheck,
+  Star,
+  UploadCloud,
+  UserRound,
 } from 'lucide-react';
-import { TOOL_PRESENTATION_MAP } from '../lib/tools-registry';
+import { listToolDefinitions } from '@docconv/tool-registry';
+import { getToolPresentation } from '../lib/tools-registry';
+import { groupTools } from '../lib/tool-groups';
+import { toolGroupIcon } from '../lib/tool-group-icons';
 
-export default function HomePage() {
-  const tools = Object.values(TOOL_PRESENTATION_MAP).slice(0, 8);
+const POPULAR_TOOL_SLUGS = [
+  'merge-pdf',
+  'compress-pdf',
+  'pdf-to-docx',
+  'split-pdf',
+  'pdf-editor',
+  'ocr-pdf',
+  'protect-pdf',
+  'image-to-pdf',
+];
 
+const PLANS = [
+  {
+    name: 'Free',
+    audience: 'For occasional use',
+    price: '$0',
+    period: 'forever',
+    features: [
+      '300 operations per month',
+      '25 MB maximum file size',
+      'Private browser tools included',
+      'Start without an account',
+    ],
+    cta: 'Start for free',
+    href: '/register',
+  },
+  {
+    name: 'Pro',
+    audience: 'For regular document work',
+    price: '$9',
+    period: '/mo · ₹749',
+    features: [
+      '500 operations per month',
+      '100 MB maximum file size',
+      'Priority processing',
+      '1 workspace seat',
+    ],
+    cta: 'Choose Pro',
+    href: '/pricing',
+    featured: true,
+  },
+  {
+    name: 'Business',
+    audience: 'For larger workflows',
+    price: '$29',
+    period: '/mo · ₹2,499',
+    features: [
+      '5,000 operations per month',
+      '250 MB maximum file size',
+      'Up to 10 seats',
+      'API access enabled',
+    ],
+    cta: 'Choose Business',
+    href: '/pricing',
+  },
+];
+
+const PRINCIPLES = [
+  {
+    icon: ShieldCheck,
+    title: 'Private by design',
+    body: 'PDF utilities run entirely in your browser. Files sent to the server expire automatically within ten minutes.',
+  },
+  {
+    icon: BadgeCheck,
+    title: 'Validated output',
+    body: 'Every converted file is checked before it is offered for download, so you never receive a broken document.',
+  },
+  {
+    icon: ScanSearch,
+    title: 'Scanned before processing',
+    body: 'Uploads pass a malware scan and strict file-type checks before any conversion engine touches them.',
+  },
+  {
+    icon: UserRound,
+    title: 'No account to start',
+    body: 'Use the tools straight away. Create a free account only when you want history and higher limits.',
+  },
+];
+
+const STEPS = [
+  {
+    icon: MousePointerClick,
+    title: 'Choose a tool',
+    body: 'Pick from PDF, document, image and web tools — each built for one job.',
+  },
+  {
+    icon: UploadCloud,
+    title: 'Add your file',
+    body: 'Drop a file or paste a link. Private tools never leave your device.',
+  },
+  {
+    icon: Download,
+    title: 'Download the result',
+    body: 'Get a validated file in seconds, ready to share or edit.',
+  },
+];
+
+function HeroPreview() {
+  const files = [
+    { name: 'Quarterly-report.pdf', meta: '2.4 MB · 18 pages' },
+    { name: 'Appendix-tables.pdf', meta: '860 KB · 6 pages' },
+    { name: 'Signed-cover.pdf', meta: '312 KB · 1 page' },
+  ];
   return (
-    <div style={{ overflowX: 'hidden' }}>
-
-      {/* HERO */}
-      <section style={{
-        position: 'relative',
-        padding: 'clamp(6rem,10vw,9rem) 0 clamp(4rem,6vw,6rem)',
-        overflow: 'hidden',
-      }}>
-        <div style={{
-          position: 'absolute', inset: 0, zIndex: 0,
-          background: 'radial-gradient(ellipse 90% 70% at 50% -5%, rgba(99,102,241,0.22) 0%, transparent 65%)',
-        }} />
-        <div style={{
-          position: 'absolute', inset: 0, zIndex: 0,
-          backgroundImage: 'radial-gradient(circle, rgba(99,102,241,0.12) 1px, transparent 1px)',
-          backgroundSize: '30px 30px',
-          maskImage: 'radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 80%)',
-        }} />
-        <div className="orb" style={{
-          position: 'absolute', width: 500, height: 500, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)',
-          top: -120, left: -80, filter: 'blur(50px)', zIndex: 0,
-        }} />
-        <div className="orb-r" style={{
-          position: 'absolute', width: 400, height: 400, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(236,72,153,0.1) 0%, transparent 70%)',
-          bottom: -60, right: -60, filter: 'blur(60px)', zIndex: 0,
-        }} />
-
-        <div className="container-custom" style={{ position: 'relative', zIndex: 1 }}>
-          <div style={{ maxWidth: '54rem', margin: '0 auto', textAlign: 'center' }}>
-            <div style={{ marginBottom: '1.75rem' }}>
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-                padding: '0.4rem 1rem', borderRadius: '9999px',
-                background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)',
-                color: 'var(--brand-400)', fontSize: '0.72rem', fontWeight: 800,
-                letterSpacing: '0.08em', textTransform: 'uppercase',
-              }}>
-                <Sparkles style={{ width: '0.8rem', height: '0.8rem' }} />
-                A Gonexel Product
-              </span>
-            </div>
-
-            <h1 style={{
-              fontSize: 'clamp(2.6rem,6vw,5rem)', fontWeight: 900,
-              lineHeight: 1.06, letterSpacing: '-0.035em',
-              color: 'var(--text-primary)', marginBottom: '1.5rem',
-            }}>
-              Document tools that{' '}
-              <span className="gradient-text">actually work</span>
-              <br />the way you think.
-            </h1>
-
-            <p style={{
-              fontSize: 'clamp(1rem,1.8vw,1.15rem)', color: 'var(--text-secondary)',
-              lineHeight: 1.75, maxWidth: '42rem', margin: '0 auto 2.5rem',
-            }}>
-              Convert PDFs, capture webpages, extract text with OCR, and edit documents —
-              all from one clean workspace. No installs. No friction.
-            </p>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '2.5rem' }}>
-              <Link href="/tools" className="btn btn-primary btn-lg">
-                <Zap style={{ width: '1rem', height: '1rem' }} />
-                Try free tools
-              </Link>
-              <Link href="/software" className="btn btn-secondary btn-lg">
-                <ShoppingBag style={{ width: '1rem', height: '1rem', color: 'var(--brand-500)' }} />
-                Browse software
-              </Link>
-            </div>
-
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              flexWrap: 'wrap', gap: '0.6rem 1.75rem',
-              fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 500,
-            }}>
-              {[
-                { icon: Zap, label: 'Instant browser processing', color: '#f59e0b' },
-                { icon: ShieldCheck, label: 'Isolated worker jobs', color: '#10b981' },
-                { icon: CheckCircle2, label: 'No credit card needed', color: '#6366f1' },
-              ].map(({ icon: Icon, label, color }) => (
-                <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <Icon style={{ width: '0.9rem', height: '0.9rem', color }} />
-                  {label}
-                </span>
-              ))}
+    <div className="hp-preview" aria-hidden="true">
+      <div className="hp-preview-window">
+        <div className="hp-preview-bar">
+          <span />
+          <span />
+          <span />
+          <p>Merge PDF</p>
+        </div>
+        <div className="hp-preview-body">
+          <div className="hp-preview-drop">
+            <UploadCloud />
+            <div>
+              <strong>3 files ready</strong>
+              <small>Drag to reorder pages</small>
             </div>
           </div>
+          <ul className="hp-preview-files">
+            {files.map((file, index) => (
+              <li key={file.name}>
+                <span className="hp-preview-index">{index + 1}</span>
+                <span className="hp-preview-fileicon">
+                  <FileText />
+                </span>
+                <span className="hp-preview-filename">
+                  <strong>{file.name}</strong>
+                  <small>{file.meta}</small>
+                </span>
+                <CheckCircle2 className="hp-preview-check" />
+              </li>
+            ))}
+          </ul>
+          <div className="hp-preview-progress">
+            <div>
+              <strong>Merging locally</strong>
+              <span>86%</span>
+            </div>
+            <span className="hp-preview-track">
+              <span />
+            </span>
+          </div>
+          <div className="hp-preview-result">
+            <span className="hp-preview-fileicon hp-preview-fileicon-done">
+              <FileText />
+            </span>
+            <span className="hp-preview-filename">
+              <strong>merged-report.pdf</strong>
+              <small>25 pages · validated</small>
+            </span>
+            <span className="hp-preview-download">
+              <Download /> Download
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="hp-preview-chip hp-preview-chip-top">
+        <ShieldCheck /> Processed on your device
+      </div>
+      <div className="hp-preview-chip hp-preview-chip-bottom">
+        <Clock3 /> Server files expire in 10 min
+      </div>
+    </div>
+  );
+}
+
+export default function HomePage() {
+  const definitions = listToolDefinitions();
+  const toolCount = definitions.length;
+  const privateCount = definitions.filter(
+    (tool) => tool.capability.preferred === 'BROWSER',
+  ).length;
+  const categoryCount = new Set(definitions.map((tool) => tool.category)).size;
+  const taskGroups = groupTools(definitions);
+  const popular = POPULAR_TOOL_SLUGS.map((slug) => ({
+    definition: definitions.find((tool) => tool.slug === slug),
+    presentation: getToolPresentation(slug),
+  })).filter((tool) => tool.definition);
+
+  return (
+    <div className="hp">
+      {/* Hero */}
+      <section className="hp-hero">
+        <div className="hp-hero-backdrop" aria-hidden="true" />
+        <div className="container-custom hp-hero-grid">
+          <div className="hp-hero-copy">
+            <span className="hp-eyebrow">
+              <span className="hp-eyebrow-dot" />
+              PDF, Office, OCR and web capture in one place
+            </span>
+            <h1>
+              Every document task,
+              <span> done in seconds.</span>
+            </h1>
+            <p className="hp-lead">
+              Merge, split, convert and edit PDFs, turn webpages into documents and pull text out of
+              scans — with private in-browser processing and no software to install.
+            </p>
+            <div className="hp-hero-actions">
+              <Link href="/tools" className="btn btn-primary btn-lg">
+                Explore free tools <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link href="/pricing" className="btn btn-secondary btn-lg">
+                View pricing
+              </Link>
+            </div>
+            <ul className="hp-hero-trust">
+              <li>
+                <CheckCircle2 /> No sign-up to start
+              </li>
+              <li>
+                <CheckCircle2 /> Free plan, no card required
+              </li>
+              <li>
+                <CheckCircle2 /> Works on any device
+              </li>
+            </ul>
+          </div>
+          <HeroPreview />
         </div>
       </section>
 
-      {/* TOOLS GRID */}
-      <section style={{
-        padding: 'clamp(4rem,6vw,5.5rem) 0',
-        borderTop: '1px solid var(--border)',
-        background: 'var(--bg)',
-      }}>
+      {/* Stats */}
+      <section className="hp-stats" aria-label="Platform at a glance">
         <div className="container-custom">
-          <div style={{ textAlign: 'center', marginBottom: 'clamp(2.5rem,4vw,3.5rem)' }}>
-            <p className="section-label" style={{ marginBottom: '0.75rem' }}>17 tools and counting</p>
-            <h2 className="ts-h2" style={{ color: 'var(--text-primary)', marginBottom: '0.75rem' }}>
-              Everything you need, nothing you don&apos;t
-            </h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1.65, maxWidth: '38rem', margin: '0 auto' }}>
-              Each tool is purpose-built for one job and does it exceptionally well.
-            </p>
-          </div>
+          <dl>
+            <div>
+              <dt>Online tools</dt>
+              <dd>{toolCount}</dd>
+            </div>
+            <div>
+              <dt>Private in-browser tools</dt>
+              <dd>{privateCount}</dd>
+            </div>
+            <div>
+              <dt>Tool categories</dt>
+              <dd>{categoryCount}</dd>
+            </div>
+            <div>
+              <dt>Maximum server file lifetime</dt>
+              <dd>10 min</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-            gap: '1rem', maxWidth: '72rem', margin: '0 auto',
-          }}>
-            {tools.map((tool) => {
-              const Icon = tool.icon;
+      {/* Popular tools */}
+      <section className="hp-section">
+        <div className="container-custom">
+          <header className="hp-section-head">
+            <p className="section-label">Popular tools</p>
+            <h2>The tools people reach for every day</h2>
+            <p>
+              {toolCount} focused tools across {categoryCount} categories. Each one does a single
+              job well.
+            </p>
+          </header>
+          <div className="hp-tool-grid">
+            {popular.map(({ definition, presentation }) => {
+              const Icon = presentation.icon;
               return (
-                <Link key={tool.slug} href={`/tools/${tool.slug}`}
-                  className="home-tool-card group"
-                  style={{ '--tool-accent': tool.accentColor } as React.CSSProperties}
+                <Link
+                  key={presentation.slug}
+                  href={`/tools/${presentation.slug}`}
+                  className="hp-tool-card"
+                  style={{ '--tool-accent': presentation.accentColor } as React.CSSProperties}
                 >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                      <div style={{
-                        width: '2.5rem', height: '2.5rem', borderRadius: '0.65rem',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: `${tool.accentColor}15`, border: `1px solid ${tool.accentColor}30`,
-                        color: tool.accentColor, flexShrink: 0,
-                        transition: 'transform 200ms ease',
-                      }} className="group-hover:scale-110">
-                        <Icon style={{ width: '1.1rem', height: '1.1rem' }} />
-                      </div>
-                      {tool.badge && (
-                        <span style={{
-                          fontSize: '0.58rem', fontWeight: 800, letterSpacing: '0.04em',
-                          textTransform: 'uppercase', padding: '0.22rem 0.5rem',
-                          borderRadius: '9999px', background: `${tool.accentColor}12`,
-                          color: tool.accentColor, border: `1px solid ${tool.accentColor}25`,
-                        }}>
-                          {tool.badge}
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="home-tool-title">{tool.name}</h3>
-                    <p className="home-tool-description">{tool.features[0]}</p>
-                  </div>
-                  <div className="home-tool-card-footer">
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-                      <Zap style={{ width: '0.75rem', height: '0.75rem', display: 'inline', color: '#f59e0b', marginRight: '0.25rem' }} />
-                      Free to try
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', fontWeight: 700, color: tool.accentColor }}>
-                      Open <ArrowRight style={{ width: '0.75rem', height: '0.75rem' }} />
-                    </span>
-                  </div>
+                  <span className="hp-tool-icon">
+                    <Icon />
+                  </span>
+                  <span className="hp-tool-category">{definition!.category}</span>
+                  <h3>{presentation.name}</h3>
+                  <p>{definition!.description}</p>
+                  <span className="hp-tool-link">
+                    Open tool <ArrowRight />
+                  </span>
                 </Link>
               );
             })}
           </div>
-
-          <div style={{ textAlign: 'center', marginTop: '2.5rem' }}>
+          <div className="hp-center">
             <Link href="/tools" className="btn btn-secondary btn-md">
-              View all tools <ArrowRight style={{ width: '0.85rem', height: '0.85rem' }} />
+              Browse all {toolCount} tools <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </div>
       </section>
 
-      {/* WHY SECTION */}
-      <section style={{
-        padding: 'clamp(4rem,6vw,5.5rem) 0',
-        background: 'var(--bg-card)',
-        borderTop: '1px solid var(--border)',
-        borderBottom: '1px solid var(--border)',
-      }}>
+      {/* Browse by task */}
+      <section className="hp-section hp-section-alt">
         <div className="container-custom">
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: '1px', background: 'var(--border)',
-            borderRadius: '1.25rem', overflow: 'hidden',
-            border: '1px solid var(--border)',
-          }}>
-            {[
-              { icon: ShieldCheck, color: '#10b981', title: 'Private by design', body: 'Browser tools never upload your file. Server jobs use isolated storage with automatic expiry.' },
-              { icon: Zap, color: '#f59e0b', title: 'Fast every time', body: 'Browser processing is instant. Server jobs run in dedicated workers with no shared queues.' },
-              { icon: CheckCircle2, color: '#6366f1', title: 'No account needed', body: 'Every tool works anonymously. Create an account only when you need history or higher limits.' },
-              { icon: TrendingUp, color: '#a855f7', title: 'Built to scale', body: 'From a single PDF to thousands of batch jobs — the same API powers both seamlessly.' },
-            ].map(({ icon: Icon, color, title, body }) => (
-              <div key={title} style={{ padding: '2rem 1.75rem', background: 'var(--bg-card)' }}>
-                <div style={{
-                  width: '2.5rem', height: '2.5rem', borderRadius: '0.65rem',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: `${color}12`, border: `1px solid ${color}28`,
-                  color, marginBottom: '1.25rem',
-                }}>
-                  <Icon style={{ width: '1.1rem', height: '1.1rem' }} />
-                </div>
-                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>{title}</h3>
-                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.65 }}>{body}</p>
-              </div>
+          <header className="hp-section-head">
+            <p className="section-label">Browse by task</p>
+            <h2>Find the right tool for the job</h2>
+            <p>Every tool is organized by what you want to do with your file.</p>
+          </header>
+          <div className="hp-task-grid">
+            {taskGroups.map(({ group, tools }) => {
+              const GroupIcon = toolGroupIcon(group.id);
+              return (
+                <Link key={group.id} href={`/tools?group=${group.id}`} className="hp-task-card">
+                  <span className="hp-step-icon">
+                    <GroupIcon />
+                  </span>
+                  <span className="hp-task-copy">
+                    <strong>
+                      {group.title} <small>{tools.length} tools</small>
+                    </strong>
+                    <span>{group.description}</span>
+                  </span>
+                  <ArrowRight className="hp-task-arrow" />
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="hp-section">
+        <div className="container-custom">
+          <header className="hp-section-head">
+            <p className="section-label">How it works</p>
+            <h2>From file to finished in three steps</h2>
+          </header>
+          <ol className="hp-steps">
+            {STEPS.map(({ icon: Icon, title, body }, index) => (
+              <li key={title}>
+                <span className="hp-step-number">{index + 1}</span>
+                <span className="hp-step-icon">
+                  <Icon />
+                </span>
+                <h3>{title}</h3>
+                <p>{body}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      {/* Principles */}
+      <section className="hp-section hp-section-alt">
+        <div className="container-custom">
+          <header className="hp-section-head">
+            <p className="section-label">Built for trust</p>
+            <h2>Your documents stay yours</h2>
+            <p>Security and privacy are part of how every tool is built, not an add-on.</p>
+          </header>
+          <div className="hp-principles">
+            {PRINCIPLES.map(({ icon: Icon, title, body }) => (
+              <article key={title}>
+                <span className="hp-principle-icon">
+                  <Icon />
+                </span>
+                <h3>{title}</h3>
+                <p>{body}</p>
+              </article>
             ))}
           </div>
         </div>
       </section>
 
-      {/* PRICING */}
-      <section style={{ padding: 'clamp(4rem,6vw,5.5rem) 0', background: 'var(--bg)' }}>
+      {/* Pricing */}
+      <section className="hp-section">
         <div className="container-custom">
-          <div style={{ textAlign: 'center', marginBottom: 'clamp(2.5rem,4vw,3.5rem)' }}>
-            <p className="section-label" style={{ marginBottom: '0.75rem' }}>Simple pricing</p>
-            <h2 className="ts-h2" style={{ color: 'var(--text-primary)', marginBottom: '0.75rem' }}>
-              Start free. Scale when ready.
-            </h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1.65, maxWidth: '36rem', margin: '0 auto' }}>
-              No hidden fees. Cancel anytime. Every plan includes the full tool suite.
-            </p>
-          </div>
-
+          <header className="hp-section-head">
+            <p className="section-label">Pricing</p>
+            <h2>Start free. Upgrade when you need more.</h2>
+            <p>Simple monthly plans with clear limits. Cancel anytime.</p>
+          </header>
           <div className="home-pricing-grid">
-            {[
-              { name: 'Free', audience: 'For getting started', price: '$0', period: 'forever',
-                features: ['10 operations / day', '25 MB file limit', 'All browser tools', 'No account required'],
-                cta: 'Start for free', href: '/register', primary: false },
-              { name: 'Pro', audience: 'For professionals', price: '$9', period: '/mo or \u20b9749',
-                features: ['500 operations / month', '100 MB file limit', 'Priority processing', 'Conversion history'],
-                cta: 'Get Pro', href: '/pricing', primary: true, badge: 'Most popular' },
-              { name: 'Business', audience: 'For teams', price: '$29', period: '/mo or \u20b92,499',
-                features: ['5,000 ops / month', '250 MB file limit', 'REST API access', '10 team seats'],
-                cta: 'Get Business', href: '/pricing', primary: false },
-            ].map((plan) => (
-              <article key={plan.name} className={`pricing-plan-card${plan.primary ? ' pricing-plan-card-popular' : ''}`}>
+            {PLANS.map((plan) => (
+              <article
+                key={plan.name}
+                className={`pricing-plan-card${plan.featured ? ' pricing-plan-card-popular' : ''}`}
+              >
                 <div className="pricing-plan-heading">
                   <div>
                     <p className="pricing-plan-audience">{plan.audience}</p>
                     <h3>{plan.name}</h3>
                   </div>
-                  {plan.badge && (
+                  {plan.featured && (
                     <span className="pricing-plan-badge">
                       <Star style={{ width: '0.6rem', height: '0.6rem' }} fill="currentColor" />
-                      {plan.badge}
+                      Most popular
                     </span>
                   )}
                 </div>
                 <div className="pricing-plan-price">
-                  <span className={plan.primary ? 'gradient-text' : ''}>{plan.price}</span>
+                  <span>{plan.price}</span>
                   <small>{plan.period}</small>
                 </div>
                 <ul className="pricing-plan-features">
-                  {plan.features.map(f => (
-                    <li key={f} className="feature-item">
-                      <CheckCircle2 style={{ width: '0.9rem', height: '0.9rem', color: plan.primary ? 'var(--brand-500)' : 'var(--success)', flexShrink: 0 }} />
-                      {f}
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="feature-item">
+                      <CheckCircle2
+                        style={{
+                          width: '0.9rem',
+                          height: '0.9rem',
+                          color: plan.featured ? 'var(--brand-500)' : 'var(--success)',
+                          flexShrink: 0,
+                        }}
+                      />
+                      {feature}
                     </li>
                   ))}
                 </ul>
-                <Link href={plan.href} className={`btn ${plan.primary ? 'btn-primary' : 'btn-secondary'} btn-md pricing-plan-action`}>
-                  {plan.cta} {plan.primary && <ArrowRight style={{ width: '0.85rem', height: '0.85rem' }} />}
+                <Link
+                  href={plan.href}
+                  className={`btn ${plan.featured ? 'btn-primary' : 'btn-secondary'} btn-md pricing-plan-action`}
+                >
+                  {plan.cta}
                 </Link>
               </article>
             ))}
           </div>
-
           <div className="home-pricing-compare">
             <Link href="/pricing">
-              Compare all features in detail
+              Compare all plan features
               <ArrowRight style={{ width: '0.85rem', height: '0.85rem' }} />
             </Link>
           </div>
         </div>
       </section>
 
-      {/* BOTTOM CTA */}
-      <section style={{ padding: 'clamp(3rem,5vw,4.5rem) 0', borderTop: '1px solid var(--border)' }}>
+      {/* Closing call to action */}
+      <section className="hp-cta-section">
         <div className="container-custom">
-          <div style={{
-            position: 'relative', overflow: 'hidden',
-            padding: 'clamp(2.5rem,5vw,4rem)', borderRadius: '1.5rem',
-            background: 'linear-gradient(130deg, #4338ca 0%, #6d28d9 50%, #9333ea 100%)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            boxShadow: '0 24px 70px rgba(79,70,229,0.3)',
-            textAlign: 'center',
-          }}>
-            <div style={{ position: 'absolute', top: -80, right: -80, width: 300, height: 300, borderRadius: '50%', background: 'rgba(255,255,255,0.07)', pointerEvents: 'none' }} />
-            <div style={{ position: 'absolute', bottom: -60, left: -60, width: 240, height: 240, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
-            <div style={{ position: 'relative', zIndex: 1 }}>
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
-                padding: '0.35rem 0.85rem', borderRadius: '9999px',
-                background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
-                color: '#fff', fontSize: '0.68rem', fontWeight: 800, letterSpacing: '0.08em',
-                textTransform: 'uppercase', marginBottom: '1.5rem',
-              }}>
-                <Lock style={{ width: '0.7rem', height: '0.7rem' }} />
-                Free forever plan available
-              </span>
-              <h2 style={{ fontSize: 'clamp(1.75rem,4vw,2.75rem)', fontWeight: 900, color: '#fff', lineHeight: 1.15, letterSpacing: '-0.03em', marginBottom: '1rem' }}>
-                Ready to convert your first file?
-              </h2>
-              <p style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.75)', lineHeight: 1.65, maxWidth: '36rem', margin: '0 auto 2rem' }}>
-                No account required to start. Pick a tool, drop your file, and download the result in seconds.
-              </p>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <Link href="/tools" style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-                  padding: '0.85rem 2rem', borderRadius: '0.75rem',
-                  background: '#fff', color: '#4338ca',
-                  fontSize: '0.95rem', fontWeight: 800, textDecoration: 'none',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                }}>
-                  Browse all tools <ArrowRight style={{ width: '0.9rem', height: '0.9rem' }} />
-                </Link>
-                <Link href="/register" style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-                  padding: '0.85rem 1.75rem', borderRadius: '0.75rem',
-                  background: 'rgba(255,255,255,0.12)', color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.25)',
-                  fontSize: '0.95rem', fontWeight: 700, textDecoration: 'none',
-                }}>
-                  Create free account
-                </Link>
-              </div>
+          <div className="hp-cta">
+            <div>
+              <h2>Ready to convert your first file?</h2>
+              <p>No account required. Pick a tool, add your file and download the result.</p>
+            </div>
+            <div className="hp-cta-actions">
+              <Link href="/tools" className="btn btn-lg hp-cta-primary">
+                Browse all tools <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link href="/register" className="btn btn-lg hp-cta-secondary">
+                Create free account
+              </Link>
             </div>
           </div>
         </div>
       </section>
-
     </div>
   );
 }

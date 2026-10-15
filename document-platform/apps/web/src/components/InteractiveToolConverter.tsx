@@ -9,7 +9,6 @@ import {
   Download,
   AlertCircle,
   Loader2,
-  Sparkles,
   Zap,
   ArrowRight,
   RefreshCw,
@@ -18,8 +17,11 @@ import {
   X,
   FileText,
 } from 'lucide-react';
-import { ToolDto } from '@docconv/shared-types';
+import { SERVER_PDF_OPERATIONS, ToolDto } from '@docconv/shared-types';
 import { fetchApi, restoreAccessToken } from '../lib/api';
+import { ToolOptionsForm } from './ToolOptionsForm';
+import { TOOL_OPTION_FIELDS, defaultToolOptions, visibleToolOptions } from '../lib/tool-options';
+import { followJobEvents, JobEventsError, JobStatusEvent } from '../lib/job-events';
 import {
   cancelBrowserProcessing,
   processInBrowserWorker,
@@ -64,19 +66,15 @@ export function InteractiveToolConverter({ tool }: Props) {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [pageSelection, setPageSelection] = useState('1');
   const [pageOrder, setPageOrder] = useState('1');
-  const [rotation, setRotation] = useState('90');
   const [cropMargins, setCropMargins] = useState({ top: '0', right: '0', bottom: '0', left: '0' });
   const [marginPoints, setMarginPoints] = useState('18');
   const [pagesPerSheet, setPagesPerSheet] = useState('2');
   const [gutterPoints, setGutterPoints] = useState('12');
-  const [headerText, setHeaderText] = useState('');
-  const [footerText, setFooterText] = useState('Page {page} of {pages}');
-  const [bates, setBates] = useState({ prefix: 'APP-', suffix: '', start: '1', padding: '6' });
-  const [watermarkText, setWatermarkText] = useState('CONFIDENTIAL');
   const [metadata, setMetadata] = useState({ title: '', author: '', subject: '', keywords: '' });
+  const [toolOptions, setToolOptions] = useState(() => defaultToolOptions(tool.operation));
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
   const localDownloadRefs = useRef<string[]>([]);
 
   const isUrlTool = tool.acceptedFormats.includes('url');
@@ -88,9 +86,16 @@ export function InteractiveToolConverter({ tool }: Props) {
     isBrowserTool &&
     (tool.operation !== 'pdf.toImages' || pdfImageEngine === 'browser' || !hasServerEngine),
   );
-  const acceptsMultipleFiles = ['pdf.merge', 'pdf.alternateMix', 'image.toPdf'].includes(
-    tool.operation || '',
+  const isScanTool = tool.operation === 'image.scanToPdf';
+  const isServerPdfOperation = Boolean(
+    tool.operation && Object.hasOwn(SERVER_PDF_OPERATIONS, tool.operation),
   );
+  const acceptsMultipleFiles = [
+    'pdf.merge',
+    'pdf.alternateMix',
+    'image.toPdf',
+    'image.scanToPdf',
+  ].includes(tool.operation || '');
   const file = files[0] || null;
 
   const clearActiveJob = useCallback(() => {
@@ -100,72 +105,80 @@ export function InteractiveToolConverter({ tool }: Props) {
     setActiveJobId(null);
   }, [tool.slug]);
 
-  const startPolling = useCallback(
+  useEffect(() => {
+    // Each tool starts from its own declared defaults.
+    // oxlint-disable-next-line react/set-state-in-effect
+    setToolOptions(defaultToolOptions(tool.operation));
+  }, [tool.operation]);
+
+  const startStatusStream = useCallback(
     (jobId: string, startTime: number, outputFormat: string) => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      streamAbortRef.current?.abort();
+      const controller = new AbortController();
+      streamAbortRef.current = controller;
       setActiveJobId(jobId);
       const clientDeadlineMs = isUrlTool ? 330_000 : 270_000;
+      const deadline = window.setTimeout(
+        () => {
+          controller.abort();
+          clearActiveJob();
+          setJobStatus('failed');
+          setIsUploading(false);
+          setErrorMessage(
+            'The server did not finish within the allowed time. Please try a smaller input.',
+          );
+        },
+        Math.max(1_000, clientDeadlineMs - (Date.now() - startTime)),
+      );
 
-      // TODO (SSE): Replace polling with Server-Sent Events for push-based updates.
-      pollIntervalRef.current = setInterval(async () => {
-        try {
-          const statusRes = await fetchApi<any>(`/tools/jobs/${jobId}`);
+      const fail = (message: string) => {
+        clearActiveJob();
+        setJobStatus('failed');
+        setIsUploading(false);
+        setErrorMessage(message);
+      };
 
-          if (statusRes.success && statusRes.data) {
-            setProgress(Math.max(60, statusRes.data.progress || 70));
-
-            if (statusRes.data.status === 'COMPLETED') {
-              if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-              clearActiveJob();
-              setProgress(100);
-
-              const downloadRes = await fetchApi<{ url: string }>(
-                `/tools/jobs/${jobId}/download-url`,
-                { method: 'POST' },
-              );
-
-              if (!downloadRes.success || !downloadRes.data?.url) {
-                setJobStatus('failed');
-                setIsUploading(false);
-                setErrorMessage(
-                  'The conversion finished, but the download link could not be created.',
-                );
-                return;
-              }
-
-              const outputName =
-                statusRes.data.outputFilename ||
-                (tool.operation === 'pdf.toImages'
-                  ? `converted-${outputFormat}-pages.zip`
-                  : `converted.${outputFormat}`);
-              setDownloadItems([{ url: downloadRes.data.url, name: outputName }]);
-              setJobStatus('completed');
-              setIsUploading(false);
-              setQuotaRemaining((prev) => (prev !== null ? Math.max(0, prev - 1) : null));
-            } else if (['FAILED', 'CANCELLED', 'EXPIRED'].includes(statusRes.data.status)) {
-              if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-              clearActiveJob();
-              setJobStatus('failed');
-              setIsUploading(false);
-              setErrorMessage(
-                statusRes.data.errorMessage || 'The conversion could not be completed.',
-              );
-            }
-          }
-
-          if (Date.now() - startTime > clientDeadlineMs) {
-            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-            clearActiveJob();
-            setJobStatus('failed');
-            setIsUploading(false);
-            setErrorMessage(
-              'The server did not finish within the allowed time. Please try a smaller input.',
-            );
-          }
-        } catch {
-          // ignore fetch errors so polling continues
+      const finish = async (status: JobStatusEvent) => {
+        clearActiveJob();
+        if (status.status !== 'COMPLETED') {
+          fail(status.errorMessage || 'The conversion could not be completed.');
+          return;
         }
-      }, 1500);
+        setProgress(100);
+        const downloadRes = await fetchApi<{ url: string }>(`/tools/jobs/${jobId}/download-url`, {
+          method: 'POST',
+        });
+        if (!downloadRes.success || !downloadRes.data?.url) {
+          fail('The conversion finished, but the download link could not be created.');
+          return;
+        }
+        const outputName =
+          status.outputFilename ||
+          (tool.operation === 'pdf.toImages'
+            ? `converted-${outputFormat}-pages.zip`
+            : `converted.${outputFormat}`);
+        setDownloadItems([{ url: downloadRes.data.url, name: outputName }]);
+        setJobStatus('completed');
+        setIsUploading(false);
+        setQuotaRemaining((prev) => (prev !== null ? Math.max(0, prev - 1) : null));
+      };
+
+      void followJobEvents(`/api/v1/tools/jobs/${jobId}/events`, {
+        signal: controller.signal,
+        onStatus: (status) => setProgress(Math.max(60, status.progress || 70)),
+      })
+        .then(finish)
+        .catch((error) => {
+          // Aborts come from reset, cancel, unmount or the deadline above,
+          // each of which already owns the resulting UI state.
+          if (controller.signal.aborted) return;
+          fail(
+            error instanceof JobEventsError
+              ? error.message
+              : 'The conversion status could not be retrieved. Please try again.',
+          );
+        })
+        .finally(() => window.clearTimeout(deadline));
     },
     [clearActiveJob, isUrlTool, tool.operation],
   );
@@ -197,15 +210,15 @@ export function InteractiveToolConverter({ tool }: Props) {
       setJobStatus('converting');
       setIsUploading(true);
       setProgress(60);
-      startPolling(storedJobId, Number(activeJobStartTime), activeJobFormat || selectedFormat);
+      startStatusStream(storedJobId, Number(activeJobStartTime), activeJobFormat || selectedFormat);
     }
 
     return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      streamAbortRef.current?.abort();
       localDownloadRefs.current.forEach((url) => URL.revokeObjectURL(url));
       localDownloadRefs.current = [];
     };
-  }, [selectedFormat, startPolling, tool.slug]);
+  }, [selectedFormat, startStatusStream, tool.slug]);
 
   const handleCancel = async () => {
     if (useBrowserProcessing && cancelBrowserProcessing()) {
@@ -217,7 +230,7 @@ export function InteractiveToolConverter({ tool }: Props) {
     }
     if (!activeJobId) return;
     await fetchApi(`/tools/jobs/${activeJobId}/cancel`, { method: 'POST' });
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    streamAbortRef.current?.abort();
     clearActiveJob();
     setIsUploading(false);
     setProgress(0);
@@ -287,8 +300,6 @@ export function InteractiveToolConverter({ tool }: Props) {
             orientation,
             pages: pageSelection,
             pageOrder,
-            rotation,
-            watermarkText,
             cropTop: cropMargins.top,
             cropRight: cropMargins.right,
             cropBottom: cropMargins.bottom,
@@ -296,15 +307,11 @@ export function InteractiveToolConverter({ tool }: Props) {
             marginPoints,
             pagesPerSheet,
             gutterPoints,
-            headerText,
-            footerText,
-            batesPrefix: bates.prefix,
-            batesSuffix: bates.suffix,
-            batesStart: bates.start,
-            batesPadding: bates.padding,
             ...metadata,
             outputFormat: selectedFormat,
             imageDpi,
+            // Declarative tool settings override the legacy shared fields above.
+            ...visibleToolOptions(tool.operation, toolOptions),
           });
           const shouldRetryWithPoppler = Boolean(
             !result.success &&
@@ -340,6 +347,7 @@ export function InteractiveToolConverter({ tool }: Props) {
       }
 
       formData.append('targetFormat', selectedFormat);
+      const { password, ...operationOptions } = visibleToolOptions(tool.operation, toolOptions);
       formData.append(
         'settings',
         JSON.stringify({
@@ -348,8 +356,11 @@ export function InteractiveToolConverter({ tool }: Props) {
           pdfFidelityMode,
           imageDpi: Number(imageDpi),
           imageFormat: selectedFormat,
+          ...(isServerPdfOperation ? { pdfOperation: tool.operation, operationOptions } : {}),
         }),
       );
+      // Passwords travel as their own field and are never stored with the job.
+      if (password) formData.append('password', password);
       const convData = await fetchApi<any>(`/tools/${tool.slug}/execute`, {
         method: 'POST',
         body: formData,
@@ -370,7 +381,7 @@ export function InteractiveToolConverter({ tool }: Props) {
       localStorage.setItem(`active_job_${tool.slug}`, jobId);
       localStorage.setItem(`active_job_time_${tool.slug}`, startTime.toString());
       localStorage.setItem(`active_job_format_${tool.slug}`, selectedFormat);
-      startPolling(jobId, startTime, selectedFormat);
+      startStatusStream(jobId, startTime, selectedFormat);
     } catch (err: any) {
       setIsUploading(false);
       setJobStatus('failed');
@@ -384,7 +395,7 @@ export function InteractiveToolConverter({ tool }: Props) {
   };
 
   const handleReset = () => {
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    streamAbortRef.current?.abort();
     clearActiveJob();
     setFiles([]);
     setUrlInput('');
@@ -415,7 +426,10 @@ export function InteractiveToolConverter({ tool }: Props) {
                   ? 'Apply Bates Numbers'
                   : tool.operation === 'pdf.flattenForms'
                     ? 'Flatten PDF Forms'
-                    : `Convert to ${selectedFormat.toUpperCase()} Now`;
+                    : tool.acceptedFormats.every((format) => format === 'pdf') &&
+                        tool.outputFormats.every((format) => format === 'pdf')
+                      ? tool.name
+                      : `Convert to ${selectedFormat.toUpperCase()}`;
 
   return (
     <div
@@ -438,7 +452,7 @@ export function InteractiveToolConverter({ tool }: Props) {
           <span
             className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full"
             style={{
-              backgroundColor: 'rgba(99,102,241,0.12)',
+              backgroundColor: 'rgba(62, 99, 221,0.12)',
               color: 'var(--brand-500)',
             }}
           >
@@ -571,8 +585,8 @@ export function InteractiveToolConverter({ tool }: Props) {
               style={{
                 background: useBrowserProcessing
                   ? 'rgba(16,185,129,0.08)'
-                  : 'rgba(99,102,241,0.08)',
-                border: `1px solid ${useBrowserProcessing ? 'rgba(16,185,129,0.22)' : 'rgba(99,102,241,0.22)'}`,
+                  : 'rgba(62, 99, 221,0.08)',
+                border: `1px solid ${useBrowserProcessing ? 'rgba(16,185,129,0.22)' : 'rgba(62, 99, 221,0.22)'}`,
                 color: 'var(--text-secondary)',
               }}
             >
@@ -625,7 +639,11 @@ export function InteractiveToolConverter({ tool }: Props) {
                   ref={fileInputRef}
                   onChange={handleFileSelect}
                   className="hidden"
-                  accept={tool.acceptedFormats.map((f) => `.${f}`).join(',')}
+                  accept={
+                    isScanTool ? 'image/*' : tool.acceptedFormats.map((f) => `.${f}`).join(',')
+                  }
+                  // On phones this opens the rear camera to photograph documents.
+                  capture={isScanTool ? 'environment' : undefined}
                   multiple={acceptsMultipleFiles}
                 />
                 <div
@@ -650,9 +668,9 @@ export function InteractiveToolConverter({ tool }: Props) {
                     <div
                       className="converter-dropzone-icon group-hover:scale-110"
                       style={{
-                        backgroundColor: 'rgba(99,102,241,0.15)',
+                        backgroundColor: 'rgba(62, 99, 221,0.15)',
                         color: 'var(--brand-500)',
-                        border: '1px solid rgba(99,102,241,0.25)',
+                        border: '1px solid rgba(62, 99, 221,0.25)',
                       }}
                     >
                       <Upload className="w-6 h-6" />
@@ -763,28 +781,40 @@ export function InteractiveToolConverter({ tool }: Props) {
               className="converter-options-grid"
               style={{ borderTop: '1px solid var(--border)' }}
             >
-              <div>
-                <label
-                  className="block text-xs font-semibold mb-1.5"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  Output Format:
-                </label>
-                <select
-                  value={selectedFormat}
-                  onChange={(e) => setSelectedFormat(e.target.value)}
-                  className="input"
-                  style={{ padding: '0.6rem 0.875rem', fontSize: '0.8125rem', fontWeight: 600 }}
-                >
-                  {tool.outputFormats.map((fmt) => (
-                    <option key={fmt} value={fmt}>
-                      {['png', 'jpg', 'jpeg'].includes(fmt)
-                        ? `${fmt.toUpperCase()} Images`
-                        : `${fmt.toUpperCase()} Document`}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {tool.outputFormats.length > 1 && (
+                <div>
+                  <label
+                    className="block text-xs font-semibold mb-1.5"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    Output format
+                  </label>
+                  <select
+                    value={selectedFormat}
+                    onChange={(e) => setSelectedFormat(e.target.value)}
+                    className="input"
+                    style={{ padding: '0.6rem 0.875rem', fontSize: '0.8125rem', fontWeight: 600 }}
+                  >
+                    {tool.outputFormats.map((fmt) => (
+                      <option key={fmt} value={fmt}>
+                        {['png', 'jpg', 'jpeg'].includes(fmt)
+                          ? `${fmt.toUpperCase()} Images`
+                          : `${fmt.toUpperCase()} Document`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {TOOL_OPTION_FIELDS[tool.operation || ''] && (
+                <ToolOptionsForm
+                  operation={tool.operation || ''}
+                  values={toolOptions}
+                  onChange={(key, value) =>
+                    setToolOptions((current) => ({ ...current, [key]: value }))
+                  }
+                />
+              )}
 
               {tool.operation === 'pdf.toDocx' && (
                 <div className="sm:col-span-1 lg:col-span-2">
@@ -866,6 +896,7 @@ export function InteractiveToolConverter({ tool }: Props) {
               )}
 
               {(tool.operation === 'image.toPdf' ||
+                isScanTool ||
                 tool.operation === 'pdf.resize' ||
                 tool.operation === 'pdf.nUp' ||
                 isUrlTool ||
@@ -1031,108 +1062,6 @@ export function InteractiveToolConverter({ tool }: Props) {
                 </>
               )}
 
-              {tool.operation === 'pdf.headerFooter' && (
-                <div className="grid gap-3 sm:col-span-2 lg:col-span-3 sm:grid-cols-2">
-                  <label
-                    className="block text-xs font-semibold"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    <span className="mb-1.5 block">Header text</span>
-                    <input
-                      className="input"
-                      maxLength={120}
-                      value={headerText}
-                      onChange={(event) => setHeaderText(event.target.value)}
-                      placeholder="Confidential report"
-                    />
-                  </label>
-                  <label
-                    className="block text-xs font-semibold"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    <span className="mb-1.5 block">Footer text</span>
-                    <input
-                      className="input"
-                      maxLength={120}
-                      value={footerText}
-                      onChange={(event) => setFooterText(event.target.value)}
-                      placeholder="Page {page} of {pages}"
-                    />
-                  </label>
-                  <p className="text-xs sm:col-span-2" style={{ color: 'var(--text-muted)' }}>
-                    Use {'{page}'} for the current page and {'{pages}'} for the total.
-                  </p>
-                </div>
-              )}
-
-              {tool.operation === 'pdf.batesNumbering' && (
-                <div className="grid gap-3 sm:col-span-2 lg:col-span-3 sm:grid-cols-4">
-                  {(
-                    [
-                      ['prefix', 'Prefix'],
-                      ['suffix', 'Suffix'],
-                      ['start', 'Starting number'],
-                      ['padding', 'Number width'],
-                    ] as const
-                  ).map(([field, label]) => (
-                    <label
-                      key={field}
-                      className="block text-xs font-semibold"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
-                      <span className="mb-1.5 block">{label}</span>
-                      <input
-                        className="input"
-                        type={field === 'start' || field === 'padding' ? 'number' : 'text'}
-                        min={field === 'padding' ? 1 : 0}
-                        max={field === 'padding' ? 12 : undefined}
-                        value={bates[field]}
-                        onChange={(event) =>
-                          setBates((current) => ({ ...current, [field]: event.target.value }))
-                        }
-                      />
-                    </label>
-                  ))}
-                </div>
-              )}
-
-              {tool.operation === 'pdf.rotate' && (
-                <div>
-                  <label
-                    className="block text-xs font-semibold mb-1.5"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    Rotation
-                  </label>
-                  <select
-                    className="input"
-                    value={rotation}
-                    onChange={(event) => setRotation(event.target.value)}
-                  >
-                    <option value="90">90° clockwise</option>
-                    <option value="180">180°</option>
-                    <option value="270">270° clockwise</option>
-                  </select>
-                </div>
-              )}
-
-              {tool.operation === 'pdf.watermark' && (
-                <div className="sm:col-span-1 lg:col-span-2">
-                  <label
-                    className="block text-xs font-semibold mb-1.5"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    Watermark text
-                  </label>
-                  <input
-                    className="input"
-                    value={watermarkText}
-                    maxLength={80}
-                    onChange={(event) => setWatermarkText(event.target.value)}
-                  />
-                </div>
-              )}
-
               {tool.operation === 'pdf.editMetadata' && (
                 <div className="grid gap-3 sm:col-span-2 lg:col-span-3 sm:grid-cols-2">
                   {(['title', 'author', 'subject', 'keywords'] as const).map((field) => (
@@ -1179,22 +1108,15 @@ export function InteractiveToolConverter({ tool }: Props) {
               onClick={handleStartConversion}
               disabled={isUploading || (!file && !urlInput)}
               className="btn btn-primary btn-lg w-full"
-              style={{
-                width: '100%',
-                justifyContent: 'center',
-                padding: '0.9rem',
-                opacity: isUploading || (!file && !urlInput) ? 0.5 : 1,
-                cursor: isUploading || (!file && !urlInput) ? 'not-allowed' : 'pointer',
-              }}
+              style={{ width: '100%', justifyContent: 'center', padding: '0.9rem' }}
             >
               {isUploading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Converting Document...</span>
+                  <span>Processing…</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-5 h-5" />
                   <span>{actionLabel}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>

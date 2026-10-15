@@ -23,8 +23,16 @@ export class LicensesService {
       this.signingPrivateKey = crypto.createPrivateKey(configured);
       this.signingPublicKey = crypto.createPublicKey(this.signingPrivateKey);
     } else {
-      if (process.env.NODE_ENV === 'production' && process.env.FEATURE_BLOG_DESKTOP_SALES === 'true') {
-        throw new Error('LICENSE_SIGNING_PRIVATE_KEY is required when desktop sales are enabled.');
+      // A key generated at startup changes on every restart, which silently
+      // invalidates every offline certificate already issued to customers.
+      if (
+        process.env.NODE_ENV === 'production' &&
+        (process.env.FEATURE_BLOG_DESKTOP_SALES === 'true' ||
+          process.env.FEATURE_STORE_CHECKOUT === 'true')
+      ) {
+        throw new Error(
+          'LICENSE_SIGNING_PRIVATE_KEY is required when the store or desktop sales are enabled.',
+        );
       }
       const generated = crypto.generateKeyPairSync('ed25519');
       this.signingPrivateKey = generated.privateKey;
@@ -256,6 +264,32 @@ export class LicensesService {
         maxActivations: license.maxActivations,
       },
     };
+  }
+
+  /**
+   * Online re-check used by installed apps. Offline certificates stay usable
+   * without a network, but once online a deactivated machine or a revoked /
+   * refunded license stops working, so seats cannot be reused indefinitely.
+   */
+  async validateActivation(params: { activationId: string; machineHash: string }) {
+    const activation = await this.prisma.licenseActivation.findUnique({
+      where: { id: params.activationId },
+      include: { licenseKey: { select: { status: true, expiresAt: true } } },
+    });
+    if (!activation || activation.machineHash !== params.machineHash) {
+      return { valid: false, reason: 'DEACTIVATED' as const };
+    }
+    if (activation.licenseKey.status !== LicenseStatus.ACTIVE) {
+      return { valid: false, reason: activation.licenseKey.status };
+    }
+    if (activation.licenseKey.expiresAt && activation.licenseKey.expiresAt < new Date()) {
+      return { valid: false, reason: LicenseStatus.EXPIRED };
+    }
+    await this.prisma.licenseActivation.update({
+      where: { id: activation.id },
+      data: { lastPingAt: new Date() },
+    });
+    return { valid: true as const };
   }
 
   getSigningPublicKey(): string {

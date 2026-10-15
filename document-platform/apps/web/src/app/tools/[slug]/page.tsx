@@ -9,7 +9,6 @@ import {
   ArrowRight,
   ChevronRight,
   ChevronDown,
-  Sparkles,
   ShieldCheck,
   Gauge,
   FileOutput,
@@ -88,7 +87,8 @@ export default function ToolDetailPage() {
         <div
           className="absolute inset-0 -z-10"
           style={{
-            background: `radial-gradient(ellipse 70% 60% at 50% 0%, ${pres.accentColor}18 0%, transparent 70%)`,
+            background:
+              'radial-gradient(ellipse 70% 60% at 50% 0%, rgba(62, 99, 221, 0.1) 0%, transparent 70%)',
           }}
         />
 
@@ -117,9 +117,9 @@ export default function ToolDetailPage() {
           </nav>
 
           {/* Category Chip */}
-          <div className="tool-detail-category badge-brand">
+          <div className="tool-detail-category">
             <Icon className="w-3.5 h-3.5" style={{ color: pres.accentColor }} />
-            <span>{tool.category} Utility Engine</span>
+            <span>{tool.category} tool</span>
           </div>
 
           {/* Heading */}
@@ -177,11 +177,10 @@ export default function ToolDetailPage() {
         <div className="container-custom tool-detail-section-inner">
           <div className="tool-detail-section-heading">
             <h2 className="ts-h2 mb-2" style={{ color: 'var(--text-primary)' }}>
-              How to Use in 3 Simple Steps
+              How to use {pres.name || tool.name}
             </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-              Zero installation required. Works smoothly across Windows, macOS, Linux, and mobile
-              browsers.
+              No installation needed. Works in any modern browser on desktop or mobile.
             </p>
           </div>
 
@@ -192,13 +191,7 @@ export default function ToolDetailPage() {
                 className="card tool-detail-step-card"
                 style={{ backgroundColor: 'var(--bg-card)' }}
               >
-                <div
-                  className="tool-detail-step-number"
-                  style={{
-                    background: 'var(--gradient-brand)',
-                    boxShadow: 'var(--shadow-brand)',
-                  }}
-                >
+                <div className="tool-detail-step-number">
                   {s.step}
                 </div>
                 <h3 className="font-bold text-base mb-2" style={{ color: 'var(--text-primary)' }}>
@@ -224,12 +217,12 @@ export default function ToolDetailPage() {
             }}
           >
             <h2 className="text-xl font-bold mb-6" style={{ color: 'var(--text-primary)' }}>
-              Key Capabilities &amp; Engine Features
+              What this tool does
             </h2>
             <div className="tool-detail-features-grid">
               {pres.features.map((f, i) => (
                 <div key={i} className="flex items-start gap-3">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#10b981' }} />
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--success)' }} />
                   <span
                     style={{
                       fontSize: '0.875rem',
@@ -252,10 +245,10 @@ export default function ToolDetailPage() {
           <div className="container-custom tool-detail-section-inner">
             <div className="tool-detail-section-heading">
               <h2 className="ts-h2 mb-2" style={{ color: 'var(--text-primary)' }}>
-                Frequently Asked Questions
+                Frequently asked questions
               </h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                Everything you need to know about privacy, quotas, and conversion engines.
+                Privacy, limits and how this tool handles your files.
               </p>
             </div>
 
@@ -329,54 +322,21 @@ export default function ToolDetailPage() {
         </section>
       )}
 
-      {/* ─── Pro Upgrade Banner ─── */}
+      {/* ─── Upgrade prompt ─── */}
       <section className="tool-detail-upgrade-section">
         <div className="container-custom tool-detail-section-inner">
-          <div
-            className="tool-detail-upgrade-card"
-            style={{
-              background: 'var(--gradient-brand)',
-              boxShadow: 'var(--shadow-brand-lg)',
-            }}
-          >
-            <div className="relative z-10 space-y-4">
-              <span
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider"
-                style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                Pro &amp; Business Plans
-              </span>
-              <h2 className="ts-h2" style={{ color: 'white' }}>
-                Need Higher Limits &amp; Priority Worker Queues?
-              </h2>
-              <p
-                style={{
-                  color: 'rgba(255,255,255,0.85)',
-                  fontSize: '0.9375rem',
-                  maxWidth: '520px',
-                  margin: '0 auto',
-                  lineHeight: '1.7',
-                }}
-              >
-                Get 500 conversions per month, 100 MB max file sizes, and priority processing for
-                $9/month (or ₹749/month). Uploaded conversion files expire within 10 minutes.
+          <div className="hp-cta">
+            <div>
+              <h2>Need higher limits?</h2>
+              <p>
+                Pro includes 500 operations a month, files up to 100 MB and priority processing for
+                $9/month (₹749). Server files still expire within 10 minutes.
               </p>
-              <div className="pt-2">
-                <Link
-                  href="/pricing"
-                  className="btn btn-lg"
-                  style={{
-                    backgroundColor: 'white',
-                    color: 'var(--brand-600)',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-                    display: 'inline-flex',
-                  }}
-                >
-                  <span>View All Plans</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
+            </div>
+            <div className="hp-cta-actions">
+              <Link href="/pricing" className="btn btn-lg hp-cta-primary">
+                Compare plans <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
           </div>
         </div>

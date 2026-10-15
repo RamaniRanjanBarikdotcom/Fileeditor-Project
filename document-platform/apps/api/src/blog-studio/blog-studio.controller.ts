@@ -52,6 +52,7 @@ import {
   UpdateRemoteBlogPostDto,
   UpdateBlogStudioSettingsDto,
   UpsertBlogCategoryMappingDto,
+  PublishBlogDto,
 } from './blog-studio.dto';
 
 @ApiTags('blog-studio')
@@ -377,7 +378,7 @@ export class BlogStudioController {
   @Post('blogs/:id/publish')
   @RequireFeatures('blogStudioPublishing')
   @UseGuards(BlogStudioPermissionGuard)
-  async publishBlog(@Request() req: any, @Param('id') id: string, @Body() dto: any) {
+  async publishBlog(@Request() req: any, @Param('id') id: string, @Body() dto: PublishBlogDto) {
     return { success: true, data: await this.publishingService.publish(req.user.orgId, req.user.userId, id, dto.destinationId, dto.publishedAs) };
   }
 

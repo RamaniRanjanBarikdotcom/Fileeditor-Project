@@ -11,6 +11,7 @@ export enum InputFormat {
   TXT = 'txt',
   DOCX = 'docx',
   XLSX = 'xlsx',
+  PPTX = 'pptx',
   CSV = 'csv',
   ZIP = 'zip',
   JSON = 'json',
@@ -26,6 +27,7 @@ export enum OutputFormat {
   MARKDOWN = 'markdown',
   TXT = 'txt',
   XLSX = 'xlsx',
+  PPTX = 'pptx',
   CSV = 'csv',
   ZIP = 'zip',
 }
@@ -42,6 +44,8 @@ export enum ConversionEngine {
   PDF_LIB = 'pdf-lib',
   IMAGE_WORKER = 'image-worker',
   PDF_EXTRACTOR = 'pdf-extractor',
+  /** Operation-routed PDF tools (compress, protect, redact, OCR, PDF/A, ...). */
+  PDF_OPS = 'pdf-ops',
 }
 
 // ─── Job Status ──────────────────────────────────────────────
@@ -240,6 +244,101 @@ export interface ConversionOptions {
   imageFormat?: 'png' | 'jpg';
   /** Raster resolution for PDF page-image export. */
   imageDpi?: 96 | 150 | 300;
+  /** Operation-routed server PDF tool (see SERVER_PDF_OPERATIONS). */
+  pdfOperation?: ServerPdfOperation;
+  /** Validated, operation-specific settings. Never contains passwords. */
+  operationOptions?: Record<string, string>;
+}
+
+// ─── User preferences ────────────────────────────────────────
+
+/** Blog Studio colour themes a user can save to their account. */
+export const BLOG_STUDIO_THEMES = ['cobalt', 'forest', 'sunset', 'midnight'] as const;
+export type BlogStudioTheme = (typeof BLOG_STUDIO_THEMES)[number];
+export const DEFAULT_BLOG_STUDIO_THEME: BlogStudioTheme = 'cobalt';
+
+export function isBlogStudioTheme(value: unknown): value is BlogStudioTheme {
+  return typeof value === 'string' && (BLOG_STUDIO_THEMES as readonly string[]).includes(value);
+}
+
+// ─── Operation-routed server PDF tools ───────────────────────
+
+const YES_NO = ['yes', 'no'] as const;
+
+/**
+ * Server PDF operations that cannot be routed by file format (most are
+ * PDF → PDF). Option values are allow-listed here; anything else is dropped.
+ * `secret` names a value delivered out-of-band (Redis, never the database).
+ */
+export const SERVER_PDF_OPERATIONS = {
+  'pdf.compress': {
+    output: 'pdf',
+    options: { compressionLevel: ['low', 'recommended', 'extreme'] },
+  },
+  'pdf.protect': {
+    output: 'pdf',
+    secret: 'password',
+    options: { allowPrinting: YES_NO, allowCopying: YES_NO, allowEditing: YES_NO },
+  },
+  'pdf.unlock': { output: 'pdf', secret: 'password', options: {} },
+  'pdf.repair': { output: 'pdf', options: {} },
+  'pdf.grayscale': { output: 'pdf', options: {} },
+  'pdf.ocrSearchable': {
+    output: 'pdf',
+    options: {
+      ocrLanguage: ['eng', 'hin', 'eng+hin', 'deu', 'fra', 'spa', 'ita', 'por', 'ara', 'chi_sim'],
+      ocrMode: ['skip', 'all'],
+    },
+  },
+  'pdf.redact': {
+    output: 'pdf',
+    options: {
+      redactTerms: { maxLength: 2000 },
+      redactEmails: YES_NO,
+      redactPhones: YES_NO,
+      redactCardNumbers: YES_NO,
+    },
+  },
+  'pdf.extractImages': { output: 'zip', options: {} },
+  'pdf.toExcel': { output: 'xlsx', options: { textFallback: YES_NO } },
+  'pdf.toPptx': { output: 'pptx', options: {} },
+  'pdf.toPdfA': { output: 'pdf', options: { pdfaLevel: ['PDF/A-1b', 'PDF/A-2b', 'PDF/A-3b'] } },
+} as const satisfies Record<
+  string,
+  {
+    output: string;
+    secret?: 'password';
+    options: Record<string, readonly string[] | { maxLength: number }>;
+  }
+>;
+
+export type ServerPdfOperation = keyof typeof SERVER_PDF_OPERATIONS;
+
+export function isServerPdfOperation(value: unknown): value is ServerPdfOperation {
+  return typeof value === 'string' && Object.hasOwn(SERVER_PDF_OPERATIONS, value);
+}
+
+/** Keeps only allow-listed options for `operation`, with values validated. */
+export function normalizeOperationOptions(
+  operation: ServerPdfOperation,
+  value: unknown,
+): Record<string, string> {
+  const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const spec = SERVER_PDF_OPERATIONS[operation].options as Record<
+    string,
+    readonly string[] | { maxLength: number }
+  >;
+  const result: Record<string, string> = {};
+  for (const [key, rule] of Object.entries(spec)) {
+    const raw = (input as Record<string, unknown>)[key];
+    if (typeof raw !== 'string') continue;
+    if (Array.isArray(rule)) {
+      if (rule.includes(raw)) result[key] = raw;
+    } else {
+      result[key] = raw.slice(0, (rule as { maxLength: number }).maxLength);
+    }
+  }
+  return result;
 }
 
 const PAGE_SIZES = new Set<string>(Object.values(PageSize));
@@ -287,6 +386,10 @@ export function normalizeConversionOptions(value: unknown): ConversionOptions {
   }
   if (input.imageFormat === 'png' || input.imageFormat === 'jpg') {
     options.imageFormat = input.imageFormat;
+  }
+  if (isServerPdfOperation(input.pdfOperation)) {
+    options.pdfOperation = input.pdfOperation;
+    options.operationOptions = normalizeOperationOptions(input.pdfOperation, input.operationOptions);
   }
   const imageDpi = Number(input.imageDpi);
   if (imageDpi === 96 || imageDpi === 150 || imageDpi === 300) {
@@ -360,6 +463,7 @@ export enum ErrorCode {
   MALWARE_DETECTED = 'MALWARE_DETECTED',
   PASSWORD_PROTECTED_FILE = 'PASSWORD_PROTECTED_FILE',
   CORRUPT_FILE = 'CORRUPT_FILE',
+  NO_TEXT_FOUND = 'NO_TEXT_FOUND',
 
   // Conversion errors
   CONVERSION_TIMEOUT = 'CONVERSION_TIMEOUT',
@@ -402,6 +506,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.MALWARE_DETECTED]: 'This file has been flagged as potentially unsafe.',
   [ErrorCode.PASSWORD_PROTECTED_FILE]: 'Password-protected files are not yet supported.',
   [ErrorCode.CORRUPT_FILE]: 'The file appears to be corrupted and cannot be processed.',
+  [ErrorCode.NO_TEXT_FOUND]:
+    'No readable text was found in this PDF. Check that the scan is sharp and the text is printed.',
   [ErrorCode.CONVERSION_TIMEOUT]:
     'The conversion took too long and was cancelled. Try a smaller file.',
   [ErrorCode.CONVERSION_ENGINE_FAILURE]:
@@ -437,6 +543,7 @@ export const MIME_TYPES: Record<string, string> = {
   pdf: 'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   csv: 'text/csv',
   html: 'text/html',
   markdown: 'text/markdown',
@@ -460,6 +567,7 @@ export const ALLOWED_EXTENSIONS = new Set([
   'text',
   'docx',
   'xlsx',
+  'pptx',
   'csv',
   'json',
   'pdf',

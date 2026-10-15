@@ -25,7 +25,27 @@ import {
   LockKeyhole,
   FileOutput,
   LucideIcon,
+  Bookmark,
+  BookmarkPlus,
+  Columns2,
+  HardDrive,
+  TextSearch,
+  Eraser,
+  FlipHorizontal2,
+  ScanLine,
+  Minimize2,
+  Lock,
+  LockOpen,
+  Wrench,
+  Contrast,
+  EyeOff,
+  Images,
+  Sheet,
+  Presentation,
+  Archive,
+  FileSpreadsheet,
 } from 'lucide-react';
+import { getToolDefinition } from '@docconv/tool-registry';
 
 export interface ToolPresentation {
   slug: string;
@@ -38,6 +58,38 @@ export interface ToolPresentation {
   steps: { step: number; title: string; desc: string }[];
   faq: { q: string; a: string }[];
 }
+
+/** Compact presentation entry for tools added in the Sejda/iLovePDF parity work. */
+function presentation(
+  slug: string,
+  name: string,
+  icon: LucideIcon,
+  badge: string,
+  features: string[],
+  steps: [string, string][],
+  faq: { q: string; a: string }[],
+): ToolPresentation {
+  return {
+    slug,
+    name,
+    icon,
+    badge,
+    gradient: 'from-indigo-500/20 via-blue-500/20 to-sky-500/20',
+    accentColor: '#3e63dd',
+    features,
+    steps: steps.map(([title, desc], index) => ({ step: index + 1, title, desc })),
+    faq,
+  };
+}
+
+const PRIVATE_FAQ = {
+  q: 'Is my file uploaded?',
+  a: 'No. This tool runs entirely in your browser, so the file never leaves your device.',
+};
+const SERVER_FAQ = {
+  q: 'What happens to my file?',
+  a: 'It is processed by an isolated worker, scanned for malware, and deleted automatically within 10 minutes.',
+};
 
 export const TOOL_PRESENTATION_MAP: Record<string, ToolPresentation> = {
   'merge-pdf': {
@@ -519,8 +571,16 @@ export const TOOL_PRESENTATION_MAP: Record<string, ToolPresentation> = {
     ],
     steps: [
       { step: 1, title: 'Upload PDF', desc: 'Choose a digital or scanned PDF document.' },
-      { step: 2, title: 'Extract structure', desc: 'Text and OCR content are normalized into Markdown.' },
-      { step: 3, title: 'Download Markdown', desc: 'Save a clean MD file for docs, notes, or AI workflows.' },
+      {
+        step: 2,
+        title: 'Extract structure',
+        desc: 'Text and OCR content are normalized into Markdown.',
+      },
+      {
+        step: 3,
+        title: 'Download Markdown',
+        desc: 'Save a clean MD file for docs, notes, or AI workflows.',
+      },
     ],
     faq: [
       {
@@ -819,15 +879,429 @@ export const TOOL_PRESENTATION_MAP: Record<string, ToolPresentation> = {
       },
     ],
   },
+  'split-pdf-by-bookmarks': presentation(
+    'split-pdf-by-bookmarks',
+    'Split PDF by Bookmarks',
+    Bookmark,
+    'Private in Browser',
+    [
+      'One PDF per top-level bookmark',
+      'Files named after each chapter',
+      'Front matter kept as its own file',
+    ],
+    [
+      ['Choose a PDF', 'Use a document that has bookmarks (an outline).'],
+      ['Split by chapter', 'Each top-level bookmark starts a new file.'],
+      ['Download', 'Save every chapter PDF.'],
+    ],
+    [
+      PRIVATE_FAQ,
+      {
+        q: 'My PDF has no bookmarks',
+        a: 'Use Split PDF with page ranges, or add bookmarks first with Add PDF Bookmarks.',
+      },
+    ],
+  ),
+  'split-pdf-in-half': presentation(
+    'split-pdf-in-half',
+    'Split PDF Pages in Half',
+    Columns2,
+    'Private in Browser',
+    [
+      'Cut two-page spreads into single pages',
+      'Left/right or top/bottom',
+      'Keeps the original quality',
+    ],
+    [
+      ['Choose a PDF', 'Ideal for scanned books and booklets.'],
+      ['Pick the cut', 'Down the middle or across the middle.'],
+      ['Download', 'Every page becomes two.'],
+    ],
+    [PRIVATE_FAQ],
+  ),
+  'split-pdf-by-size': presentation(
+    'split-pdf-by-size',
+    'Split PDF by File Size',
+    HardDrive,
+    'Private in Browser',
+    [
+      'Parts stay below your size limit',
+      'Page order is preserved',
+      'Great for email attachment limits',
+    ],
+    [
+      ['Choose a PDF', 'Select a large document.'],
+      ['Set the limit', 'For example 10 MB per file.'],
+      ['Download', 'Save every part.'],
+    ],
+    [
+      PRIVATE_FAQ,
+      {
+        q: 'Why is one part bigger than the limit?',
+        a: 'A single page that is larger than the limit cannot be split further, so it is kept whole in its own file.',
+      },
+    ],
+  ),
+  'split-pdf-by-text': presentation(
+    'split-pdf-by-text',
+    'Split PDF by Text',
+    TextSearch,
+    'Private in Browser',
+    [
+      'New file at every page containing your text',
+      'Case-sensitive option',
+      'Ideal for batches of invoices or statements',
+    ],
+    [
+      ['Choose a PDF', 'Use a PDF with selectable text.'],
+      ['Enter the text', 'For example "Invoice number".'],
+      ['Download', 'One PDF per section.'],
+    ],
+    [
+      PRIVATE_FAQ,
+      {
+        q: 'Does it work on scans?',
+        a: 'Scanned pages have no text. Run OCR PDF first to make them searchable.',
+      },
+    ],
+  ),
+  'remove-pdf-annotations': presentation(
+    'remove-pdf-annotations',
+    'Remove PDF Annotations',
+    Eraser,
+    'Private in Browser',
+    [
+      'Removes comments, highlights, stamps and drawings',
+      'Optionally keeps hyperlinks',
+      'Form fields stay intact',
+    ],
+    [
+      ['Choose a PDF', 'Select an annotated document.'],
+      ['Choose what to keep', 'Keep or remove hyperlinks.'],
+      ['Download', 'Save the clean PDF.'],
+    ],
+    [PRIVATE_FAQ],
+  ),
+  'flip-pdf': presentation(
+    'flip-pdf',
+    'Flip PDF Pages',
+    FlipHorizontal2,
+    'Private in Browser',
+    ['Mirror horizontally or vertically', 'All pages or a selection', 'Respects rotated pages'],
+    [
+      ['Choose a PDF', 'Select the document.'],
+      ['Pick a direction', 'Horizontal or vertical.'],
+      ['Download', 'Save the mirrored PDF.'],
+    ],
+    [PRIVATE_FAQ],
+  ),
+  'pdf-bookmarks': presentation(
+    'pdf-bookmarks',
+    'Add PDF Bookmarks',
+    BookmarkPlus,
+    'Private in Browser',
+    ['Clickable table of contents', 'Opens with the bookmark panel', 'Simple "Title, page" format'],
+    [
+      ['Choose a PDF', 'Select the document.'],
+      ['List bookmarks', 'One per line: Title, page.'],
+      ['Download', 'Open it to see the outline.'],
+    ],
+    [PRIVATE_FAQ],
+  ),
+  'pdf-to-text': presentation(
+    'pdf-to-text',
+    'PDF to Text',
+    FileText,
+    'Private in Browser',
+    ['Plain UTF-8 text for every page', 'Page separators included', 'Works in any language'],
+    [
+      ['Choose a PDF', 'Use a PDF with selectable text.'],
+      ['Extract', 'Text is read in your browser.'],
+      ['Download', 'Save the .txt file.'],
+    ],
+    [
+      PRIVATE_FAQ,
+      {
+        q: 'The output is empty',
+        a: 'Scanned PDFs contain images, not text. Use OCR PDF to recognise the text first.',
+      },
+    ],
+  ),
+  'scan-to-pdf': presentation(
+    'scan-to-pdf',
+    'Scan to PDF',
+    ScanLine,
+    'Camera Capture',
+    [
+      'Photograph pages with your phone camera',
+      'Combine many photos into one PDF',
+      'Page size and margins',
+    ],
+    [
+      ['Take photos', 'On a phone the camera opens directly.'],
+      ['Arrange pages', 'Add as many pages as you need.'],
+      ['Download', 'Save one PDF.'],
+    ],
+    [PRIVATE_FAQ],
+  ),
+  'compress-pdf': presentation(
+    'compress-pdf',
+    'Compress PDF',
+    Minimize2,
+    'Smaller Files',
+    [
+      'Recommended, extreme or light compression',
+      'Downsamples oversized images',
+      'Never returns a larger file',
+    ],
+    [
+      ['Choose a PDF', 'Select the document to shrink.'],
+      ['Pick a level', 'Balance size and image quality.'],
+      ['Download', 'Save the smaller PDF.'],
+    ],
+    [
+      SERVER_FAQ,
+      {
+        q: 'Will text become blurry?',
+        a: 'No. Text and vector graphics are kept sharp; only large images are resampled.',
+      },
+    ],
+  ),
+  'protect-pdf': presentation(
+    'protect-pdf',
+    'Protect PDF',
+    Lock,
+    'AES-256',
+    ['AES-256 encryption', 'Control printing, copying and editing', 'Password never stored'],
+    [
+      ['Choose a PDF', 'Select the document.'],
+      ['Set a password', 'Choose what readers may do.'],
+      ['Download', 'The PDF now asks for the password.'],
+    ],
+    [
+      SERVER_FAQ,
+      {
+        q: 'Do you keep my password?',
+        a: 'No. It is held in memory only for this job and deleted as soon as it finishes.',
+      },
+    ],
+  ),
+  'unlock-pdf': presentation(
+    'unlock-pdf',
+    'Unlock PDF',
+    LockOpen,
+    'Remove Password',
+    [
+      'Removes the open password',
+      'Removes printing and copying restrictions',
+      'Password never stored',
+    ],
+    [
+      ['Choose a PDF', 'Select the protected document.'],
+      ['Enter the password', 'You must know the current password.'],
+      ['Download', 'Save the unlocked PDF.'],
+    ],
+    [
+      SERVER_FAQ,
+      {
+        q: 'Can you unlock a PDF without the password?',
+        a: 'No. Unlocking requires the current password; only unlock files you are allowed to open.',
+      },
+    ],
+  ),
+  'repair-pdf': presentation(
+    'repair-pdf',
+    'Repair PDF',
+    Wrench,
+    'Recovery',
+    [
+      'Rebuilds broken cross-reference tables',
+      'Recovers readable pages',
+      'Cleans the file structure',
+    ],
+    [
+      ['Choose a PDF', 'Select the damaged file.'],
+      ['Repair', 'The structure is rebuilt.'],
+      ['Download', 'Save the repaired PDF.'],
+    ],
+    [SERVER_FAQ],
+  ),
+  'grayscale-pdf': presentation(
+    'grayscale-pdf',
+    'Grayscale PDF',
+    Contrast,
+    'Print Ready',
+    [
+      'Converts text, images and graphics',
+      'Saves colour ink when printing',
+      'Keeps text selectable',
+    ],
+    [
+      ['Choose a PDF', 'Select the document.'],
+      ['Convert', 'Colours become shades of grey.'],
+      ['Download', 'Save the grayscale PDF.'],
+    ],
+    [SERVER_FAQ],
+  ),
+  'ocr-pdf': presentation(
+    'ocr-pdf',
+    'OCR PDF — Searchable PDF',
+    ScanLine,
+    'OCR',
+    [
+      'Invisible text layer over the original scan',
+      'Pages look exactly the same',
+      'English, Hindi and 8 more languages',
+    ],
+    [
+      ['Choose a scanned PDF', 'Photos or scans of printed text.'],
+      ['Pick the language', 'Better accuracy with the right language.'],
+      ['Download', 'Search and copy text in any reader.'],
+    ],
+    [
+      SERVER_FAQ,
+      {
+        q: 'Does it change how the pages look?',
+        a: 'No. The recognised text is added invisibly behind the scan.',
+      },
+    ],
+  ),
+  'redact-pdf': presentation(
+    'redact-pdf',
+    'Redact PDF',
+    EyeOff,
+    'True Redaction',
+    [
+      'Removes text, not just covers it',
+      'Emails, phone and card numbers',
+      'Strips hidden metadata',
+    ],
+    [
+      ['Choose a PDF', 'Select the document.'],
+      ['Choose what to remove', 'Words, phrases or patterns.'],
+      ['Download', 'The redacted text is gone for good.'],
+    ],
+    [
+      SERVER_FAQ,
+      {
+        q: 'Can redacted text be recovered?',
+        a: 'No. Matching text and image pixels are deleted from the file, and metadata is removed.',
+      },
+    ],
+  ),
+  'extract-images-from-pdf': presentation(
+    'extract-images-from-pdf',
+    'Extract Images from PDF',
+    Images,
+    'Original Quality',
+    ['Every embedded picture', 'Original format and resolution', 'Skips tiny icons'],
+    [
+      ['Choose a PDF', 'Select the document.'],
+      ['Extract', 'Each image is saved once.'],
+      ['Download', 'Get a ZIP of images.'],
+    ],
+    [SERVER_FAQ],
+  ),
+  'pdf-to-excel': presentation(
+    'pdf-to-excel',
+    'PDF to Excel',
+    Sheet,
+    'Table Detection',
+    ['Detects tables on every page', 'One sheet per table', 'Numbers stay numeric'],
+    [
+      ['Choose a PDF', 'Use a PDF with selectable text.'],
+      ['Detect tables', 'Rows and columns are rebuilt.'],
+      ['Download', 'Open the workbook in Excel.'],
+    ],
+    [
+      SERVER_FAQ,
+      { q: 'Does it work on scans?', a: 'Run OCR PDF first, then convert the searchable PDF.' },
+    ],
+  ),
+  'pdf-to-powerpoint': presentation(
+    'pdf-to-powerpoint',
+    'PDF to PowerPoint',
+    Presentation,
+    'Editable Slides',
+    ['One slide per page', 'Text stays editable', 'Images and shapes preserved'],
+    [
+      ['Choose a PDF', 'Select the document.'],
+      ['Convert', 'Pages become slides.'],
+      ['Download', 'Edit in PowerPoint or Keynote.'],
+    ],
+    [SERVER_FAQ],
+  ),
+  'pdf-to-pdfa': presentation(
+    'pdf-to-pdfa',
+    'PDF to PDF/A',
+    Archive,
+    'ISO 19005',
+    ['PDF/A-1b, 2b or 3b', 'Fonts embedded for long-term use', 'Accepted by archives and courts'],
+    [
+      ['Choose a PDF', 'Select the document.'],
+      ['Pick a version', 'PDF/A-2b suits most uses.'],
+      ['Download', 'Save the archival PDF.'],
+    ],
+    [SERVER_FAQ],
+  ),
+  'powerpoint-to-pdf': presentation(
+    'powerpoint-to-pdf',
+    'PowerPoint to PDF',
+    Presentation,
+    'LibreOffice',
+    ['One page per slide', 'Fonts and images preserved', 'Share without PowerPoint'],
+    [
+      ['Choose a PPTX', 'Select the presentation.'],
+      ['Convert', 'Slides are rendered to PDF.'],
+      ['Download', 'Save the PDF.'],
+    ],
+    [SERVER_FAQ],
+  ),
+  'excel-to-pdf': presentation(
+    'excel-to-pdf',
+    'Excel to PDF',
+    FileSpreadsheet,
+    'LibreOffice',
+    ['Every sheet converted', 'Print areas respected', 'Share without Excel'],
+    [
+      ['Choose an XLSX', 'Select the workbook.'],
+      ['Convert', 'Sheets are rendered to PDF.'],
+      ['Download', 'Save the PDF.'],
+    ],
+    [SERVER_FAQ],
+  ),
 };
+
+/**
+ * One accent per category keeps the catalogue coherent: colour signals what a
+ * tool works on (PDF, documents, images, web, code, studio) rather than being
+ * a different decoration on every card.
+ */
+export const CATEGORY_ACCENTS: Record<string, string> = {
+  PDF: '#e5484d',
+  Document: '#3e63dd',
+  Image: '#d97706',
+  Web: '#0891b2',
+  Developer: '#7c5ce0',
+  Studio: '#12a150',
+};
+const DEFAULT_ACCENT = CATEGORY_ACCENTS.Document;
+
+export function accentForCategory(category?: string): string {
+  return (category && CATEGORY_ACCENTS[category]) || DEFAULT_ACCENT;
+}
+
+for (const presentation of Object.values(TOOL_PRESENTATION_MAP)) {
+  presentation.accentColor = accentForCategory(getToolDefinition(presentation.slug)?.category);
+}
 
 export function getToolPresentation(slug: string): ToolPresentation {
   return (
     TOOL_PRESENTATION_MAP[slug] || {
       slug,
       icon: FileText,
-      gradient: 'from-indigo-500/20 via-blue-500/20 to-purple-500/20',
-      accentColor: '#6366f1',
+      gradient: 'from-indigo-500/20 via-blue-500/20 to-sky-500/20',
+      accentColor: accentForCategory(getToolDefinition(slug)?.category),
       features: ['Fast conversion', 'High reliability', 'Cloud & client processing'],
       steps: [
         { step: 1, title: 'Select Input', desc: 'Provide your source file or link.' },

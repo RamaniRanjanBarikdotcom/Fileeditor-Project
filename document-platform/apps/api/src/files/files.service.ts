@@ -173,7 +173,7 @@ export class FilesService implements OnModuleInit {
             : 'text/plain';
 
     const file = {
-      originalname: `pasted-content.${ext}`,
+      originalname: `${format === 'url' ? urlFilenameBase(content) : 'pasted-content'}.${ext}`,
       mimetype,
       buffer,
       size: buffer.length,
@@ -281,11 +281,63 @@ export class FilesService implements OnModuleInit {
     return { storageKey, sizeBytes: buffer.length };
   }
 
+  /**
+   * Permanent business branding image (logo, signature): PNG, JPEG or WebP
+   * only (by content, not name), at most 1 MB, malware-scanned like uploads.
+   * Unlike conversion inputs these never expire.
+   */
+  async storeBrandingImage(organizationId: string, userId: string, buffer: Buffer) {
+    if (buffer.length === 0 || buffer.length > 1024 * 1024) {
+      throw new BadRequestException('Images must be smaller than 1 MB.');
+    }
+    const type =
+      buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+        ? { mime: 'image/png', extension: 'png' }
+        : buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff
+          ? { mime: 'image/jpeg', extension: 'jpg' }
+          : buffer.subarray(0, 4).toString('latin1') === 'RIFF' && buffer.subarray(8, 12).toString('latin1') === 'WEBP'
+            ? { mime: 'image/webp', extension: 'webp' }
+            : null;
+    if (!type) throw new BadRequestException('Use a PNG, JPEG or WebP image.');
+    const scan = await this.clamScanner.scanBuffer(buffer);
+    if (scan.status === 'FAILED' && scan.virus) throw new BadRequestException('This image was rejected by the security scan.');
+    if (scan.status !== 'PASSED' && process.env.NODE_ENV === 'production') {
+      throw new BadRequestException('Image security scan failed. Upload rejected.');
+    }
+    const stored = await this.storeGeneratedAsset(organizationId, userId, buffer, type.mime, type.extension);
+    return { ...stored, mimeType: type.mime };
+  }
+
+  readGeneratedAsset(storageKey: string) {
+    return this.storage.downloadBuffer('outputs', storageKey);
+  }
+
   deleteGeneratedAsset(storageKey: string) {
     return this.storage.delete('outputs', storageKey);
   }
 
   getGeneratedAssetUrl(storageKey: string, filename?: string) {
     return this.storage.getSignedDownloadUrl('outputs', storageKey, 900, filename);
+  }
+}
+
+/** Names URL captures after the page, e.g. "example.com-blog-post", for downloads. */
+export function urlFilenameBase(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl.trim());
+    const host = url.hostname.replace(/^www\./, '');
+    const path = url.pathname
+      .split('/')
+      .filter(Boolean)
+      .slice(0, 3)
+      .join('-');
+    const base = `${host}${path ? `-${path}` : ''}`
+      .toLowerCase()
+      .replace(/[^a-z0-9.-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    return base.slice(0, 80) || 'webpage';
+  } catch {
+    return 'webpage';
   }
 }

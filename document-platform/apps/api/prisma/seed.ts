@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { listToolDefinitions } from '@docconv/tool-registry';
 
 const prisma = new PrismaClient();
 
@@ -508,6 +509,49 @@ async function main() {
     });
   }
 
+  // Every other catalogue tool is seeded from the canonical registry, so the
+  // API can execute it and the catalogue and database cannot drift apart.
+  const handSeeded = new Set(tools.map((tool) => tool.slug));
+  const ENGINE_BY_OPERATION: Record<string, string> = {
+    'pptx.toPdf': 'libreoffice',
+    'xlsx.toPdf': 'libreoffice',
+  };
+  const registryTools = listToolDefinitions().filter((tool) => !handSeeded.has(tool.slug));
+  for (const [index, definition] of registryTools.entries()) {
+    const capability = definition.capability;
+    const maxBytes =
+      capability.native.maxBytes || capability.node.maxBytes || capability.browser.maxBytes || 25 * 1024 * 1024;
+    const engine =
+      ENGINE_BY_OPERATION[definition.operation] ||
+      (capability.preferred === 'BROWSER' ? 'browser' : 'pdf-ops');
+    const row = {
+      slug: definition.slug,
+      name: definition.title,
+      category: definition.category,
+      engine,
+      acceptedFormats: definition.inputTypes,
+      outputFormats: definition.outputTypes,
+      minimumPlan: SubscriptionPlanTier.FREE,
+      anonymousEnabled: true,
+      costUnits: 1,
+      maxFileSizeBytes: BigInt(maxBytes),
+      isPublished: definition.availability !== 'COMING_SOON',
+      isFeatured: false,
+      sortOrder: 100 + index,
+      seoMetadata: { title: definition.title, description: definition.description },
+    };
+    await prisma.tool.upsert({ where: { slug: definition.slug }, update: row, create: row });
+  }
+  console.log(`✅ ${registryTools.length} registry tools seeded.`);
+
+  // The API creates an internal "document-conversion" record for quota
+  // accounting when a conversion matches no catalogue tool. Older versions
+  // created it as published, which exposed it in the public tool directory.
+  await prisma.tool.updateMany({
+    where: { slug: 'document-conversion', isPublished: true },
+    data: { isPublished: false },
+  });
+
   console.log(`✅ ${tools.length} Launch tools seeded in registry.`);
 
   // ─── 3. Initial Software & Automation Products ───────────────
@@ -599,7 +643,10 @@ async function main() {
 
   const blogDesktop = await prisma.product.upsert({
     where: { slug: 'blog-studio-desktop-windows' },
-    update: { name: 'Blog Studio Desktop', isPublished: false },
+    // Not published here: `release:publish --publish` lists it once an installer
+    // exists (checkout refuses products without a release). Re-seeding must not
+    // unlist a product that is already on sale.
+    update: { name: 'Blog Studio Desktop' },
     create: {
       slug: 'blog-studio-desktop-windows',
       name: 'Blog Studio Desktop',
@@ -656,6 +703,78 @@ async function main() {
       create: price,
     });
   }
+
+  // ─── Invoice Studio + Inventory (generic SaaS plans) ─────────
+  // Limits: -1 = unlimited; a missing metric = not included. Prices are
+  // placeholders for the owner to set. Plans are created once and never
+  // overwritten, so prices or limits edited later are kept on re-seed.
+  const invoiceStudio = await prisma.product.upsert({
+    where: { slug: 'invoice-studio' },
+    update: {},
+    create: {
+      slug: 'invoice-studio',
+      name: 'Invoice Studio',
+      tagline: 'Invoices in any language, with inventory built in',
+      description:
+        'Create GST and VAT-compliant invoices, quotations and credit notes in any language, and keep stock, suppliers and purchase orders in sync automatically.',
+      type: ProductType.SAAS,
+      isPublished: true,
+      isFeatured: true,
+      sortOrder: 12,
+    },
+  });
+  const invoicePlans = [
+    {
+      key: 'free',
+      name: 'Free',
+      description: 'For freelancers and very small shops.',
+      sortOrder: 0,
+      isFree: true,
+      limitsJson: { invoicesPerMonth: 20, businesses: 1, items: 100, warehouses: 1, seats: 1 },
+      featuresJson: [],
+      prices: [],
+    },
+    {
+      key: 'pro',
+      name: 'Pro',
+      description: 'Unlimited invoices, purchasing and recurring billing.',
+      sortOrder: 1,
+      isFree: false,
+      limitsJson: { invoicesPerMonth: -1, businesses: 2, items: 5000, warehouses: 3, seats: 3 },
+      featuresJson: ['purchasing', 'recurring', 'remove_branding'],
+      prices: [
+        { currency: CurrencyCode.USD, interval: BillingInterval.MONTH, amountMinorUnits: 1200, provider: PaymentProvider.STRIPE },
+        { currency: CurrencyCode.USD, interval: BillingInterval.YEAR, amountMinorUnits: 12000, provider: PaymentProvider.STRIPE },
+        { currency: CurrencyCode.INR, interval: BillingInterval.MONTH, amountMinorUnits: 79900, provider: PaymentProvider.RAZORPAY },
+        { currency: CurrencyCode.INR, interval: BillingInterval.YEAR, amountMinorUnits: 799000, provider: PaymentProvider.RAZORPAY },
+      ],
+    },
+    {
+      key: 'business',
+      name: 'Business',
+      description: 'Multiple branches, unlimited stock locations and larger teams.',
+      sortOrder: 2,
+      isFree: false,
+      limitsJson: { invoicesPerMonth: -1, businesses: 10, items: -1, warehouses: -1, seats: 10 },
+      featuresJson: ['purchasing', 'recurring', 'remove_branding'],
+      prices: [
+        { currency: CurrencyCode.USD, interval: BillingInterval.MONTH, amountMinorUnits: 2900, provider: PaymentProvider.STRIPE },
+        { currency: CurrencyCode.USD, interval: BillingInterval.YEAR, amountMinorUnits: 29000, provider: PaymentProvider.STRIPE },
+        { currency: CurrencyCode.INR, interval: BillingInterval.MONTH, amountMinorUnits: 219900, provider: PaymentProvider.RAZORPAY },
+        { currency: CurrencyCode.INR, interval: BillingInterval.YEAR, amountMinorUnits: 2199000, provider: PaymentProvider.RAZORPAY },
+      ],
+    },
+  ];
+  for (const { prices, ...plan } of invoicePlans) {
+    const existing = await prisma.saasPlan.findUnique({
+      where: { productId_key: { productId: invoiceStudio.id, key: plan.key } },
+    });
+    if (existing) continue;
+    await prisma.saasPlan.create({
+      data: { ...plan, productId: invoiceStudio.id, prices: { create: prices } },
+    });
+  }
+  console.log('✅ Invoice Studio plans seeded.');
 
   const configuredChatModel = process.env.AI_CHAT_MODEL || 'gpt-6-luna';
   const currentModelPrices = [

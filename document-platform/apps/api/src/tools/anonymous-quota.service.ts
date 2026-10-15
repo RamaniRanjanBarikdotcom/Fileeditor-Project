@@ -2,6 +2,7 @@ import { Injectable, ForbiddenException, ServiceUnavailableException } from '@ne
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../common/redis.service';
 import * as crypto from 'crypto';
+import { isIPv4, isIPv6 } from 'net';
 
 export interface AnonymousQuotaStatus {
   allowed: boolean;
@@ -63,7 +64,7 @@ export class AnonymousQuotaService {
    * Computes a privacy-safe HMAC-SHA256 of client IP using server salt.
    */
   computeIpHmac(ip: string): string {
-    const cleanIp = ip.replace(/^.*:/, '').trim(); // normalize IPv4-mapped IPv6
+    const cleanIp = normalizeQuotaIp(ip);
     return crypto.createHmac('sha256', this.hmacSecret).update(cleanIp).digest('hex').slice(0, 32);
   }
 
@@ -158,4 +159,31 @@ export class AnonymousQuotaService {
   private signAnonId(id: string): string {
     return crypto.createHmac('sha256', this.hmacSecret).update(id).digest('hex').slice(0, 16);
   }
+}
+
+/**
+ * Produces the quota bucket for a client address. IPv4-mapped IPv6 addresses
+ * collapse to IPv4, and native IPv6 is grouped by its /64 prefix because a
+ * single subscriber normally controls an entire /64 and could otherwise rotate
+ * addresses to evade the per-IP limit.
+ */
+export function normalizeQuotaIp(raw: string): string {
+  const ip = String(raw || '')
+    .trim()
+    .replace(/^\[|\]$/g, '')
+    .replace(/%.*$/, '');
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip);
+  if (mapped && isIPv4(mapped[1]!)) return mapped[1]!;
+  if (isIPv4(ip)) return ip;
+  if (!isIPv6(ip)) return ip;
+
+  const [head, tail] = ip.toLowerCase().split('::') as [string, string | undefined];
+  const headGroups = head ? head.split(':') : [];
+  const tailGroups = tail ? tail.split(':') : [];
+  const missing = ip.includes('::') ? 8 - headGroups.length - tailGroups.length : 0;
+  const groups = [...headGroups, ...Array(Math.max(0, missing)).fill('0'), ...tailGroups];
+  return `${groups
+    .slice(0, 4)
+    .map((group) => group.replace(/^0+(?=.)/, ''))
+    .join(':')}::/64`;
 }

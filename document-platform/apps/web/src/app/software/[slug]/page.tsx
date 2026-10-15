@@ -123,6 +123,8 @@ export default function SoftwareDetailPage() {
       name: 'AppToolkitLab',
       description: data.productName,
       order_id: data.razorpayOrderId,
+      // Lets the payment webhook find the order even if this tab is closed.
+      notes: { orderId: data.orderId },
       handler: async (payment: Record<string, string>) => {
         const verified = await fetchApi('/orders/verify-razorpay', {
           method: 'POST',
@@ -140,7 +142,7 @@ export default function SoftwareDetailPage() {
         }
       },
       modal: { ondismiss: () => setBuying(false) },
-      theme: { color: '#6366f1' },
+      theme: { color: '#3e63dd' },
     });
     gateway.open();
   };

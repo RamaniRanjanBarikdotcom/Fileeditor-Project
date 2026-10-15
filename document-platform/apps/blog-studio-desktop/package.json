@@ -14,7 +14,7 @@
     "build": "node scripts/verify-security.mjs",
     "typecheck": "node scripts/verify-security.mjs",
     "test": "node --test test/*.test.cjs",
-    "package:win": "node scripts/verify-security.mjs && electron-builder --win nsis --x64"
+    "package:win": "node scripts/embed-license-key.mjs && node scripts/verify-security.mjs --release && electron-builder --win nsis --x64"
   },
   "devDependencies": {
     "electron": "44.4.3",

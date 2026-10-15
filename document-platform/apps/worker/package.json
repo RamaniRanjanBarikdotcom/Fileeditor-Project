@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
-    "test": "node --test test/*.test.cjs",
+    "test": "tsc && node --test test/*.test.cjs",
     "start": "node dist/index.js"
   },
   "dependencies": {

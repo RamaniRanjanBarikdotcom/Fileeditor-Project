@@ -1,8 +1,17 @@
-import type { Metadata } from 'next';
-import { ThemeProvider } from '../lib/ThemeContext';
+import type { Metadata, Viewport } from 'next';
+import Script from 'next/script';
+import { THEME_BOOTSTRAP_SCRIPT, ThemeProvider } from '../lib/ThemeContext';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import '../index.css';
+import '../blog-studio-themes.css';
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f6f7fb' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a0d14' },
+  ],
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://apptoolkitlab.com'),
@@ -20,6 +29,7 @@ export const metadata: Metadata = {
     'document editor',
   ],
   authors: [{ name: 'AppToolkitLab by Gonexel' }],
+  icons: { icon: '/favicon.svg', shortcut: '/favicon.svg', apple: '/favicon.svg' },
   robots: {
     index: true,
     follow: true,
@@ -37,7 +47,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -54,6 +64,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           fontFamily: 'var(--font-sans)',
         }}
       >
+        {/* Applies the saved/system theme before first paint. Injected by Next
+            into the initial HTML (a raw <script> in <head> intermittently broke
+            hydration and reset the theme). */}
+        <Script id="theme-bootstrap" strategy="beforeInteractive">
+          {THEME_BOOTSTRAP_SCRIPT}
+        </Script>
         <ThemeProvider>
           <a className="skip-link" href="#main-content">Skip to main content</a>
           <Navbar />

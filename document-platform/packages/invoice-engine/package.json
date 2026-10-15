@@ -1,0 +1,14 @@
+{
+  "name": "@docconv/invoice-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Invoice maths, tax rules (India GST, EU VAT, generic), document types and numbering. Framework-free; shared by API and web.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc && node --test test/*.test.cjs",
+    "clean": "rm -rf dist"
+  }
+}

@@ -2,6 +2,8 @@
 // AppToolkitLab — NestJS API Entry Point
 // ═══════════════════════════════════════════════════════════════
 
+// Must stay the first import: later modules read process.env at load time.
+import './load-env';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';

@@ -5,13 +5,25 @@ import { FilesService } from '../files/files.service';
 import { ConversionsService } from '../conversions/conversions.service';
 import { ToolsService } from './tools.service';
 import { AnonymousQuotaService } from './anonymous-quota.service';
-import { OutputFormat } from '@docconv/shared-types';
+import { OutputFormat, isServerPdfOperation } from '@docconv/shared-types';
 import { getExtension } from '@docconv/file-validation';
+import { getToolDefinition } from '@docconv/tool-registry';
 import { PlatformRole } from '@prisma/client';
 
 const ANONYMOUS_EMAIL = 'anonymous@internal.toolsuite.local';
 const ANONYMOUS_ORG_SLUG = 'internal-anonymous-tools';
 const JOB_TTL_SECONDS = 60 * 60;
+
+/**
+ * The tool being executed, never the client, decides the server PDF
+ * operation. Otherwise a request to one tool could run another tool's
+ * (possibly more expensive or tier-restricted) operation.
+ */
+export function toolSettings(slug: string, settings: Record<string, unknown> | undefined) {
+  const { pdfOperation: _ignored, ...rest } = settings ?? {};
+  const operation = getToolDefinition(slug)?.operation;
+  return isServerPdfOperation(operation) ? { ...rest, pdfOperation: operation } : rest;
+}
 
 @Injectable()
 export class AnonymousToolsService {
@@ -32,6 +44,7 @@ export class AnonymousToolsService {
     url?: string;
     file?: Express.Multer.File;
     settings?: Record<string, unknown>;
+    password?: string;
   }) {
     const tool = await this.tools.getToolBySlug(params.slug);
     if (!tool.anonymousEnabled) {
@@ -81,10 +94,12 @@ export class AnonymousToolsService {
           sourceFileId: storedFile.id,
           targetFormat: (isPdfImageArchive ? OutputFormat.ZIP : targetFormat) as OutputFormat,
           settings: {
-            ...params.settings,
+            ...toolSettings(params.slug, params.settings),
             ...(isPdfImageArchive ? { imageFormat } : {}),
           },
         },
+        { password: params.password },
+        params.slug,
       );
 
       await this.redis.set(this.jobOwnerKey(conversion.id), params.anonId, JOB_TTL_SECONDS);
@@ -107,6 +122,7 @@ export class AnonymousToolsService {
     url?: string;
     file?: Express.Multer.File;
     settings?: Record<string, unknown>;
+    password?: string;
   }) {
     const tool = await this.tools.getToolBySlug(params.slug);
     const targetFormat = (params.targetFormat || tool.outputFormats[0] || '').toLowerCase();
@@ -149,10 +165,10 @@ export class AnonymousToolsService {
       sourceFileId: storedFile.id,
       targetFormat: (isPdfImageArchive ? OutputFormat.ZIP : targetFormat) as OutputFormat,
       settings: {
-        ...params.settings,
+        ...toolSettings(params.slug, params.settings),
         ...(isPdfImageArchive ? { imageFormat } : {}),
       },
-    });
+    }, { password: params.password }, params.slug);
   }
 
   getAuthenticatedStatus(jobId: string, userId: string, organizationId: string) {

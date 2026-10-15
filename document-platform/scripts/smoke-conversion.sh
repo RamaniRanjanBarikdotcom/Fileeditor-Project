@@ -6,7 +6,8 @@ origin="${ORIGIN:-http://localhost:5173}"
 email="smoke-$(date +%s)@example.test"
 password="SmokeTest123!"
 output_file="$(mktemp /tmp/docconv-smoke.XXXXXX.pdf)"
-trap 'rm -f "$output_file"' EXIT
+events_file="$(mktemp /tmp/docconv-smoke-events.XXXXXX)"
+trap 'rm -f "$output_file" "$events_file"' EXIT
 
 register_response="$(
   curl -fsS -X POST "$api_url/auth/register" \
@@ -34,22 +35,19 @@ conversion_response="$(
 )"
 conversion_id="$(printf '%s' "$conversion_response" | jq -er '.data.id')"
 
-status="QUEUED"
-attempt=0
-while [ "$attempt" -lt 60 ]; do
-  status_response="$(curl -fsS "$api_url/conversions/$conversion_id" -H "Authorization: Bearer $token")"
-  status="$(printf '%s' "$status_response" | jq -er '.data.status')"
-  [ "$status" = "COMPLETED" ] && break
-  if [ "$status" = "FAILED" ]; then
-    printf 'Conversion failed: %s\n' "$(printf '%s' "$status_response" | jq -r '.data.errorMessage // "unknown error"')" >&2
-    exit 1
-  fi
-  attempt=$((attempt + 1))
-  sleep 1
-done
+curl -fsS -N --max-time 90 "$api_url/conversions/$conversion_id/events" \
+  -H "Origin: $origin" \
+  -H 'Accept: text/event-stream' \
+  -H "Authorization: Bearer $token" \
+  -o "$events_file"
+
+status_response="$(awk '/^data:/{sub(/^data:[[:space:]]*/, ""); latest=$0} END{print latest}' "$events_file")"
+status="$(printf '%s' "$status_response" | jq -er '.status')"
 
 if [ "$status" != "COMPLETED" ]; then
-  printf 'Conversion timed out with status %s\n' "$status" >&2
+  printf 'Conversion failed with status %s: %s\n' \
+    "$status" \
+    "$(printf '%s' "$status_response" | jq -r '.errorMessage // "unknown error"')" >&2
   exit 1
 fi
 

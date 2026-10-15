@@ -6,6 +6,7 @@ import { fetchApi } from '../../../lib/api';
 import { useFeatureFlags } from '../../../lib/use-feature-flags';
 
 type Subscription = {
+  provider: 'STRIPE' | 'RAZORPAY';
   status: string;
   currency: 'USD' | 'INR';
   currentPeriodEnd: string;
@@ -63,6 +64,39 @@ export default function BillingPage() {
     );
   }
 
+  async function manage(action: 'cancel' | 'resume' | 'portal') {
+    setStarting(true);
+    setNotice('');
+    const response = await fetchApi<Subscription & { url?: string }>(
+      `/blog-studio/subscription/${action}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(
+          action === 'portal' ? { returnUrl: `${window.location.origin}/app/billing` } : {},
+        ),
+      },
+    );
+    setStarting(false);
+    if (!response.success || !response.data) {
+      setNotice(response.error?.message || 'The subscription could not be updated.');
+      return;
+    }
+    if (action === 'portal' && response.data.url) {
+      window.location.assign(response.data.url);
+      return;
+    }
+    setSubscription((current) =>
+      current ? { ...current, cancelAtPeriodEnd: action === 'cancel' } : current,
+    );
+    setNotice(
+      action === 'cancel'
+        ? 'Cancellation scheduled. You keep access until the end of the paid period.'
+        : 'Your subscription will renew as normal.',
+    );
+  }
+
+  const manageable = subscription?.status === 'ACTIVE' || subscription?.status === 'PAST_DUE';
+
   return (
     <div className="mx-auto max-w-5xl space-y-7">
       <header>
@@ -94,9 +128,44 @@ export default function BillingPage() {
               </p>
             </div>
             <div className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
-              Period ends {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
+              {subscription.cancelAtPeriodEnd ? 'Access ends' : 'Renews'}{' '}
+              {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
             </div>
           </div>
+          {manageable && flags.blogStudioCheckout && (
+            <div className="mt-5 flex flex-wrap gap-3">
+              {subscription.provider === 'STRIPE' && (
+                <button
+                  onClick={() => void manage('portal')}
+                  disabled={starting}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                >
+                  Invoices & payment method
+                </button>
+              )}
+              {subscription.cancelAtPeriodEnd ? (
+                subscription.provider === 'STRIPE' && (
+                  <button
+                    onClick={() => void manage('resume')}
+                    disabled={starting}
+                    className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                  >
+                    Keep my subscription
+                  </button>
+                )
+              ) : (
+                <button
+                  onClick={() => {
+                    if (window.confirm('Cancel at the end of the current paid period?')) void manage('cancel');
+                  }}
+                  disabled={starting}
+                  className="rounded-xl border border-rose-300 px-4 py-2 text-sm font-bold text-rose-600 disabled:opacity-50 dark:border-rose-500/40"
+                >
+                  Cancel subscription
+                </button>
+              )}
+            </div>
+          )}
         </section>
       )}
 
